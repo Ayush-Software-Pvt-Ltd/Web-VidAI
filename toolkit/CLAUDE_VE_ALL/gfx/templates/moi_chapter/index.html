@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="hi" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="shared/js/gsap.min.js"></script>
+    <script src="shared/moi/mp.js"></script>
+    <link rel="stylesheet" href="shared/moi/mp.css" />
+    <style>
+      /* Moi Phone chapter card (STYLE.md element 1).  Text column on the left, the
+         charging ring on the right; the title is readable by ~0.6 s. */
+      #col { position: absolute; left: 160px; top: 0; bottom: 0; width: 1180px; display: flex; flex-direction: column; justify-content: center; }
+      #num { font-weight: 800; font-size: 46px; letter-spacing: 8px; color: var(--green); line-height: 1.3; }
+      #title { font-size: 128px; margin-top: 6px; }
+      #title span { display: inline-block; }
+      #sub { font-size: 46px; margin-top: 22px; }
+      #rule { width: 260px; margin-top: 44px; }
+    </style>
+  </head>
+  <body>
+    <!-- CARD: {"num": "03", "title": "Qi2 और MagSafe में फ़र्क क्या है?", "sub": "Qi2 vs MagSafe", "dur": 4} -->
+    <div id="root" data-composition-id="main" data-start="0" data-duration="4" data-width="1920" data-height="1080">
+      <div id="cam" class="mp-cam">
+        <div class="mp-wordmark" id="wm">MOI PHONE</div>
+        <div id="col">
+          <div id="num">03</div>
+          <div id="title" class="mp-title">Qi2 और MagSafe में फ़र्क क्या है?</div>
+          <div id="sub" class="mp-label">Qi2 vs MagSafe</div>
+          <div id="rule" class="mp-rule"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      const D = 4;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      document.fonts.ready.then(function () {
+        const root = document.getElementById("root");
+        MP.bg(tl, root, D, { seed: 31 });
+        MP.push(tl, document.getElementById("cam"), D, 1, 1.035);
+        const title = document.getElementById("title");
+        MP.fit(title, 1180, 330, 84);
+        const words = MP.words(title);
+        tl.fromTo("#wm", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, ease: "power4.out" }, 0);
+        tl.fromTo("#num", { opacity: 0, x: -60 }, { opacity: 1, x: 0, duration: 0.4, ease: "power4.out" }, 0.02);
+        tl.fromTo(words, { y: 70, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power4.out", stagger: 0.06 }, 0.06);
+        tl.fromTo("#sub", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.4, ease: "power4.out" }, 0.35);
+        tl.fromTo("#rule", { scaleX: 0 }, { scaleX: 1, duration: 0.55, ease: "power4.out" }, 0.4);
+        // keeps travelling after it lands: the rule grows on and the column drifts left
+        tl.fromTo("#rule", { width: 260 }, { width: 420, duration: D - 0.95, ease: "sine.inOut", immediateRender: false }, 0.95);
+        tl.fromTo("#col", { x: 0 }, { x: -18, duration: D - 0.5, ease: "none" }, 0.5);
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>

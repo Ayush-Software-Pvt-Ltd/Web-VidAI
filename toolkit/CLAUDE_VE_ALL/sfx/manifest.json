@@ -1,0 +1,26 @@
+{
+ "whoosh1": {
+  "samples": 26400,
+  "peak": 0.18
+ },
+ "whoosh2": {
+  "samples": 24000,
+  "peak": 0.16
+ },
+ "whoosh3": {
+  "samples": 28800,
+  "peak": 0.2
+ },
+ "pop1": {
+  "samples": 7680,
+  "peak": 0.004
+ },
+ "pop2": {
+  "samples": 7680,
+  "peak": 0.004
+ },
+ "tick": {
+  "samples": 2400,
+  "peak": 0.002
+ }
+}

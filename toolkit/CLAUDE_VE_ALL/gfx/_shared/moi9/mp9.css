@@ -1,0 +1,126 @@
+/* Moi Phone PORTRAIT (9:16) design kit - shared by every Moi Phone Shorts graphic.
+   Layout is 1080x1920; renders at 2x for 4K (--resolution portrait-4k).  See README.md.
+
+   SAFE ZONES (YouTube Shorts UI):
+   - bottom ~22% (y > 1500) is covered by title, channel name and the progress bar
+   - right edge in the lower half (x > 930, y > 1000) is covered by the like/comment/share column
+   - top strip (y < 160) carries the search / menu icons
+   Keep key text inside x 70-1010, y 160-1450 (and x < 930 below y 1000).
+   Decoration (background, ring, glow, dots, bleed of a phone or card) may go anywhere. */
+@font-face { font-family: "Mukta"; src: url("../moi/fonts/Mukta-Regular.ttf") format("truetype"); font-weight: 400; }
+@font-face { font-family: "Mukta"; src: url("../moi/fonts/Mukta-Medium.ttf") format("truetype"); font-weight: 500; }
+@font-face { font-family: "Mukta"; src: url("../moi/fonts/Mukta-SemiBold.ttf") format("truetype"); font-weight: 600; }
+@font-face { font-family: "Mukta"; src: url("../moi/fonts/Mukta-Bold.ttf") format("truetype"); font-weight: 700; }
+@font-face { font-family: "Mukta"; src: url("../moi/fonts/Mukta-ExtraBold.ttf") format("truetype"); font-weight: 800; }
+
+:root {
+  --ink: #0d1117;
+  --ink2: #171c24;
+  --ink3: #222935;
+  --paper: #f5f1e8;
+  --muted: #a7b0ba;
+  --green: #3be37a;
+  --amber: #ffb547;
+  --red: #ff6b6b;          /* "no / not yet" marks only (cross, upi-off strike) */
+  --axis1: #9b1d55;        /* default card gradient (deep magenta to burgundy) */
+  --axis2: #4d0b2c;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  background: transparent;
+}
+
+#root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: "Mukta", sans-serif;
+  color: var(--paper);
+}
+
+/* Background (built by MP9.bg) */
+.m9-bg { position: absolute; inset: 0; overflow: hidden; background: linear-gradient(180deg, #0f141b 0%, var(--ink) 55%, #0a0d12 100%); }
+.m9-glow {
+  position: absolute;
+  width: 1400px; height: 1400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 227, 122, 0.17) 0%, rgba(59, 227, 122, 0.05) 42%, rgba(59, 227, 122, 0) 70%);
+}
+.m9-ring { position: absolute; border-radius: 50%; border: 28px solid rgba(59, 227, 122, 0.09); }
+.m9-arc { position: absolute; }
+.m9-dot { position: absolute; border-radius: 50%; background: var(--green); }
+
+/* Camera wrapper for the slow push-in (MP9.push) */
+.m9-cam { position: absolute; inset: 0; }
+
+/* Text atoms.  Devanagari needs line-height >= 1.25 and padding so matras / reph never clip. */
+.m9-title { font-weight: 800; font-size: 112px; line-height: 1.25; padding: 0.06em 0.04em 0.08em; color: var(--paper); }
+.m9-sub { font-weight: 600; font-size: 52px; line-height: 1.35; padding: 0.04em 0; color: var(--muted); }
+.m9-label { font-weight: 700; font-size: 40px; line-height: 1.3; letter-spacing: 1px; color: var(--muted); }
+.m9-num { font-weight: 800; line-height: 1.1; color: var(--paper); font-variant-numeric: lining-nums; }
+.m9-hl { color: var(--green); }
+.m9-amber { color: var(--amber); }
+.m9-red { color: var(--red); }
+.m9-wordmark { position: absolute; left: 0; right: 0; top: 178px; text-align: center; font-weight: 700; font-size: 28px; letter-spacing: 10px; color: var(--muted); }
+
+/* Filled pill (keyword chips, labels on full-screen cards) */
+.m9-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: rgba(13, 17, 23, 0.90);
+  border: 5px solid rgba(59, 227, 122, 0.85);
+  border-radius: 999px;
+  padding: 8px 46px 14px;
+  font-weight: 800;
+  font-size: 64px;
+  line-height: 1.3;
+  color: var(--paper);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.40);
+}
+.m9-chip.multi { border-radius: 44px; }
+/* Outline pill (small tags) */
+.m9-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  border: 4px solid var(--green);
+  border-radius: 999px;
+  padding: 4px 30px 8px;
+  font-weight: 700;
+  font-size: 42px;
+  line-height: 1.3;
+  color: var(--paper);
+}
+/* Dark panel (lists, steps) */
+.m9-panel { position: absolute; background: var(--ink2); border-radius: 36px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45); }
+
+/* Phone (MP9.phone) */
+.m9-phone {
+  position: absolute;
+  background: linear-gradient(135deg, #7d8087 0%, #d9dade 22%, #8a8d94 48%, #c9cbcf 74%, #6c6f76 100%);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.55), inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+.m9-phone-bezel { position: absolute; background: #050608; }
+.m9-phone-screen { position: absolute; overflow: hidden; background: #000; display: flex; flex-direction: column; align-items: center; }
+.m9-phone-screen > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.m9-phone-island { position: absolute; background: #000; border-radius: 999px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07); }
+.m9-phone-btn { position: absolute; background: linear-gradient(90deg, #6c6f76, #c9cbcf, #7d8087); border-radius: 4px; }
+
+/* Credit card (MP9.card) */
+.m9-card { position: absolute; overflow: hidden; color: var(--paper); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5); }
+.m9-card-label { position: absolute; font-weight: 800; line-height: 1.25; white-space: nowrap; }
+.m9-card-digits { position: absolute; font-weight: 700; line-height: 1.2; white-space: nowrap; letter-spacing: 0.08em; }
+.m9-card-kind { position: absolute; font-weight: 700; line-height: 1.2; letter-spacing: 0.12em; opacity: 0.85; }
+.m9-card-chip { position: absolute; background: linear-gradient(135deg, #e9cf86, #b8913d 55%, #f1dc9e); }
+.m9-card-sheen { position: absolute; top: 0; bottom: 0; width: 45%; background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.20) 50%, rgba(255, 255, 255, 0) 100%); }
+
+/* Icons (MP9.icon) */
+.m9-icon { display: block; overflow: visible; }

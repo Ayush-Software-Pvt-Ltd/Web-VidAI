@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="hi" data-resolution="portrait"
+  data-composition-variables='[{"id":"text","type":"string","label":"Pop-up text (*word* = green)","default":"सिर्फ़ *Axis Bank* cards"}]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="shared/js/gsap.min.js"></script>
+    <script src="shared/moi9/mp9.js"></script>
+    <link rel="stylesheet" href="shared/moi9/mp9.css" />
+    <style>
+      /* Moi Phone portrait keyword pop-up over the HOST shot.  The face sits at about
+         y 460-1190, x 300-780; the chip lives in the chest zone, centred, y ~1230-1450.
+         2-5 words; one line from 84 px down to 64 px, else two balanced lines (72 -> 56 px),
+         shrink-wrapped so the chip hugs the longer line. */
+      #zone { position: absolute; left: 70px; right: 70px; top: 1230px; height: 220px; display: flex; align-items: center; justify-content: center; }
+      #chip { max-width: 940px; font-size: 84px; text-align: center; }
+      #txt { display: inline-block; white-space: nowrap; }
+      #txt.multi { white-space: normal; text-wrap: balance; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="6" data-width="1080" data-height="1920">
+      <div id="zone">
+        <div id="chip" class="m9-chip"><span id="txt">सिर्फ़ <span class="m9-hl">Axis Bank</span> cards</span></div>
+      </div>
+    </div>
+    <script>
+      const D = 6;
+      const tl = gsap.timeline({ paused: true });
+      MP9.ready().then(function () {
+        const v = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+        const txt = document.getElementById("txt");
+        const chip = document.getElementById("chip");
+        if (v.text) MP9.rich(txt, v.text);
+        // inner width = 940 - 2 x 46 padding - 2 x 5 border
+        const W = 838;
+        txt.style.fontSize = "84px";
+        MP9.fit(txt, W, null, 64);
+        if (txt.scrollWidth > W) {
+          txt.classList.add("multi");
+          chip.classList.add("multi");
+          txt.style.maxWidth = W + "px";
+          txt.style.fontSize = "72px";
+          MP9.fit(txt, W, 2 * 1.3 * 72 + 4, 56);
+          MP9.shrinkWrap(txt);
+        }
+        // pop-in under 0.35 s
+        tl.fromTo("#chip", { scale: 0.55, opacity: 0, y: 30 }, { scale: 1, opacity: 1, y: 0, duration: 0.32, ease: "back.out(1.8)", transformOrigin: "50% 60%" }, 0);
+        tl.fromTo("#txt", { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.26, ease: "power3.out" }, 0.06);
+        // gentle drift to the last frame, no exit
+        tl.fromTo("#zone", { y: 0, scale: 1 }, { y: -14, scale: 1.03, duration: D - 0.32, ease: "sine.inOut" }, 0.32);
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>

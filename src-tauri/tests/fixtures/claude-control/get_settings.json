@@ -1,0 +1,9 @@
+{
+  "effective": {
+    "model": "fable"
+  },
+  "applied": {
+    "model": "claude-fable-5-1",
+    "effort": "high"
+  }
+}

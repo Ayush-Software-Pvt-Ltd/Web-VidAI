@@ -1,0 +1,23 @@
+Encoders:
+ V..... = Video
+ A..... = Audio
+ S..... = Subtitle
+ ..S... = Slice-level multithreading
+ ------
+ V....D apng                 APNG (Animated Portable Network Graphics) image
+ V....D libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+ V....D libx264rgb           libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 RGB (codec h264)
+ V....D h264_videotoolbox    VideoToolbox H.264 Encoder (codec h264)
+ V....D libx265              libx265 H.265 / HEVC (codec hevc)
+ V....D hevc_videotoolbox    VideoToolbox H.265 Encoder (codec hevc)
+ VFS..D mjpeg                MJPEG (Motion JPEG)
+ VF...D png                  PNG (Portable Network Graphics) image
+ VF...D prores               Apple ProRes
+ VF...D prores_aw            Apple ProRes (codec prores)
+ VFS... prores_ks            Apple ProRes (iCodec Pro) (codec prores)
+ V....D prores_videotoolbox  VideoToolbox ProRes Encoder (codec prores)
+ A....D aac                  AAC (Advanced Audio Coding)
+ A..... aac_at               aac (AudioToolbox) (codec aac)
+ A....D libmp3lame           libmp3lame MP3 (MPEG audio layer 3) (codec mp3)
+ A....D pcm_s16le            PCM signed 16-bit little-endian
+ A....D pcm_s24le            PCM signed 24-bit little-endian

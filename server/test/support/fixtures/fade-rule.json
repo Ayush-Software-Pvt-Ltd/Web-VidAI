@@ -1,0 +1,492 @@
+{
+ "comment": "The fade rule of docs/SPEC.md section 10 (A-roll sound fades). Run by server/test/timeline/lanes.test.js (lanes.js planFades) and toolkit/tests/test_hfproject.py (hfproject.fade_plan): change the rule, this table, both implementations and the SPEC together. mediaStart and dur are project frames; fadeIn and fadeOut are seconds as written in the file, null for none.",
+ "cases": [
+  {
+   "name": "one clip: de-click at the head, the end fade at the tail",
+   "fps": "30",
+   "endFrames": 15,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 30,
+     "rate": 1,
+     "dur": 450,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.5"
+    }
+   ]
+  },
+  {
+   "name": "two sources: a de-click on both sides of the cut",
+   "fps": "30",
+   "endFrames": 15,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "b.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    },
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.5"
+    }
+   ]
+  },
+  {
+   "name": "a cut that continues the same source has no fade",
+   "fps": "30",
+   "endFrames": 15,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 10,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "a.mp4",
+     "mediaStart": 110,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "a.mp4",
+     "mediaStart": 210,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": null
+    },
+    {
+     "fadeIn": null,
+     "fadeOut": null
+    },
+    {
+     "fadeIn": null,
+     "fadeOut": "0.5"
+    }
+   ]
+  },
+  {
+   "name": "the same source with a jump is a cut",
+   "fps": "30",
+   "endFrames": 15,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 10,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "a.mp4",
+     "mediaStart": 500,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    },
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.5"
+    }
+   ]
+  },
+  {
+   "name": "a different speed is a cut even where the positions meet",
+   "fps": "30",
+   "endFrames": 15,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "a.mp4",
+     "mediaStart": 120,
+     "rate": 1.2,
+     "dur": 100,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    },
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.5"
+    }
+   ]
+  },
+  {
+   "name": "a continuation within a hundredth of a frame is whole",
+   "fps": "30",
+   "endFrames": 15,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "a.mp4",
+     "mediaStart": 100.005,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": null
+    },
+    {
+     "fadeIn": null,
+     "fadeOut": "0.5"
+    }
+   ]
+  },
+  {
+   "name": "a clip without sound has no fades and continues nothing",
+   "fps": "30",
+   "endFrames": 15,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "a.mp4",
+     "mediaStart": 100,
+     "rate": 1,
+     "dur": 100,
+     "sound": false
+    },
+    {
+     "src": "a.mp4",
+     "mediaStart": 200,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    },
+    {
+     "fadeIn": null,
+     "fadeOut": null
+    },
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.5"
+    }
+   ]
+  },
+  {
+   "name": "a first clip without sound: the next one fades in",
+   "fps": "30",
+   "endFrames": 15,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": false
+    },
+    {
+     "src": "a.mp4",
+     "mediaStart": 100,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": null,
+     "fadeOut": null
+    },
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.5"
+    }
+   ]
+  },
+  {
+   "name": "no end fade picture: the tail is a de-click",
+   "fps": "30",
+   "endFrames": 0,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "b.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    },
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    }
+   ]
+  },
+  {
+   "name": "a last clip shorter than the end fade fades over its own length",
+   "fps": "30",
+   "endFrames": 15,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "b.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 10,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    },
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.333333333"
+    }
+   ]
+  },
+  {
+   "name": "29.97 fps: 15 frames of end fade",
+   "fps": "30000/1001",
+   "endFrames": 15,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 300,
+     "sound": true
+    },
+    {
+     "src": "a.mp4",
+     "mediaStart": 300,
+     "rate": 1,
+     "dur": 300,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": null
+    },
+    {
+     "fadeIn": null,
+     "fadeOut": "0.5005"
+    }
+   ]
+  },
+  {
+   "name": "25 fps: 13 frames of end fade",
+   "fps": "25",
+   "endFrames": 13,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 50,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.52"
+    }
+   ]
+  },
+  {
+   "name": "60 fps: a clip of one frame is shorter than four de-clicks",
+   "fps": "60",
+   "endFrames": 30,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "b.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 1,
+     "sound": true
+    },
+    {
+     "src": "c.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    },
+    {
+     "fadeIn": null,
+     "fadeOut": null
+    },
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.5"
+    }
+   ]
+  },
+  {
+   "name": "60 fps: a clip of two frames is long enough",
+   "fps": "60",
+   "endFrames": 30,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "b.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 2,
+     "sound": true
+    },
+    {
+     "src": "c.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    },
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    },
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.5"
+    }
+   ]
+  },
+  {
+   "name": "a last clip of one frame at 60 fps has no fades",
+   "fps": "60",
+   "endFrames": 30,
+   "clips": [
+    {
+     "src": "a.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 100,
+     "sound": true
+    },
+    {
+     "src": "b.mp4",
+     "mediaStart": 0,
+     "rate": 1,
+     "dur": 1,
+     "sound": true
+    }
+   ],
+   "expect": [
+    {
+     "fadeIn": "0.008",
+     "fadeOut": "0.008"
+    },
+    {
+     "fadeIn": null,
+     "fadeOut": null
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="hi" data-resolution="portrait"
+  data-composition-variables='[{"id":"text","type":"string","label":"Hit text","default":"MS Office Lifetime"},{"id":"accent","type":"string","label":"Accent: orange, cyan, green, red or white","default":"orange"}]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="shared/js/gsap.min.js"></script>
+    <script src="shared/hot/ht.js"></script>
+    <link rel="stylesheet" href="shared/hot/ht.css" />
+    <style>
+      /* House of Tech keyword hit over the host: chest area (y 1170-1400), clear of the face,
+         the Shorts UI at the bottom and the action rail on the right. */
+      #zone { position: absolute; left: 110px; right: 110px; top: 1170px; height: 230px; display: flex; align-items: center; justify-content: center; }
+      #slab { position: relative; font-size: 92px; white-space: nowrap; padding: 10px 46px 2px; border-radius: 20px;
+        box-shadow: 0 16px 0 rgba(5, 8, 19, 0.55), 0 0 50px rgba(25, 211, 255, 0.45); }
+      #bar { position: absolute; left: 0; top: 0; bottom: 0; width: 18px; border-radius: 20px 0 0 20px; background: var(--orange); }
+      #txt { display: inline-block; white-space: nowrap; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="6" data-width="1080" data-height="1920">
+      <div id="zone">
+        <div id="slab" class="ht-slab"><div id="bar"></div><span id="txt">MS Office Lifetime</span></div>
+      </div>
+    </div>
+    <script>
+      const D = 6;
+      const tl = gsap.timeline({ paused: true });
+      document.fonts.ready.then(function () {
+        const v = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+        const txt = document.getElementById("txt");
+        if (v.text) txt.textContent = v.text;
+        const ACC = { orange: "#ff6b1a", cyan: "#19d3ff", green: "#2ee59d", red: "#ff3b4e", white: "#ffffff" };
+        if (v.accent && ACC[v.accent]) document.getElementById("bar").style.background = ACC[v.accent];
+        HT.fit(txt, 780, 190, 56);
+        tl.fromTo("#slab", { x: -140, scaleX: 0.3, opacity: 0, skewX: -12 }, { x: 0, scaleX: 1, opacity: 1, skewX: 0, duration: 0.26, ease: "back.out(2)" }, 0);
+        tl.fromTo("#txt", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.2, ease: "power3.out" }, 0.08);
+        // keeps alive while on screen: slow growth and drift
+        tl.fromTo("#zone", { scale: 1, x: 0 }, { scale: 1.05, x: 8, duration: D - 0.3, ease: "sine.inOut" }, 0.3);
+        tl.fromTo("#bar", { scaleY: 0 }, { scaleY: 1, duration: 0.25, ease: "power3.out", transformOrigin: "50% 100%" }, 0.12);
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>

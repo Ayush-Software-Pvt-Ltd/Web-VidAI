@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="hi" data-resolution="landscape"
+  data-composition-variables='[{"id":"text","type":"string","label":"Pop-up text (*word* = green)","default":"केबल का *झंझट* ख़त्म"},{"id":"side","type":"string","label":"left or right","default":"left"}]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="shared/js/gsap.min.js"></script>
+    <script src="shared/moi/mp.js"></script>
+    <link rel="stylesheet" href="shared/moi/mp.css" />
+    <style>
+      /* Moi Phone keyword pop-up: dark chip with a green left bar in the lower third, beside
+         the centred host (never over the face).  Lives 2-5 words, one word in green. */
+      #zone { position: absolute; left: 110px; right: 110px; top: 790px; height: 170px; display: flex; align-items: center; justify-content: flex-start; }
+      #zone.right { justify-content: flex-end; }
+      #chip { position: relative; overflow: hidden; padding-left: 52px; }
+      #bar { position: absolute; left: 0; top: 0; bottom: 0; width: 14px; background: var(--green); transform-origin: 50% 100%; }
+      #txt { display: inline-block; white-space: nowrap; }
+      .hl { color: var(--green); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="4" data-width="1920" data-height="1080">
+      <div id="zone">
+        <div id="chip" class="mp-chip"><div id="bar"></div><span id="txt">केबल का <span class="hl">झंझट</span> ख़त्म</span></div>
+      </div>
+    </div>
+    <script>
+      const D = 4;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      document.fonts.ready.then(function () {
+        const v = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+        const txt = document.getElementById("txt");
+        if (v.text) {
+          // *word* marks the highlighted word(s); build spans without innerHTML injection
+          txt.textContent = "";
+          v.text.split(/(\*[^*]+\*)/).forEach(function (part) {
+            if (!part) return;
+            const s = document.createElement("span");
+            if (part[0] === "*") { s.className = "hl"; s.textContent = part.slice(1, -1); }
+            else { s.textContent = part; }
+            txt.appendChild(s);
+          });
+        }
+        const right = v.side === "right";
+        if (right) document.getElementById("zone").classList.add("right");
+        MP.fit(txt, 780, 120, 44);
+        const origin = right ? "100% 50%" : "0% 50%";
+        tl.fromTo("#chip", { scale: 0.6, opacity: 0, x: right ? 40 : -40 },
+          { scale: 1, opacity: 1, x: 0, duration: 0.38, ease: "back.out(1.7)", transformOrigin: origin }, 0);
+        tl.fromTo("#bar", { scaleY: 0 }, { scaleY: 1, duration: 0.3, ease: "power4.out" }, 0.08);
+        tl.fromTo("#txt", { x: right ? 24 : -24, opacity: 0 }, { x: 0, opacity: 1, duration: 0.32, ease: "power4.out" }, 0.1);
+        // a slow drift while on screen, so the chip is never frozen
+        tl.fromTo("#zone", { y: 0, scale: 1 }, { y: -10, scale: 1.025, duration: D - 0.4, ease: "sine.inOut", transformOrigin: origin }, 0.4);
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>

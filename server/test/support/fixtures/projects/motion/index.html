@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="shared/gsap.min.js"></script>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-width="1920" data-height="1080" data-fps="30" data-duration="15">
+      <video id="a-1" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="0" data-duration="5" data-media-start="1" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Hook" data-fade-in="0.008" data-fade-out="0.008" style="z-index:0"></video>
+      <video id="a-2" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="5" data-duration="5" data-media-start="3" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Point" data-fade-in="0.008" style="z-index:0"></video>
+      <video id="a-3" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="10" data-duration="5" data-media-start="8" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Offer" data-fade-out="0.5" style="z-index:0"></video>
+      <div id="b-1" class="clip" data-composition-id="b-1" data-composition-src="compositions/b-1.html" data-start="3" data-duration="3" data-track-index="1" data-vidai-kind="broll" data-vidai-label="Street" data-width="1920" data-height="1080" style="z-index:1"></div>
+      <div id="b-2" class="clip" data-composition-id="b-2" data-composition-src="compositions/b-2.html" data-start="11" data-duration="2" data-track-index="1" data-vidai-kind="broll" data-vidai-label="Workshop" data-width="1920" data-height="1080" style="z-index:1"></div>
+      <div id="fade-1" class="clip" data-composition-id="fade-1" data-composition-src="compositions/fade-1.html" data-start="14.5" data-duration="0.5" data-track-index="4" data-vidai-kind="fade" data-vidai-label="Fade out" data-width="1920" data-height="1080" style="z-index:4"></div>
+    </div>
+    <script>
+(function () {
+  window.__timelines = window.__timelines || {};
+  var root = document.getElementById("root");
+  var length = Math.max(0, Number(root.getAttribute("data-duration")) || 0);
+  var timeline = gsap.timeline({ paused: true });
+  timeline.to({}, { duration: length }, 0);
+  window.__timelines["main"] = timeline;
+})();
+    </script>
+  </body>
+</html>

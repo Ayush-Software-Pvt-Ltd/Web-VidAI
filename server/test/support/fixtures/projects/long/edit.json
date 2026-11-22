@@ -1,0 +1,20 @@
+{
+  "toolkitVersion": "1.0.0",
+  "fps": "30",
+  "width": 1920,
+  "height": 1080,
+  "sources": [
+    { "name": "aroll.mp4", "path": "assets/media/aroll.mp4", "originalPath": "/data/channels/demo/video-1/aroll.mp4", "frames": 6000, "fps": "30" },
+    { "name": "broll.mp4", "path": "assets/media/broll.mp4", "originalPath": "/data/channels/demo/video-1/B-roll 1.mp4", "frames": 1500, "fps": "25" },
+    { "name": "whoosh.wav", "path": "assets/sfx/whoosh.wav", "originalPath": null, "frames": 90, "fps": "30" },
+    { "name": "bed.mp3", "path": "assets/music/bed.mp3", "originalPath": null, "frames": 4500, "fps": "30" }
+  ],
+  "graphics": [
+    { "id": "g-1", "template": "big-number", "variables": { "text": "3x" }, "label": "Big number" },
+    { "id": "ov-1", "template": "lower-third", "variables": { "text": "Ana Diaz" }, "label": "Lower third" },
+    { "id": "h-1", "template": "keyword-hit", "variables": { "word": "free" }, "label": "free" },
+    { "id": "h-2", "template": "keyword-hit", "variables": { "word": "today" }, "label": "today" },
+    { "id": "h-3", "template": "keyword-hit", "variables": { "word": "now" }, "label": "now" },
+    { "id": "fade-1", "template": "end-fade", "variables": {}, "label": "Fade out" }
+  ]
+}

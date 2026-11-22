@@ -1,0 +1,37 @@
+{
+  "ok": false,
+  "errorCount": 3,
+  "warningCount": 0,
+  "infoCount": 0,
+  "findings": [
+    {
+      "code": "audio_src_not_found",
+      "severity": "error",
+      "file": "<project>/index.html",
+      "message": "<audio> element references file(s) not found in the project: assets/sfx/whoosh.wav, assets/music/bed.mp3. The rendered video will be silent.",
+      "fixHint": "Add the missing files to the project directory, or update the src attributes to point to existing files."
+    },
+    {
+      "code": "missing_local_asset",
+      "severity": "error",
+      "file": "<project>/index.html",
+      "message": "<video> element references local file(s) not found in the project: assets/media/aroll.mp4, assets/media/broll.mp4. The renderer will silently skip these and produce a video with missing visuals.",
+      "fixHint": "Add the missing files to the project directory, or update the src attributes to point to existing files. Captured asset filenames are unreliable. Verify against capture/contact-sheets/ and capture/extracted/asset-descriptions.md."
+    },
+    {
+      "code": "missing_local_asset",
+      "severity": "error",
+      "file": "<project>/index.html",
+      "message": "<img> element references local file(s) not found in the project: assets/product.png. The renderer will silently skip these and produce a video with missing visuals.",
+      "fixHint": "Add \"assets/product.png\" to the project directory, or update the src attribute to point to an existing file. Common cause: captured asset filenames are unreliable (heygen-logo.svg often contains Google, nvidia-logo.svg may contain Autodesk, etc.). Open the contact sheets and verify the file actually exists at this path before referencing it."
+    }
+  ],
+  "filesScanned": 7,
+  "unmountedCompositions": [],
+  "_meta": {
+    "version": "0.9.80",
+    "latestVersion": "0.9.80",
+    "updateAvailable": false,
+    "checkedAt": "2026-11-22T05:02:47.437Z"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "ok": false,
+  "error": {
+    "code": "runtime_error",
+    "message": "Not a directory: <project>"
+  },
+  "findings": [],
+  "errorCount": 0,
+  "warningCount": 0,
+  "infoCount": 0,
+  "filesScanned": 0,
+  "_meta": {
+    "version": "0.9.80",
+    "latestVersion": "0.9.80",
+    "updateAvailable": false,
+    "checkedAt": "2026-11-22T05:02:47.437Z"
+  }
+}

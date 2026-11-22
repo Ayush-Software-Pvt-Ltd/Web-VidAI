@@ -1,0 +1,96 @@
+/* Moi Phone design kit - shared by every Moi Phone graphic (see <video>/Details/STYLE.md).
+   Layout is 1920x1080; renders at 2x for 4K. */
+@font-face { font-family: "Mukta"; src: url("fonts/Mukta-Regular.ttf") format("truetype"); font-weight: 400; }
+@font-face { font-family: "Mukta"; src: url("fonts/Mukta-Medium.ttf") format("truetype"); font-weight: 500; }
+@font-face { font-family: "Mukta"; src: url("fonts/Mukta-SemiBold.ttf") format("truetype"); font-weight: 600; }
+@font-face { font-family: "Mukta"; src: url("fonts/Mukta-Bold.ttf") format("truetype"); font-weight: 700; }
+@font-face { font-family: "Mukta"; src: url("fonts/Mukta-ExtraBold.ttf") format("truetype"); font-weight: 800; }
+
+:root {
+  --ink: #0d1117;
+  --ink2: #171c24;
+  --paper: #f5f1e8;
+  --muted: #9aa3ae;
+  --green: #3be37a;
+  --amber: #ffb547;
+  --qi2: #d9c6a3;        /* Noise Qi2 bank (champagne / titanium) */
+  --magsafe: #8fa9d6;    /* Noise MagSafe bank (slate blue) */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: transparent;
+}
+
+#root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: "Mukta", sans-serif;
+  color: var(--paper);
+}
+
+/* Background (built by MP.bg) */
+.mp-bg { position: absolute; inset: 0; background: var(--ink); overflow: hidden; }
+.mp-glow {
+  position: absolute;
+  width: 1500px; height: 1500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 227, 122, 0.16) 0%, rgba(59, 227, 122, 0.05) 40%, rgba(59, 227, 122, 0) 70%);
+}
+.mp-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 26px solid rgba(59, 227, 122, 0.10);
+}
+.mp-arc { position: absolute; }
+.mp-dot { position: absolute; border-radius: 50%; background: var(--green); }
+
+/* Camera wrapper for the slow push-in */
+.mp-cam { position: absolute; inset: 0; }
+
+/* Text atoms */
+.mp-wordmark { position: absolute; left: 160px; top: 96px; font-weight: 700; font-size: 26px; letter-spacing: 9px; color: var(--muted); }
+.mp-title { font-weight: 800; line-height: 1.16; color: var(--paper); padding-bottom: 0.06em; }
+.mp-label { font-weight: 600; color: var(--muted); line-height: 1.3; }
+.mp-num { font-weight: 800; line-height: 1.05; color: var(--paper); font-variant-numeric: lining-nums; }
+.mp-green { color: var(--green); }
+.mp-amber { color: var(--amber); }
+.mp-rule { height: 10px; border-radius: 5px; background: var(--green); transform-origin: 0 50%; }
+.mp-card {
+  position: absolute;
+  background: var(--ink2);
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+.mp-card-top { position: absolute; left: 0; right: 0; top: 0; height: 12px; }
+.mp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+  background: rgba(13, 17, 23, 0.86);
+  border-radius: 18px;
+  padding: 10px 40px 14px 36px;
+  font-weight: 800;
+  font-size: 64px;
+  line-height: 1.3;
+  color: var(--paper);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+.mp-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 4px solid var(--green);
+  border-radius: 999px;
+  padding: 4px 30px 8px;
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1.3;
+  color: var(--paper);
+}

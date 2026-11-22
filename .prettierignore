@@ -1,0 +1,17 @@
+dist
+node_modules
+artifacts
+.claude
+src-tauri/target
+src-tauri/gen
+src-tauri/icons
+src-tauri/resources
+src-web/target
+src-web/gen
+docs/SPEC.md
+package-lock.json
+src-tauri/tests/fixtures/readiness-table.json
+docs/SPEC-desktop.md
+toolkit
+server/test/support/fixtures
+server/src/render/testProject

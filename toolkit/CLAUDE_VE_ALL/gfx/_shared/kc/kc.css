@@ -1,0 +1,67 @@
+/* Kudrat Care design kit - natural skincare look (see Kudrat Care/Style/STYLE.md).
+   Warm cream paper, drifting red-clay and blue-clay blobs, leaf green accents, Baloo 2 type. */
+@font-face { font-family: "Baloo 2"; src: url("fonts/Baloo2-VF.ttf") format("truetype"); font-weight: 400 800; }
+
+:root {
+  --cream: #fbf3e8;
+  --sand: #f1e2cf;
+  --ink: #2a1d17;
+  --clay: #b5452f;
+  --clay-lt: #e07a5c;
+  --blue: #2f6f93;
+  --blue-lt: #8ec3db;
+  --leaf: #2f6b3d;
+  --leaf-lt: #8fbf7a;
+  --gold: #c99a3c;
+  --white: #ffffff;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: transparent; }
+#root { position: relative; width: 100%; height: 100%; overflow: hidden;
+  font-family: "Baloo 2", sans-serif; color: var(--ink); }
+
+/* Background (built by KC.bg) */
+.kc-bg { position: absolute; inset: 0; overflow: hidden;
+  background: radial-gradient(120% 70% at 50% 35%, #fffaf2 0%, var(--cream) 55%, var(--sand) 100%); }
+.kc-bg.dark { background: radial-gradient(120% 70% at 50% 35%, #3a2a22 0%, #261a15 60%, #1a120e 100%); }
+.kc-blob { position: absolute; border-radius: 50%; }
+.kc-blob.red { background: radial-gradient(circle, rgba(224, 122, 92, 0.42) 0%, rgba(224, 122, 92, 0.12) 45%, rgba(224, 122, 92, 0) 70%); }
+.kc-blob.blue { background: radial-gradient(circle, rgba(142, 195, 219, 0.55) 0%, rgba(142, 195, 219, 0.15) 45%, rgba(142, 195, 219, 0) 70%); }
+.kc-blob.green { background: radial-gradient(circle, rgba(143, 191, 122, 0.35) 0%, rgba(143, 191, 122, 0.10) 45%, rgba(143, 191, 122, 0) 70%); }
+.kc-dust { position: absolute; border-radius: 50%; }
+.kc-grain { position: absolute; inset: 0; opacity: 0.06;
+  background-image: radial-gradient(rgba(42, 29, 23, 0.9) 1px, transparent 1.2px); background-size: 7px 7px; }
+
+/* Text atoms */
+.kc-head { font-weight: 800; line-height: 1.32; text-align: center; color: var(--ink); }
+.kc-kicker { font-weight: 700; font-size: 46px; letter-spacing: 3px; line-height: 1.3; color: var(--leaf); text-align: center; }
+.kc-clay { color: var(--clay); }
+.kc-blue { color: var(--blue); }
+.kc-leaf { color: var(--leaf); }
+.kc-gold { color: var(--gold); }
+.kc-slab { display: inline-flex; align-items: center; justify-content: center;
+  background: var(--clay); color: var(--white); font-weight: 800; line-height: 1.32;
+  border-radius: 28px; padding: 10px 40px 2px; box-shadow: 0 14px 36px rgba(181, 69, 47, 0.30); }
+.kc-slab.blue { background: var(--blue); box-shadow: 0 14px 36px rgba(47, 111, 147, 0.30); }
+.kc-slab.leaf { background: var(--leaf); box-shadow: 0 14px 36px rgba(47, 107, 61, 0.30); }
+.kc-slab.ink { background: var(--ink); box-shadow: 0 14px 36px rgba(42, 29, 23, 0.30); }
+.kc-chip { display: inline-flex; align-items: center; justify-content: center;
+  border: 5px solid var(--clay); border-radius: 999px; color: var(--ink); background: rgba(255, 255, 255, 0.75);
+  font-weight: 700; font-size: 54px; line-height: 1.32; padding: 6px 36px 0; }
+.kc-chip.blue { border-color: var(--blue); }
+.kc-chip.leaf { border-color: var(--leaf); }
+/* Soft white card */
+.kc-card { position: absolute; border-radius: 44px; background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 30px 70px rgba(90, 50, 30, 0.18), inset 0 0 0 2px rgba(201, 154, 60, 0.25); }
+/* Drawn clay jar (KC.jar) */
+.kc-jar { position: absolute; }
+.kc-jar .lid { position: absolute; left: 6%; right: 6%; top: 0; height: 16%; border-radius: 18px 18px 8px 8px;
+  background: linear-gradient(180deg, #e3c27a 0%, #b88a3a 60%, #8e6626 100%); box-shadow: inset 0 -4px 0 rgba(0,0,0,0.15); }
+.kc-jar .glass { position: absolute; left: 0; right: 0; top: 13%; bottom: 0; border-radius: 26px 26px 44px 44px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.15) 30%, rgba(255,255,255,0.05) 70%, rgba(255,255,255,0.4) 100%);
+  border: 4px solid rgba(255,255,255,0.75); overflow: hidden; box-shadow: 0 26px 50px rgba(90, 50, 30, 0.25); }
+.kc-jar .powder { position: absolute; left: 0; right: 0; bottom: 0; height: 74%; }
+.kc-jar.red .powder { background: radial-gradient(120% 60% at 50% 0%, #e39a7f 0%, #c76a4e 40%, #a44a33 100%); }
+.kc-jar.blue .powder { background: radial-gradient(120% 60% at 50% 0%, #e4f2f8 0%, #b9dbea 45%, #8fbfd6 100%); }
+.kc-jar .shine { position: absolute; left: 12%; top: 10%; width: 12%; height: 70%; border-radius: 20px; background: rgba(255,255,255,0.45); }

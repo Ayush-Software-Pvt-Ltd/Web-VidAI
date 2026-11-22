@@ -1,0 +1,800 @@
+[
+  {
+    "name": "option 1 (claudeSubscription), everything ready",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": null
+  },
+  {
+    "name": "option 1 (claudeSubscription), Claude Code not installed",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "none",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "claudeMissing"
+  },
+  {
+    "name": "option 1 (claudeSubscription), Claude Code logged out",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "loggedOut",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "claudeLoggedOut"
+  },
+  {
+    "name": "option 1 (claudeSubscription), Git for Windows missing",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "gitBashMissing"
+  },
+  {
+    "name": "option 1 (claudeSubscription), Git for Windows missing is asked before Claude Code is installed",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "none",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "gitBashMissing"
+  },
+  {
+    "name": "option 1 (claudeSubscription), Git for Windows missing is asked before the login",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "loggedOut",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "gitBashMissing"
+  },
+  {
+    "name": "option 1 (claudeSubscription), not installed is asked before anything about the login",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "none",
+      "program": "ready",
+      "prepared": false
+    },
+    "program": "claudeCode",
+    "problem": "claudeMissing"
+  },
+  {
+    "name": "option 1 (claudeSubscription), logged out is asked before the computer is prepared",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "loggedOut",
+      "program": "ready",
+      "prepared": false
+    },
+    "program": "claudeCode",
+    "problem": "claudeLoggedOut"
+  },
+  {
+    "name": "option 1 (claudeSubscription), computer not prepared",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": false
+    },
+    "program": "claudeCode",
+    "problem": "notPrepared"
+  },
+  {
+    "name": "option 1 (claudeSubscription), no key and no model saved for any API option does not matter",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": false,
+      "modelChosen": false,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": null
+  },
+  {
+    "name": "option 1 (claudeSubscription), OpenCode 2 not installed does not matter",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "none",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": null
+  },
+  {
+    "name": "option 1 (claudeSubscription), OpenCode 2 unsupported does not matter",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "unsupported",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": null
+  },
+  {
+    "name": "option 1 (claudeSubscription), nothing of OpenCode or any API saved or installed does not matter",
+    "facts": {
+      "setup": "claudeSubscription",
+      "keySaved": false,
+      "modelChosen": false,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "none",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": null
+  },
+  {
+    "name": "option 2 (opencodeGo), everything ready",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 2 (opencodeGo), key not saved",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": false,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "apiKeyMissing"
+  },
+  {
+    "name": "option 2 (opencodeGo), model not chosen",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": false,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "apiModelMissing"
+  },
+  {
+    "name": "option 2 (opencodeGo), key is asked before the model",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": false,
+      "modelChosen": false,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "apiKeyMissing"
+  },
+  {
+    "name": "option 2 (opencodeGo), key is asked before the program",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": false,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "none",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "apiKeyMissing"
+  },
+  {
+    "name": "option 2 (opencodeGo), model is asked before the program",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": false,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "unsupported",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "apiModelMissing"
+  },
+  {
+    "name": "option 2 (opencodeGo), program not installed",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "none",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "programMissing"
+  },
+  {
+    "name": "option 2 (opencodeGo), program in a version VidAI does not drive",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "unsupported",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "programUnsupported"
+  },
+  {
+    "name": "option 2 (opencodeGo), program missing is asked before the computer is prepared",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "none",
+      "prepared": false
+    },
+    "program": "opencode2",
+    "problem": "programMissing"
+  },
+  {
+    "name": "option 2 (opencodeGo), computer not prepared",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": false
+    },
+    "program": "opencode2",
+    "problem": "notPrepared"
+  },
+  {
+    "name": "option 2 (opencodeGo), Claude Code not installed does not matter",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "none",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 2 (opencodeGo), Claude Code logged out does not matter",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "loggedOut",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 2 (opencodeGo), Git for Windows missing does not matter",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 2 (opencodeGo), no Claude Code and no Git for Windows does not matter",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "none",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 2 (opencodeGo), no Claude Code and no program is a missing program",
+    "facts": {
+      "setup": "opencodeGo",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "none",
+      "program": "none",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "programMissing"
+  },
+  {
+    "name": "option 4 (openaiApi), everything ready",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 4 (openaiApi), key not saved is ready when a model is chosen (the key is optional)",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": false,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 4 (openaiApi), model not chosen",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": false,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "apiModelMissing"
+  },
+  {
+    "name": "option 4 (openaiApi), no key and no model: only the model is asked",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": false,
+      "modelChosen": false,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "apiModelMissing"
+  },
+  {
+    "name": "option 4 (openaiApi), no key is not asked before the program",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": false,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "none",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "programMissing"
+  },
+  {
+    "name": "option 4 (openaiApi), model is asked before the program",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": false,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "unsupported",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "apiModelMissing"
+  },
+  {
+    "name": "option 4 (openaiApi), program not installed",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "none",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "programMissing"
+  },
+  {
+    "name": "option 4 (openaiApi), program in a version VidAI does not drive",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "unsupported",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "programUnsupported"
+  },
+  {
+    "name": "option 4 (openaiApi), program missing is asked before the computer is prepared",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "none",
+      "prepared": false
+    },
+    "program": "opencode2",
+    "problem": "programMissing"
+  },
+  {
+    "name": "option 4 (openaiApi), computer not prepared",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": false
+    },
+    "program": "opencode2",
+    "problem": "notPrepared"
+  },
+  {
+    "name": "option 4 (openaiApi), Claude Code not installed does not matter",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "none",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 4 (openaiApi), Claude Code logged out does not matter",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "loggedOut",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 4 (openaiApi), Git for Windows missing does not matter",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 4 (openaiApi), no Claude Code and no Git for Windows does not matter",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "none",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": null
+  },
+  {
+    "name": "option 4 (openaiApi), no Claude Code and no program is a missing program",
+    "facts": {
+      "setup": "openaiApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "none",
+      "program": "none",
+      "prepared": true
+    },
+    "program": "opencode2",
+    "problem": "programMissing"
+  },
+  {
+    "name": "option 3 (anthropicApi), everything ready",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": null
+  },
+  {
+    "name": "option 3 (anthropicApi), key not saved is ready when a model is chosen (the key is optional)",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": false,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": null
+  },
+  {
+    "name": "option 3 (anthropicApi), model not chosen",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": false,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "apiModelMissing"
+  },
+  {
+    "name": "option 3 (anthropicApi), no key and no model: only the model is asked",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": false,
+      "modelChosen": false,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "apiModelMissing"
+  },
+  {
+    "name": "option 3 (anthropicApi), no key is not asked before Claude Code",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": false,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "none",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "claudeMissing"
+  },
+  {
+    "name": "option 3 (anthropicApi), model is asked before Git for Windows",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": false,
+      "gitBashMissing": true,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "apiModelMissing"
+  },
+  {
+    "name": "option 3 (anthropicApi), Git for Windows missing",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "gitBashMissing"
+  },
+  {
+    "name": "option 3 (anthropicApi), Git for Windows missing is asked before Claude Code is installed",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": true,
+      "claude": "none",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "gitBashMissing"
+  },
+  {
+    "name": "option 3 (anthropicApi), Claude Code not installed",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "none",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": "claudeMissing"
+  },
+  {
+    "name": "option 3 (anthropicApi), Claude Code logged out is never asked for a login",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "loggedOut",
+      "program": "ready",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": null
+  },
+  {
+    "name": "option 3 (anthropicApi), Claude Code logged out and computer not prepared",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "loggedOut",
+      "program": "ready",
+      "prepared": false
+    },
+    "program": "claudeCode",
+    "problem": "notPrepared"
+  },
+  {
+    "name": "option 3 (anthropicApi), computer not prepared",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "ready",
+      "prepared": false
+    },
+    "program": "claudeCode",
+    "problem": "notPrepared"
+  },
+  {
+    "name": "option 3 (anthropicApi), OpenCode 2 not installed does not matter",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "none",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": null
+  },
+  {
+    "name": "option 3 (anthropicApi), OpenCode 2 unsupported does not matter",
+    "facts": {
+      "setup": "anthropicApi",
+      "keySaved": true,
+      "modelChosen": true,
+      "gitBashMissing": false,
+      "claude": "ready",
+      "program": "unsupported",
+      "prepared": true
+    },
+    "program": "claudeCode",
+    "problem": null
+  }
+]

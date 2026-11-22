@@ -1,0 +1,126 @@
+/* Apna Trader design kit - shared by every Apna Trader graphic (see <MAIN>/Style/STYLE.md).
+   Layout canvas 1920x1080 (rendered at 2x for 4K). Dark trading-terminal look. */
+@font-face { font-family: "Hind"; src: url("fonts/Hind-Medium.ttf") format("truetype"); font-weight: 500; }
+@font-face { font-family: "Hind"; src: url("fonts/Hind-SemiBold.ttf") format("truetype"); font-weight: 600; }
+@font-face { font-family: "Hind"; src: url("fonts/Hind-Bold.ttf") format("truetype"); font-weight: 700; }
+@font-face { font-family: "Rajdhani"; src: url("fonts/Rajdhani-SemiBold.ttf") format("truetype"); font-weight: 600; }
+@font-face { font-family: "Rajdhani"; src: url("fonts/Rajdhani-Bold.ttf") format("truetype"); font-weight: 700; }
+
+:root {
+  --ink: #070b14;      /* background */
+  --deep: #0d1424;     /* panels */
+  --line: #1c2740;     /* grid lines, borders */
+  --bull: #1fd17a;     /* up / profit / call */
+  --bear: #ff4757;     /* down / loss / put */
+  --gold: #ffc531;     /* highlight, slabs, key numbers */
+  --sky: #4da3ff;      /* neutral info accent */
+  --white: #ffffff;
+  --steel: #8a96ad;    /* secondary labels */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+
+#root {
+  position: relative; width: 100%; height: 100%; overflow: hidden;
+  font-family: "Hind", sans-serif; color: var(--white);
+}
+
+.at-layer { position: absolute; inset: 0; }
+.at-cam { position: absolute; inset: 0; }
+
+/* Background (built by AT.bg) */
+.at-bg { position: absolute; inset: 0; overflow: hidden;
+  background: radial-gradient(110% 90% at 50% 40%, #111b30 0%, #0a1020 55%, var(--ink) 100%); }
+.at-grid { position: absolute; left: -120px; top: -120px; width: 2160px; height: 1320px;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(77, 163, 255, 0.07) 0 2px, transparent 2px 120px),
+    repeating-linear-gradient(0deg, rgba(77, 163, 255, 0.07) 0 2px, transparent 2px 120px); }
+.at-glow { position: absolute; border-radius: 50%; }
+.at-glow-g { left: -500px; top: -300px; width: 1400px; height: 1400px;
+  background: radial-gradient(circle, rgba(31, 209, 122, 0.20) 0%, rgba(31, 209, 122, 0.06) 40%, rgba(31, 209, 122, 0) 70%); }
+.at-glow-r { left: 1100px; top: 250px; width: 1300px; height: 1300px;
+  background: radial-gradient(circle, rgba(255, 71, 87, 0.16) 0%, rgba(255, 71, 87, 0.05) 40%, rgba(255, 71, 87, 0) 70%); }
+.at-tape { position: absolute; left: 0; top: 0; height: 1080px; opacity: 0.16; }
+.at-vignette { position: absolute; inset: 0;
+  background: radial-gradient(120% 100% at 50% 50%, rgba(7, 11, 20, 0) 55%, rgba(7, 11, 20, 0.75) 100%); }
+
+/* Text atoms */
+.at-head { font-weight: 700; line-height: 1.3; text-align: center; }
+.at-label { font-weight: 600; line-height: 1.3; }
+.at-num { font-family: "Rajdhani", "Hind", sans-serif; font-weight: 700; line-height: 1.1; letter-spacing: 0.01em; }
+.at-gold { color: var(--gold); }
+.at-bull { color: var(--bull); }
+.at-bear { color: var(--bear); }
+.at-sky { color: var(--sky); }
+.at-steel { color: var(--steel); }
+
+/* Solid slab for key words: gold with ink text (bull / bear variants) */
+.at-slab {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--gold); color: var(--ink);
+  font-weight: 700; line-height: 1.3;
+  border-radius: 14px; padding: 10px 34px 2px;
+}
+.at-slab.bull { background: var(--bull); color: var(--ink); }
+.at-slab.bear { background: #e8313f; color: var(--white); }   /* darker than --bear so white passes 3:1 */
+.at-slab.white { background: var(--white); color: var(--ink); }
+
+/* Outlined pill */
+.at-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 3px solid var(--gold); border-radius: 999px;
+  color: var(--white); background: rgba(255, 197, 49, 0.10);
+  font-weight: 600; font-size: 40px; line-height: 1.3; padding: 6px 30px 0;
+}
+.at-chip.bull { border-color: var(--bull); background: rgba(31, 209, 122, 0.10); }
+.at-chip.bear { border-color: var(--bear); background: rgba(255, 71, 87, 0.10); }
+.at-chip.sky { border-color: var(--sky); background: rgba(77, 163, 255, 0.10); }
+
+/* Glass panel (cards, tables) */
+.at-panel {
+  position: absolute; border-radius: 28px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 2px solid rgba(138, 150, 173, 0.28);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.at-panel.bull { border-color: rgba(31, 209, 122, 0.55); }
+.at-panel.bear { border-color: rgba(255, 71, 87, 0.55); }
+.at-panel.gold { border-color: rgba(255, 197, 49, 0.6); }
+
+/* Small step tag ("STEP 1", "TIP 2") */
+.at-tag {
+  display: inline-flex; align-items: center; gap: 14px;
+  font-family: "Rajdhani", "Hind", sans-serif; font-weight: 700; font-size: 40px; letter-spacing: 0.08em;
+  color: var(--gold); line-height: 1.2;
+}
+.at-tag::before { content: ""; width: 44px; height: 6px; border-radius: 3px; background: var(--gold); }
+
+/* Screenshot / still image with rounded corners and shadow */
+.at-shot { position: absolute; border-radius: 26px; overflow: hidden;
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.6), 0 0 0 3px rgba(255, 255, 255, 0.08); }
+.at-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* Screenshot rig (shot.js, ATShot.build) */
+.ats-view { position: absolute; overflow: hidden; border-radius: 28px; background: rgba(13, 20, 36, 0.92);
+  border: 3px solid rgba(255, 197, 49, 0.45); box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), 0 0 60px rgba(255, 197, 49, 0.10); }
+.ats-cam { position: absolute; left: 0; top: 0; width: 1px; height: 1px; }
+.ats-page { position: absolute; left: 0; top: 0; border-radius: 18px; overflow: hidden; background: #fff;
+  box-shadow: 0 50px 120px rgba(0, 0, 0, 0.65), 0 0 0 4px rgba(255, 255, 255, 0.10); }
+.ats-page img { position: absolute; left: 0; top: 0; display: block; }
+.ats-mark { position: absolute; border-radius: 10px; }
+.ats-hl { background: rgba(255, 197, 49, 0.55); mix-blend-mode: multiply; }
+.ats-hl.bull { background: rgba(31, 209, 122, 0.45); }
+.ats-hl.bear { background: rgba(255, 71, 87, 0.40); }
+.ats-box { border: 7px solid var(--gold); box-shadow: 0 0 0 4px rgba(7, 11, 20, 0.35), 0 0 40px rgba(255, 197, 49, 0.55); }
+.ats-box.bull { border-color: var(--bull); }
+.ats-box.bear { border-color: var(--bear); }
+.ats-ul { background: var(--gold); border-radius: 6px; }
+.ats-ul.bear { background: var(--bear); }
+.ats-tag { position: absolute; left: 60px; top: 46px; font-size: 38px; background: rgba(7, 11, 20, 0.82); }
+.ats-cap { position: absolute; left: 60px; right: 60px; bottom: 44px; height: 132px; overflow: hidden;
+  border-radius: 24px; background: rgba(7, 11, 20, 0.88); border: 2px solid rgba(255, 197, 49, 0.55);
+  backdrop-filter: blur(14px); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); }
+.ats-line { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding-top: 8px; }
+.ats-line span { display: inline-block; white-space: nowrap; font-weight: 700; font-size: 64px; line-height: 1.35; color: var(--white); }

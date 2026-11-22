@@ -1,0 +1,471 @@
+@import "tailwindcss";
+
+/*
+ * Narrow top bar variants: `topbar-max-<N>:` applies inside a top bar narrower than N CSS px.
+ * The top bar measures itself (`useTopBarTokens` in src/app/topBar.ts) and lists the
+ * breakpoints it is below in `data-topbar`. CSS container queries would say the same, but
+ * WebKit compares the zoomed width of a container with them under page zoom (the text size),
+ * so a 744 px top bar at text size 20 counts as 1145 px wide. Keep the list in step with
+ * `TOP_BAR_BREAKPOINTS` (a test checks it).
+ */
+@custom-variant topbar-max-680 (&:where([data-topbar~="max-680"] *));
+@custom-variant topbar-max-760 (&:where([data-topbar~="max-760"] *));
+@custom-variant topbar-max-800 (&:where([data-topbar~="max-800"] *));
+@custom-variant topbar-max-820 (&:where([data-topbar~="max-820"] *));
+@custom-variant topbar-max-900 (&:where([data-topbar~="max-900"] *));
+@custom-variant topbar-max-960 (&:where([data-topbar~="max-960"] *));
+@custom-variant topbar-max-1100 (&:where([data-topbar~="max-1100"] *));
+
+/*
+ * VidAI design tokens (SPEC section 9): a calm, dense, professional desktop utility.
+ * Every colour is a CSS variable so light and dark mode switch in one place. The scheme follows
+ * the system (`prefers-color-scheme`); `data-theme="light" | "dark"` on <html> forces one (used
+ * by the primitives gallery and screenshots).
+ *
+ * Tailwind utilities map to these tokens through @theme below, for example `bg-surface`,
+ * `text-fg-muted`, `border-border`, `ring-focus`.
+ */
+
+:root {
+  color-scheme: light;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, "Kohinoor Devanagari",
+    "Devanagari Sangam MN", "Noto Sans Devanagari", sans-serif;
+  /* Monaco, not Menlo, before the generic fallback: Menlo's hyphen is nearly as long as an en dash
+     ("claude-opus-5-5" reads as "claude–opus–5–5") where SF Mono is not available (browsers
+     other than WebKit, the screenshots). */
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Monaco, Consolas, monospace;
+
+  /* Surfaces */
+  --c-window: #ececee;
+  --c-sidebar: #e9e9ec;
+  --c-surface: #ffffff;
+  --c-elevated: #ffffff;
+  --c-subtle: #f5f5f7;
+  --c-muted: #ebebef;
+  --c-hover: rgb(0 0 0 / 0.045);
+  --c-pressed: rgb(0 0 0 / 0.08);
+  --c-control: #ffffff;
+  --c-control-hover: #f6f6f8;
+  --c-control-active: #ececf0;
+  --c-selected: rgb(76 86 236 / 0.12);
+  --c-overlay: rgb(20 20 28 / 0.32);
+
+  /* Lines */
+  --c-border: rgb(0 0 0 / 0.1);
+  --c-border-strong: rgb(0 0 0 / 0.22);
+  /* Cards and containers: as light as the control border, never heavier. */
+  --c-border-container: rgb(0 0 0 / 0.1);
+  --c-separator: rgb(0 0 0 / 0.07);
+
+  /* Text */
+  --c-fg: #1d1d1f;
+  --c-fg-muted: #5f5f66;
+  --c-fg-subtle: #8a8a91;
+  --c-fg-disabled: #b4b4ba;
+
+  /* Accent (one accent colour, from the app icon) */
+  --c-accent: #4f58e8;
+  --c-accent-hover: #444ddb;
+  --c-accent-active: #3a42c4;
+  --c-accent-fg: #ffffff;
+  --c-accent-soft: rgb(79 88 232 / 0.1);
+  --c-accent-text: #3f48d6;
+  --c-focus: rgb(79 88 232 / 0.55);
+
+  /* Status */
+  --c-success: #1f8a43;
+  --c-success-soft: rgb(31 138 67 / 0.12);
+  --c-warning: #a05a00;
+  --c-warning-soft: rgb(220 140 0 / 0.16);
+  --c-danger: #d0312d;
+  --c-danger-hover: #bd2a26;
+  --c-danger-solid: #d0312d;
+  --c-danger-active: #a72320;
+  --c-danger-soft: rgb(208 49 45 / 0.1);
+  --c-info: #0a66c2;
+  --c-info-soft: rgb(10 102 194 / 0.1);
+  --c-neutral-soft: rgb(0 0 0 / 0.06);
+
+  /* Elevation */
+  --shadow-control: 0 0.5px 1px rgb(0 0 0 / 0.12), 0 0 0 0.5px rgb(0 0 0 / 0.06);
+  --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.14), 0 0 0 0.5px rgb(0 0 0 / 0.12);
+  --shadow-dialog: 0 24px 64px rgb(0 0 0 / 0.22), 0 0 0 0.5px rgb(0 0 0 / 0.12);
+}
+
+/*
+ * Windows (`data-platform` on <html>, set from the platform before the first frame, see
+ * src/main.tsx): the Windows 11 UI font (Segoe UI Variable, falling back to Segoe UI on
+ * Windows 10), Nirmala UI for Devanagari (Segoe UI has none), and Cascadia Mono, the font of
+ * Windows Terminal (Consolas before it). The fonts after them only matter where those are
+ * missing: the Windows screenshots rendered on a Mac (`npm run screenshots -- --platform=windows`).
+ */
+:root[data-platform="windows"] {
+  --font-sans:
+    "Segoe UI Variable Text", "Segoe UI", "Nirmala UI", system-ui, "Noto Sans Devanagari",
+    sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, ui-monospace, Monaco, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --c-window: #1e1e20;
+    --c-sidebar: #232326;
+    --c-surface: #1b1b1d;
+    --c-elevated: #2a2a2d;
+    --c-subtle: #222225;
+    --c-muted: #2e2e32;
+    --c-hover: rgb(255 255 255 / 0.055);
+    --c-pressed: rgb(255 255 255 / 0.09);
+    --c-control: #4a4a50;
+    --c-control-hover: #54545a;
+    --c-control-active: #5e5e65;
+    --c-selected: rgb(122 130 255 / 0.2);
+    --c-overlay: rgb(0 0 0 / 0.5);
+    --c-border: rgb(255 255 255 / 0.2);
+    --c-border-strong: rgb(255 255 255 / 0.32);
+    --c-border-container: rgb(255 255 255 / 0.14);
+    --c-separator: rgb(255 255 255 / 0.12);
+    --c-fg: #f2f2f5;
+    --c-fg-muted: #a8a8b0;
+    --c-fg-subtle: #7d7d85;
+    --c-fg-disabled: #55555b;
+    --c-accent: #626bf0;
+    --c-accent-hover: #6f78f5;
+    --c-accent-active: #565fe0;
+    --c-accent-fg: #ffffff;
+    --c-accent-soft: rgb(122 130 255 / 0.16);
+    --c-accent-text: #9aa1ff;
+    --c-focus: rgb(130 138 255 / 0.6);
+    --c-success: #4cc173;
+    --c-success-soft: rgb(76 193 115 / 0.16);
+    --c-warning: #f0b14a;
+    --c-warning-soft: rgb(240 177 74 / 0.16);
+    --c-danger: #ff6b63;
+    --c-danger-hover: #b8342e;
+    --c-danger-solid: #c93a33;
+    --c-danger-active: #a22d28;
+    --c-danger-soft: rgb(255 107 99 / 0.15);
+    --c-info: #5aa9ff;
+    --c-info-soft: rgb(90 169 255 / 0.15);
+    --c-neutral-soft: rgb(255 255 255 / 0.08);
+    --shadow-control: 0 0.5px 1px rgb(0 0 0 / 0.4), 0 0 0 0.5px rgb(255 255 255 / 0.22);
+    --shadow-popover: 0 10px 30px rgb(0 0 0 / 0.45), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+    --shadow-dialog: 0 24px 64px rgb(0 0 0 / 0.55), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+  }
+}
+
+/* Forced dark mode: the same values as the media query above. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --c-window: #1e1e20;
+  --c-sidebar: #232326;
+  --c-surface: #1b1b1d;
+  --c-elevated: #2a2a2d;
+  --c-subtle: #222225;
+  --c-muted: #2e2e32;
+  --c-hover: rgb(255 255 255 / 0.055);
+  --c-pressed: rgb(255 255 255 / 0.09);
+  --c-control: #4a4a50;
+  --c-control-hover: #54545a;
+  --c-control-active: #5e5e65;
+  --c-selected: rgb(122 130 255 / 0.2);
+  --c-overlay: rgb(0 0 0 / 0.5);
+  --c-border: rgb(255 255 255 / 0.2);
+  --c-border-strong: rgb(255 255 255 / 0.32);
+  --c-border-container: rgb(255 255 255 / 0.14);
+  --c-separator: rgb(255 255 255 / 0.12);
+  --c-fg: #f2f2f5;
+  --c-fg-muted: #a8a8b0;
+  --c-fg-subtle: #7d7d85;
+  --c-fg-disabled: #55555b;
+  --c-accent: #626bf0;
+  --c-accent-hover: #6f78f5;
+  --c-accent-active: #565fe0;
+  --c-accent-fg: #ffffff;
+  --c-accent-soft: rgb(122 130 255 / 0.16);
+  --c-accent-text: #9aa1ff;
+  --c-focus: rgb(130 138 255 / 0.6);
+  --c-success: #4cc173;
+  --c-success-soft: rgb(76 193 115 / 0.16);
+  --c-warning: #f0b14a;
+  --c-warning-soft: rgb(240 177 74 / 0.16);
+  --c-danger: #ff6b63;
+  --c-danger-hover: #b8342e;
+  --c-danger-solid: #c93a33;
+  --c-danger-active: #a22d28;
+  --c-danger-soft: rgb(255 107 99 / 0.15);
+  --c-info: #5aa9ff;
+  --c-info-soft: rgb(90 169 255 / 0.15);
+  --c-neutral-soft: rgb(255 255 255 / 0.08);
+  --shadow-control: 0 0.5px 1px rgb(0 0 0 / 0.4), 0 0 0 0.5px rgb(255 255 255 / 0.22);
+  --shadow-popover: 0 10px 30px rgb(0 0 0 / 0.45), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+  --shadow-dialog: 0 24px 64px rgb(0 0 0 / 0.55), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --color-window: var(--c-window);
+  --color-sidebar: var(--c-sidebar);
+  --color-surface: var(--c-surface);
+  --color-elevated: var(--c-elevated);
+  --color-subtle: var(--c-subtle);
+  --color-muted: var(--c-muted);
+  --color-hover: var(--c-hover);
+  --color-pressed: var(--c-pressed);
+  --color-control: var(--c-control);
+  --color-control-hover: var(--c-control-hover);
+  --color-control-active: var(--c-control-active);
+  --color-selected: var(--c-selected);
+  --color-overlay: var(--c-overlay);
+  --color-border: var(--c-border);
+  --color-border-strong: var(--c-border-strong);
+  --color-border-container: var(--c-border-container);
+  --color-separator: var(--c-separator);
+  --color-fg: var(--c-fg);
+  --color-fg-muted: var(--c-fg-muted);
+  --color-fg-subtle: var(--c-fg-subtle);
+  --color-fg-disabled: var(--c-fg-disabled);
+  --color-accent: var(--c-accent);
+  --color-accent-hover: var(--c-accent-hover);
+  --color-accent-active: var(--c-accent-active);
+  --color-accent-fg: var(--c-accent-fg);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-accent-text: var(--c-accent-text);
+  --color-focus: var(--c-focus);
+  --color-success: var(--c-success);
+  --color-success-soft: var(--c-success-soft);
+  --color-warning: var(--c-warning);
+  --color-warning-soft: var(--c-warning-soft);
+  --color-danger: var(--c-danger);
+  --color-danger-solid: var(--c-danger-solid);
+  --color-danger-hover: var(--c-danger-hover);
+  --color-danger-active: var(--c-danger-active);
+  --color-danger-soft: var(--c-danger-soft);
+  --color-info: var(--c-info);
+  --color-info-soft: var(--c-info-soft);
+  --color-neutral-soft: var(--c-neutral-soft);
+
+  --shadow-control: var(--shadow-control);
+  --shadow-popover: var(--shadow-popover);
+  --shadow-dialog: var(--shadow-dialog);
+
+  /* 13px base type scale */
+  --text-2xs: 10px;
+  --text-2xs--line-height: 14px;
+  --text-xs: 11px;
+  --text-xs--line-height: 14px;
+  --text-sm: 12px;
+  --text-sm--line-height: 16px;
+  --text-base: 13px;
+  --text-base--line-height: 18px;
+  --text-md: 14px;
+  --text-md--line-height: 20px;
+  --text-lg: 17px;
+  --text-lg--line-height: 22px;
+  --text-xl: 22px;
+  --text-xl--line-height: 28px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --animate-fade-in: fade-in 120ms ease-out;
+  --animate-pop-in: pop-in 140ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --animate-slide-up: slide-up 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  --animate-spin: spin 0.8s linear infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--c-fg);
+    background: var(--c-window);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    overflow: hidden;
+    /* A desktop app: text is not selectable unless a component opts in (`select-text`). */
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+  }
+
+  input,
+  textarea,
+  [contenteditable="true"],
+  .select-text {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  button {
+    cursor: default;
+  }
+
+  ::selection {
+    background: var(--c-accent-soft);
+  }
+
+  /*
+   * WebKit lays out a textarea's placeholder with the page zoom applied twice, so at a text size
+   * above the default an empty text box is wider inside than outside and shows a horizontal
+   * scrollbar (checked by the window-geometry end-to-end scenario).
+   */
+  textarea::placeholder {
+    max-width: 100%;
+  }
+
+  /* While a divider is dragged, keep its cursor everywhere and select nothing. */
+  html[data-resizing="col"],
+  html[data-resizing="col"] * {
+    cursor: col-resize !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
+
+  :focus-visible {
+    outline: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      transition-duration: 1ms !important;
+    }
+  }
+}
+
+@utility focus-ring {
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 1px var(--c-surface),
+      0 0 0 3.5px var(--c-focus);
+  }
+}
+
+/*
+ * A radio button drawn by the app, so it looks the same in light and dark mode (the native one is
+ * a filled dot in one and a ring in the other): a ring, and when chosen a filled accent circle
+ * with a white dot. Unavailable ones keep a visible ring on a grey fill. Give it a size, for
+ * example `size-4`.
+ */
+@utility radio {
+  appearance: none;
+  border-radius: 9999px;
+  border: 1.5px solid var(--c-fg-muted);
+  background-color: var(--c-surface);
+  &:checked {
+    border-color: var(--c-accent);
+    background-color: var(--c-accent);
+    background-image: radial-gradient(circle, var(--c-accent-fg) 0 3px, transparent 3.5px);
+  }
+  &:disabled {
+    border-color: var(--c-fg-subtle);
+    background-color: var(--c-muted);
+  }
+  &:disabled:checked {
+    border-color: var(--c-accent);
+    background-color: var(--c-accent);
+    opacity: 0.6;
+  }
+}
+
+/*
+ * A checkbox drawn by the app, so it looks the same in light and dark mode: a rounded square
+ * ring, and when checked a filled accent square with a white tick. Give it a size, for example
+ * `size-4`.
+ */
+@utility checkbox {
+  appearance: none;
+  border-radius: 4px;
+  border: 1.5px solid var(--c-fg-muted);
+  background-color: var(--c-surface);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  &:checked {
+    border-color: var(--c-accent);
+    background-color: var(--c-accent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.2 8.4 6.9 11 11.8 5.2'/%3E%3C/svg%3E");
+  }
+  &:disabled {
+    border-color: var(--c-fg-subtle);
+    background-color: var(--c-muted);
+  }
+  &:disabled:checked {
+    border-color: var(--c-accent);
+    background-color: var(--c-accent);
+    opacity: 0.6;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Web version only (`--page-zoom` is set on <html> by `applyPageZoom`, src/app/appearance.ts):
+ * CSS `zoom` scales a popup's offset a second time, so a menu would open away from its button.
+ * The positioning wrapper therefore undoes the zoom (its offset is then in screen pixels, as
+ * measured) and the popup inside takes it again for its own size. Nothing changes in the app.
+ */
+html[style*="--page-zoom"] [data-radix-popper-content-wrapper] {
+  zoom: calc(1 / var(--page-zoom));
+}
+html[style*="--page-zoom"] [data-radix-popper-content-wrapper] > * {
+  zoom: var(--page-zoom);
+}
+
+/*
+ * Web version only (`data-web-page` and `--page-min-*` are set on <html> by `applyWebPageFloor`,
+ * src/app/appearance.ts): a browser window can be any size, so the layout never gets less than the
+ * desktop window's smallest size (`MIN_LAYOUT_SIZE`, in zoomed px) and the page scrolls both ways
+ * below it. The body no longer clips, so the scrolling reaches the viewport; the page background
+ * (`html`) fills the area the scrolling reveals. Dialogs, sheets, toasts and menus are fixed to the
+ * visible window and are not part of the scrolled page.
+ */
+html[data-web-page] body {
+  overflow: visible;
+}
+html[data-web-page] #root {
+  min-width: var(--page-min-width);
+  min-height: var(--page-min-height);
+}

@@ -1,0 +1,77 @@
+/* XXX channel design kit (tmp/Style/STYLE.md): near-black ink on off-white paper, one electric
+   green accent, oversized condensed type (Barlow Condensed), flat geometric icons with rounded
+   strokes.  Layout canvas 1920x1080 (rendered at 2x for 4K). */
+@font-face { font-family: "Barlow Condensed"; src: url("fonts/BarlowCondensed-SemiBold.ttf") format("truetype"); font-weight: 600; }
+@font-face { font-family: "Barlow Condensed"; src: url("fonts/BarlowCondensed-Bold.ttf") format("truetype"); font-weight: 700; }
+@font-face { font-family: "Barlow Condensed"; src: url("fonts/BarlowCondensed-ExtraBold.ttf") format("truetype"); font-weight: 800; }
+@font-face { font-family: "Barlow Condensed"; src: url("fonts/BarlowCondensed-Black.ttf") format("truetype"); font-weight: 900; }
+@font-face { font-family: "Barlow"; src: url("fonts/Barlow-Medium.ttf") format("truetype"); font-weight: 500; }
+@font-face { font-family: "Barlow"; src: url("fonts/Barlow-SemiBold.ttf") format("truetype"); font-weight: 600; }
+@font-face { font-family: "Barlow"; src: url("fonts/Barlow-Bold.ttf") format("truetype"); font-weight: 700; }
+
+:root {
+  --paper: #f3f1ea;    /* background */
+  --card: #ffffff;     /* raised cards */
+  --ink: #111111;      /* text, strokes */
+  --green: #2ef06e;    /* the one accent: fills and slabs (ink text on it, never white) */
+  --green-d: #0f8a3c;  /* green for thin lines / text on paper (passes contrast) */
+  --mute: #6b6860;     /* secondary labels */
+  --line: #d9d5ca;     /* hairlines, empty bar tracks */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+
+#root {
+  position: relative; width: 100%; height: 100%; overflow: hidden;
+  font-family: "Barlow", sans-serif; color: var(--ink);
+}
+
+.xx-layer { position: absolute; inset: 0; }
+.xx-cam { position: absolute; inset: 0; }
+
+/* Background (built by XX.bg) */
+.xx-bg { position: absolute; inset: 0; overflow: hidden; background: var(--paper); }
+.xx-dots { position: absolute; left: -80px; top: -80px; width: 2080px; height: 1240px;
+  background-image: radial-gradient(circle, rgba(17, 17, 17, 0.14) 0 1.6px, transparent 2px);
+  background-size: 40px 40px; background-position: 0 0; }
+.xx-blob { position: absolute; border-radius: 50%; background: var(--green); opacity: 0.16; }
+
+/* Type atoms */
+.xx-head { font-family: "Barlow Condensed", sans-serif; font-weight: 900; text-transform: uppercase;
+  line-height: 0.98; letter-spacing: 0.005em; }
+.xx-num { font-family: "Barlow Condensed", sans-serif; font-weight: 900; line-height: 0.9; letter-spacing: -0.01em; }
+.xx-label { font-family: "Barlow", sans-serif; font-weight: 600; line-height: 1.2; }
+.xx-kicker { font-family: "Barlow Condensed", sans-serif; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; line-height: 1.1; }
+.xx-mute { color: var(--mute); }
+.xx-greentext { color: var(--green-d); }
+
+/* Solid green slab with ink text (key words, numbers) */
+.xx-slab { display: inline-flex; align-items: center; justify-content: center;
+  background: var(--green); color: var(--ink); border-radius: 14px; padding: 4px 26px 6px; }
+.xx-slab.ink { background: var(--ink); color: var(--paper); }
+
+/* Outlined pill / tag */
+.xx-chip { display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  border: 4px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink);
+  font-family: "Barlow Condensed", sans-serif; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.05em; font-size: 38px; line-height: 1.1; padding: 8px 28px 10px; }
+.xx-chip.green { background: var(--green); }
+
+/* Flat card: white, ink outline, hard offset shadow in ink */
+.xx-card { position: absolute; background: var(--card); border: 5px solid var(--ink); border-radius: 26px;
+  box-shadow: 10px 12px 0 var(--ink); }
+.xx-card.green { background: var(--green); }
+
+/* Highlighter bar behind words: <span class="xx-markwrap"><span class="xx-mark"></span><span class="xx-marktext">Word</span></span>
+   (animate .xx-mark scaleX from 0; transform-origin is the left edge) */
+.xx-markwrap { position: relative; display: inline-block; }
+.xx-mark { position: absolute; left: -10px; right: -10px; bottom: 6%; height: 34%; background: var(--green);
+  border-radius: 6px; transform-origin: 0% 50%; }
+.xx-marktext { position: relative; }
+
+/* Icon holder (XX.icon puts an inline SVG inside) */
+.xx-icon { position: absolute; display: block; }
+.xx-icon svg { width: 100%; height: 100%; overflow: visible; display: block; }

@@ -1,0 +1,8 @@
+# Nothing is written into the toolkit at run time, so nothing here should ever show up.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+Thumbs.db
+tests/**/*.tmp

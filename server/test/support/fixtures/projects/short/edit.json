@@ -1,0 +1,12 @@
+{
+  "toolkitVersion": "1.0.0",
+  "fps": 25,
+  "width": 1080,
+  "height": 1920,
+  "sources": [
+    { "name": "aroll.mp4", "path": "assets/media/aroll.mp4", "originalPath": "/data/channels/demo/short-1/take.mp4", "frames": 1000, "fps": "25" },
+    { "name": "broll.mp4", "path": "assets/media/broll.mp4", "originalPath": "/data/channels/demo/short-1/b1.mp4", "frames": 500, "fps": "25" },
+    { "name": "bed.mp3", "path": "assets/music/bed.mp3", "originalPath": null, "frames": 1000, "fps": "25" }
+  ],
+  "graphics": [{ "id": "h-1", "template": "keyword-hit", "variables": { "word": "wow" }, "label": "wow" }]
+}

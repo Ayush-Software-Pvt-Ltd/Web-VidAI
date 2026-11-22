@@ -1,0 +1,66 @@
+[package]
+name = "vidai-web"
+version = "0.2.4"
+description = "VidAI Web: the local server that runs the VidAI core for a browser on the same computer"
+authors = ["VidAI"]
+edition = "2024"
+publish = false
+
+[lib]
+name = "vidai_web"
+
+[[bin]]
+name = "vidai-web"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+# Reads the minimum macOS version for the picture-check helper (build.rs).
+serde_json = "1"
+
+[dependencies]
+# The core, as a library (SPEC section 12, Architecture).
+vidai = { path = "../src-tauri" }
+# The same Tauri, features and plugins as the core. The plugins are direct dependencies so that
+# tauri-build sees their permissions for capabilities/default.json.
+# `custom-protocol` makes the build a release one for Tauri: no Info.plist is embedded in each of
+# the two crates that call `generate_context!` (the core and this one), which fat LTO rejects.
+tauri = { version = "2", features = ["protocol-asset", "custom-protocol"] }
+tauri-plugin-opener = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+# The HTTP server runs on Tauri's own tokio runtime (`tauri::async_runtime`), the same tokio.
+tokio = { version = "1", features = ["macros", "net", "signal", "sync", "time", "rt", "fs", "io-util"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query"] }
+# The access token (random bytes from the operating system, compared in constant time).
+getrandom = "0.3"
+subtle = "2"
+# Files and the file picker's folders (`asset`, `fs`) and the usage schedule (`usage`).
+tokio-util = { version = "0.7", features = ["io"] }
+mime_guess = "2"
+httpdate = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# The UI: `../dist` read from disk in debug builds, embedded in release builds.
+rust-embed = "8"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt"] }
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

@@ -1,0 +1,20 @@
+/* House of Tech - landscape (1920x1080) overrides.  Link AFTER ht.css:
+     <link rel="stylesheet" href="shared/hot/ht.css" />
+     <link rel="stylesheet" href="shared/hot/ht16.css" />
+   and call HT.bg(tl, root, D, { landscape: true, seed: 11 }).
+   Author long-video graphics at 1920x1080. */
+html, body { width: 1920px; height: 1080px; }
+
+.ht-floor { left: -240px; top: 650px; width: 2400px; height: 900px; }
+.ht-floor-lines { width: 2400px; height: 1200px; }
+.ht-floor-wrap { perspective: 900px; perspective-origin: 50% 560px; }
+.ht-horizon { top: 648px; }
+.ht-fade { top: 626px; height: 250px; }
+.ht-glow-c { left: -500px; top: -120px; width: 1500px; height: 1500px; }
+.ht-glow-o { left: 900px; top: 300px; width: 1300px; height: 1300px; }
+
+/* Landscape text atoms keep the same weights; sizes are set per graphic. */
+.ht-head { line-height: 1.22; }
+.ht-slab { border-radius: 18px; padding: 6px 30px 2px; }
+.ht-chip { font-size: 40px; padding: 4px 26px 0; }
+.ht-panel { border-radius: 28px; }

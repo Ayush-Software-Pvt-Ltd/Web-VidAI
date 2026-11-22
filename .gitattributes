@@ -1,0 +1,13 @@
+# Every text file is checked out with LF line endings on every platform, also on Windows:
+# Git Bash runs the test fakes (*.sh), Prettier checks for LF, and fixtures are compared byte by byte.
+* text=auto eol=lf
+
+# Binary files, never touched.
+*.gz binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.icns binary
+*.mp4 binary
+*.mov binary
+*.ttf binary

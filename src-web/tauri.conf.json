@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "VidAI Web",
+  "version": "0.2.4",
+  "identifier": "com.vidai.desktop",
+  "build": {
+    "frontendDist": "./blank"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'none'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
+    }
+  },
+  "bundle": {
+    "active": false,
+    "resources": {
+      "../src-tauri/resources/default_prompt.md": "resources/default_prompt.md",
+      "../src-tauri/resources/toolkit.tar.gz": "resources/toolkit.tar.gz"
+    },
+    "icon": [
+      "../src-tauri/icons/32x32.png",
+      "../src-tauri/icons/128x128.png",
+      "../src-tauri/icons/128x128@2x.png",
+      "../src-tauri/icons/icon.icns",
+      "../src-tauri/icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
+  }
+}

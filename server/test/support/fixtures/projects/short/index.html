@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script src="shared/gsap.min.js"></script>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-fps="25" data-duration="12">
+      <video id="a-1" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="0" data-duration="5" data-media-start="0" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Hook" style="z-index:0"></video>
+      <video id="a-2" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="5" data-duration="4" data-media-start="10" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Point" style="z-index:0"></video>
+      <video id="a-3" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="9" data-duration="3" data-media-start="20" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="End" style="z-index:0"></video>
+      <video id="b-1" class="clip" src="assets/media/broll.mp4" playsinline muted data-start="2" data-duration="2" data-media-start="1" data-track-index="1" data-vidai-kind="broll" data-vidai-label="Detail" style="z-index:1"></video>
+      <div id="h-1" class="clip" data-composition-id="h-1" data-composition-src="compositions/h-1.html" data-start="8" data-duration="1.2" data-track-index="3" data-vidai-kind="hit" data-vidai-label="wow" data-width="1080" data-height="1920" style="z-index:3"></div>
+      <audio id="m-1" class="clip" src="assets/music/bed.mp3" data-start="0" data-duration="12" data-media-start="0" data-track-index="10" data-vidai-kind="music" data-vidai-label="Music"></audio>
+    </div>
+    <script>
+(function () {
+  window.__timelines = window.__timelines || {};
+  var root = document.getElementById("root");
+  var length = Math.max(0, Number(root.getAttribute("data-duration")) || 0);
+  var timeline = gsap.timeline({ paused: true });
+  timeline.to({}, { duration: length }, 0);
+  window.__timelines["main"] = timeline;
+})();
+    </script>
+  </body>
+</html>

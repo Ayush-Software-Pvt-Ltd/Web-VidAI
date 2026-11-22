@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="shared/gsap.min.js"></script>
+    <link rel="stylesheet" href="shared/kit.css" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+      .clip { position: absolute; inset: 0; }
+      @font-face { font-family: Kit; src: url("shared/kit.woff2"); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-width="1920" data-height="1080" data-fps="30" data-duration="45">
+      <!-- A-roll: one cut per line, the sound stays on the video -->
+      <video id="a-1" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="0" data-duration="5" data-media-start="2" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Hook" style="z-index:0"></video>
+      <video id="a-2" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="5" data-duration="7" data-media-start="12" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Problem" style="z-index:0"></video>
+      <video id="a-3" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="12" data-duration="4" data-media-start="30" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Turn" style="z-index:0"></video>
+      <video
+        id="a-4"
+        class="clip"
+        src="assets/media/aroll.mp4"
+        playsinline
+        data-has-audio="true"
+        data-start="16"
+        data-duration="6"
+        data-media-start="45.5"
+        data-track-index="0"
+        data-vidai-kind="aroll"
+        data-vidai-label="Solution"
+        style="z-index:0"
+      ></video>
+      <video id="a-5" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="22" data-duration="8" data-media-start="60" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Proof" style="z-index:0"></video>
+      <video id="a-6" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="30" data-duration="3" data-media-start="80" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Detail" style="z-index:0"></video>
+      <video id="a-7" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="33" data-duration="6.666666667" data-media-start="100.5" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Offer" style="z-index:0"></video>
+      <video id="a-8" class="clip" src="assets/media/aroll.mp4" playsinline data-has-audio="true" data-start="39.666666667" data-duration="5.333333333" data-media-start="130" data-track-index="0" data-vidai-kind="aroll" data-vidai-label="Call to action" style="z-index:0"></video>
+
+      <!-- B-roll and full-screen graphics, track 1 -->
+      <video id='b-1' class='clip' src='assets/media/broll.mp4' playsinline muted data-start='2' data-duration='3' data-media-start='0' data-track-index='1' data-vidai-kind='broll' data-vidai-label='Street' style='z-index:1'></video>
+      <video id="b-2" class="clip" src="assets/media/broll.mp4" playsinline muted data-start="13.333333333" data-duration="4" data-media-start="3.5" data-track-index="1" data-vidai-kind="broll" data-vidai-label="Workshop" style="z-index:1"></video>
+      <div id="g-1" class="clip" data-composition-id="g-1" data-composition-src="compositions/g-1.html" data-start="20" data-duration="3" data-track-index="1" data-vidai-kind="graphic" data-vidai-label="Big number" data-width="1920" data-height="1080" style="z-index:1"></div>
+      <img id="b-3" class="clip" src="assets/product.png" data-start="26.666666667" data-duration="2" data-track-index=1 data-vidai-kind="broll" data-vidai-label="Product" style="z-index:1" />
+
+      <!-- Overlays, track 2 -->
+      <div id="ov-1" class="clip" data-composition-id="ov-1" data-composition-src="compositions/ov-1.html" data-start="6.666666667" data-duration="3" data-track-index="2" data-vidai-kind="overlay" data-vidai-label="Lower third" data-width="1920" data-height="1080" style="z-index:2"></div>
+      <img id="ov-2" class="clip" src="assets/product.png" data-start="33.333333333" data-duration="2" data-track-index="2" data-vidai-kind="overlay" data-vidai-label="Badge" style="z-index:2;width:320px" />
+
+      <!-- Keyword hits, track 3 -->
+      <div id="h-1" class="clip" data-composition-id="h-1" data-composition-src="compositions/h-1.html" data-start="8.333333333" data-duration="1" data-track-index="3" data-vidai-kind="hit" data-vidai-label="free" data-width="1920" data-height="1080" style="z-index:3"></div>
+      <div id="h-2" class="clip" data-composition-id="h-2" data-composition-src="compositions/h-2.html" data-start="23.333333333" data-duration="1" data-track-index="3" data-vidai-kind="hit" data-vidai-label="today" data-width="1920" data-height="1080" style="z-index:3"></div>
+      <div id="h-3" class="clip" data-composition-id="h-3" data-composition-src="compositions/h-3.html" data-start="40" data-duration="1" data-track-index="3" data-vidai-kind="hit" data-vidai-label="now" data-width="1920" data-height="1080" style="z-index:3"></div>
+
+      <!-- The end fade, track 4 -->
+	  <div id="fade-1"	class="clip" data-composition-id="fade-1" data-composition-src="compositions/fade-1.html" data-start="43" data-duration="2" data-track-index="4" data-vidai-kind="fade" data-vidai-label="Fade out" data-width="1920" data-height="1080" style="z-index:4"></div>
+
+      <!-- Sound: effects on 10 and 11, music on 12 -->
+      <audio id="s-1" class="clip" src="assets/sfx/whoosh.wav" data-start="3.166666667" data-duration="1" data-media-start="0" data-track-index="10" data-vidai-kind="sfx" data-vidai-label="Whoosh"></audio>
+      <audio id="s-2" class="clip" src="assets/sfx/whoosh.wav" data-start="13.5" data-duration="1" data-media-start="0" data-track-index="10" data-vidai-kind="sfx" data-vidai-label="Whoosh"></audio>
+      <audio id="s-3" class="clip" src="assets/sfx/whoosh.wav" data-start="23.333333333" data-duration="1" data-media-start="1" data-track-index="11" data-vidai-kind="sfx" data-vidai-label="Impact"></audio>
+      <audio id="m-1" class="clip" src="assets/music/bed.mp3" data-start="0" data-duration="45" data-media-start="0" data-track-index="12" data-vidai-kind="music" data-vidai-label="Music bed"></audio>
+    </div>
+    <script>
+(function () {
+  window.__timelines = window.__timelines || {};
+  var root = document.getElementById("root");
+  var length = Math.max(0, Number(root.getAttribute("data-duration")) || 0);
+  var timeline = gsap.timeline({ paused: true });
+  timeline.to({}, { duration: length }, 0);
+  window.__timelines["main"] = timeline;
+})();
+    </script>
+  </body>
+</html>
