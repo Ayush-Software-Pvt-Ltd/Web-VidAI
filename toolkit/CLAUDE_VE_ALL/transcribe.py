@@ -1,4 +1,4 @@
-"""Hindi / Hinglish A-roll transcription with word timestamps (mlx-whisper or faster-whisper, see vekit/asr.py).
+"""A-roll transcription with word timestamps (mlx-whisper or faster-whisper, see vekit/asr.py).
 
 Two passes, both kept (each recovers words the other misses):
   full    one pass over the whole file                -> <out>/<part>.full.json
@@ -8,7 +8,11 @@ Two passes, both kept (each recovers words the other misses):
 
 Usage:
   python transcribe.py <audio_16k.wav> <out_dir> <part> [--pass full|chunks|both]
-                       [--model large-v3|turbo] [--prompt "..."] [--lang hi|en|...]
+                       [--model large-v3|turbo] [--prompt "..."] [--lang hi|en|auto|...]
+
+--lang is a Whisper language code (default hi).  --lang auto detects the spoken language once on
+windows spread over the audio, prints it with its probability, and uses it for every pass and chunk;
+the Hindi tech prompt is used only when the language is hi.  `ve.py lang <video folder>` only detects.
 """
 import argparse
 import json
@@ -70,6 +74,16 @@ def speech_chunks(wav, total, max_len=25.0):
     return out
 
 
+def resolve_language(lang, audio, model):
+    """`auto` becomes the detected language code (printed with its probability, detected once so
+    every pass and chunk uses the same one); any other value is returned as it is."""
+    if lang != "auto":
+        return lang
+    found = asr.detect_language(audio, model=model)
+    print(asr.describe_language(found), flush=True)
+    return found["language"]
+
+
 def run(model, audio, prompt, lang="hi", offset=0.0):
     """One recognition: {"text", "segments": [{s, e, text}], "words": [{w, s, e, p}]}."""
     return asr.transcribe(audio, model=model, language=lang, prompt=prompt, offset=offset)
@@ -82,11 +96,9 @@ def main():
     ap.add_argument("part")
     ap.add_argument("--pass", dest="which", default="both", choices=["full", "chunks", "both"])
     ap.add_argument("--model", default="large-v3", choices=list(MODELS))
-    ap.add_argument("--prompt", default=None, help="initial prompt (default: a Hindi tech prompt for --lang hi)")
-    ap.add_argument("--lang", default="hi", help="Whisper language code (hi, en, ...)")
+    ap.add_argument("--prompt", default=None, help="initial prompt (default: a Hindi tech prompt for hi)")
+    ap.add_argument("--lang", default="hi", help="Whisper language code (hi, en, ...) or auto to detect it")
     a = ap.parse_args()
-    if a.prompt is None and a.lang == "hi":
-        a.prompt = DEFAULT_PROMPT
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     audio, sr = sf.read(a.wav, dtype="float32")
@@ -95,10 +107,13 @@ def main():
 
     # one GPU slot for the whole run (SPEC section 9): the model stays loaded between the passes
     with asr.gpu_task():
+        a.lang = resolve_language(a.lang, audio, a.model)
+        if a.prompt is None and a.lang == "hi":
+            a.prompt = DEFAULT_PROMPT
         if a.which in ("full", "both"):
             r = run(a.model, a.wav, a.prompt, a.lang)
             (out / f"{a.part}.full.json").write_text(json.dumps(
-                {"model": a.model, "segments": r["segments"], "words": r["words"]},
+                {"model": a.model, "language": a.lang, "segments": r["segments"], "words": r["words"]},
                 ensure_ascii=False, indent=1), encoding="utf-8")
             print(f"full pass: {len(r['segments'])} segments", flush=True)
 
@@ -111,7 +126,7 @@ def main():
                             "words": r["words"]})
                 print(f"[{i + 1}/{len(chunks)}] {s:7.2f}-{e:7.2f} {r['text']}", flush=True)
             (out / f"{a.part}.chunks.json").write_text(json.dumps(
-                {"model": a.model, "chunks": res}, ensure_ascii=False, indent=1), encoding="utf-8")
+                {"model": a.model, "language": a.lang, "chunks": res}, ensure_ascii=False, indent=1), encoding="utf-8")
     return 0
 
 

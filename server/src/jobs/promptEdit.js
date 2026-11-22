@@ -18,6 +18,7 @@ import {
 import {
   headerBlock,
   hfCommandLine,
+  isWindows,
   parentOf,
   programBlocks,
   separatorOf,
@@ -91,6 +92,7 @@ export function vidaiParagraph(ctx, hasStyle) {
       example: hf,
       home: parentOf(ctx.toolkitFolder),
       sep,
+      windows: isWindows(ctx),
     }),
     hasStyle ? STYLE_GIVEN : STYLE_EMPTY,
     projectSentences({ hfCommand: hf }),

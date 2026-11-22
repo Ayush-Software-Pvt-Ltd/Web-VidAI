@@ -7,6 +7,7 @@ the deliverables to <video folder>/output/.  Run it with the toolkit's own Pytho
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py doctor                    check ffmpeg / hardware encoders / node / speech package
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py hardware                  speech device and video encoder as one JSON line (System page)
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py prep   <VIDEO>            recon the video folder, write project.json, extract audio
+  $PY <toolkit>/CLAUDE_VE_ALL/ve.py lang   <VIDEO>            spoken language of each A-roll (after prep)
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py plan   <VIDEO>            timeline.py -> build/timeline.json (+ warnings, pacing)
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py gfx    <VIDEO> [--res 1080 2160]   render the graphics the timeline uses
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py broll  <VIDEO>            conform the b-roll mezzanines only
@@ -161,6 +162,22 @@ def cmd_prep(a):
         print(f"{len(others)} other video file(s) to catalogue as b-roll:")
         for p in others:
             print("  ", p.relative_to(vdir))
+
+
+def cmd_lang(a):
+    """The spoken language of each A-roll: Whisper's guess on three windows, printed with its probability."""
+    import soundfile as sf
+    pdir = pdir_of(a.main)
+    try:
+        project = json.loads((pdir / "project.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise SystemExit("no project.json: run ve.py prep first")
+    with asr.gpu_task():
+        for k in project["aroll"]:
+            wav = pdir / "audio" / f"{k}_16k.wav"
+            audio, sr = sf.read(str(wav), dtype="float32")
+            assert sr == 16000, "expects 16 kHz mono"
+            print(f"{k}  {asr.describe_language(asr.detect_language(audio, model=a.model))}", flush=True)
 
 
 def cmd_plan(a):
@@ -450,13 +467,14 @@ def main():
     p = sub.add_parser("audio"); p.add_argument("main"); p.add_argument("--timeline")
     p = sub.add_parser("qa"); p.add_argument("main"); p.add_argument("--res", required=True); p.add_argument("--timeline")
     p = sub.add_parser("prep"); p.add_argument("main")
+    p = sub.add_parser("lang"); p.add_argument("main"); p.add_argument("--model", default="large-v3", choices=list(asr.MODELS))
     sub.add_parser("doctor")
     sub.add_parser("hardware")
     a = ap.parse_args()
     sys.exit(asr.guarded(lambda: {"prep": cmd_prep, "plan": cmd_plan, "gfx": cmd_gfx, "broll": cmd_broll, "build": cmd_build,
      "fcp": cmd_fcp, "premiere": cmd_premiere, "hf": cmd_hf,
      "review": cmd_review, "import": cmd_import, "frames": cmd_frames, "audio": cmd_audio,
-     "qa": cmd_qa, "doctor": cmd_doctor, "hardware": cmd_hardware}[a.cmd](a) or 0))
+     "lang": cmd_lang, "qa": cmd_qa, "doctor": cmd_doctor, "hardware": cmd_hardware}[a.cmd](a) or 0))
 
 
 if __name__ == "__main__":

@@ -388,3 +388,64 @@ def transcribe(audio, *, model: str = "large-v3", language: str | None = "hi",
         audio, language=language, task="transcribe", word_timestamps=True, temperature=0.0,
         condition_on_previous_text=False, initial_prompt=prompt)
     return _from_faster(segments, offset)
+
+
+# ------------------------------------------------------------------------------- language
+
+SAMPLE_RATE = 16000
+WINDOW_SECONDS = 30                  # Whisper listens to 30 s per language guess
+SILENT_RMS = 0.003                   # a window quieter than this (about -50 dB) says nothing about the language
+
+
+def _detection_windows(audio, count: int) -> list:
+    """Up to `count` windows of 30 s spread over the audio (one when it is shorter), the silent
+    ones left out unless all are silent.  The first seconds of a raw take are often crew chatter,
+    so the windows are centred in equal parts of the audio instead of starting at 0."""
+    import numpy as np
+    size = WINDOW_SECONDS * SAMPLE_RATE
+    if len(audio) <= size:
+        return [audio]
+    count = max(1, min(count, len(audio) // size))
+    starts = [round((len(audio) - size) * (i + 0.5) / count) for i in range(count)]
+    windows = [audio[s:s + size] for s in starts]
+    loud = [w for w in windows if float(np.sqrt(np.mean(np.square(w, dtype="float64")))) >= SILENT_RMS]
+    return loud or windows
+
+
+def _language_probs(window, name: str, which: str) -> dict:
+    """{language code: probability} of one window of at most 30 s."""
+    if which == "mlx":
+        import mlx.core as mx
+        from mlx_whisper.audio import N_FRAMES, N_SAMPLES, log_mel_spectrogram, pad_or_trim
+        from mlx_whisper.transcribe import ModelHolder
+        model = ModelHolder.get_model(name, mx.float16)
+        mel = log_mel_spectrogram(window, n_mels=model.dims.n_mels, padding=N_SAMPLES)
+        _, probs = model.detect_language(pad_or_trim(mel, N_FRAMES, axis=-2).astype(mx.float16))
+        return dict(probs[0] if isinstance(probs, list) else probs)
+    _language, _probability, all_probs = _faster_model(name).detect_language(window)
+    return dict(all_probs)
+
+
+def detect_language(audio, *, model: str = "large-v3", windows: int = 3) -> dict:
+    """The language spoken in `audio` (a float32 numpy array at 16 kHz mono): Whisper's guess on up
+    to `windows` windows of 30 s spread over the audio, the probabilities averaged.
+    Returns {"language": "hi", "probability": 0.93, "top": [("hi", 0.93), ("en", 0.05), ("ur", 0.01)]}.
+    Callers wrap the run in `with asr.gpu_task():`."""
+    which = backend()
+    name = model_name(model, which)
+    total: dict = {}
+    parts = _detection_windows(audio, windows)
+    for window in parts:
+        for code, p in _language_probs(window, name, which).items():
+            total[code] = total.get(code, 0.0) + float(p) / len(parts)
+    if not total:
+        raise RuntimeError("the speech model gave no language probabilities")
+    top = sorted(total.items(), key=lambda kv: -kv[1])[:3]
+    return {"language": top[0][0], "probability": round(top[0][1], 3),
+            "top": [(code, round(p, 3)) for code, p in top]}
+
+
+def describe_language(found: dict) -> str:
+    """One line for the agent: `language: hi 0.93 (en 0.05, ur 0.01)`."""
+    rest = ", ".join(f"{code} {p:.2f}" for code, p in found["top"][1:])
+    return f"language: {found['language']} {found['probability']:.2f}" + (f" ({rest})" if rest else "")

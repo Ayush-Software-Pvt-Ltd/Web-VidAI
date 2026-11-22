@@ -6,6 +6,7 @@ import {
   followUpOn,
   headerBlock,
   hfCommandLine,
+  isWindows,
   joinPath,
   limitsLine,
   machineLine,
@@ -115,6 +116,33 @@ test("paths are joined with the separator of their base, on both systems", () =>
     hfCommandLine(editInput()),
     '"/srv/vidai/toolkit/venv/bin/python" "/srv/vidai/toolkit/CLAUDE_VE_ALL/ve.py" hf "/Users/e/Editing/Tech Reviews/2026-11-01 Unboxing"',
   );
+});
+
+test("on Windows the command lines use slashes, elsewhere nothing changes", () => {
+  const windows = {
+    ...editInput(),
+    toolkitFolder: "C:\\VidAI\\toolkit\\CLAUDE_VE_ALL",
+    python: "C:\\VidAI\\toolkit\\venv\\Scripts\\python.exe",
+    mainFolder: "D:\\Editing\\Tech\\Video",
+    checkCommand:
+      '"C:\\Program Files\\nodejs\\node.exe" "C:\\VidAI\\server\\src\\timeline\\checkCli.js" "D:\\Editing\\Tech\\Video\\output\\Video.hf"',
+  };
+  assert.equal(isWindows(windows), true);
+  assert.equal(isWindows({ ...windows, python: "\\\\nas\\vidai\\python.exe" }), true);
+  assert.equal(isWindows(editInput()), false);
+  assert.equal(
+    hfCommandLine(windows),
+    '"C:/VidAI/toolkit/venv/Scripts/python.exe" "C:/VidAI/toolkit/CLAUDE_VE_ALL/ve.py" hf "D:/Editing/Tech/Video"',
+  );
+  const header = headerBlock(windows);
+  assert.ok(header.includes("\nTOOLKIT_FOLDER = C:\\VidAI\\toolkit\\CLAUDE_VE_ALL\n"));
+  assert.ok(header.includes("\nPYTHON = C:\\VidAI\\toolkit\\venv\\Scripts\\python.exe\n"));
+  assert.ok(
+    header.includes(
+      '\nCHECK_COMMAND = "C:/Program Files/nodejs/node.exe" "C:/VidAI/server/src/timeline/checkCli.js" "D:/Editing/Tech/Video/output/Video.hf"\n',
+    ),
+  );
+  assert.equal(headerBlock(editInput()).includes("CHECK_COMMAND = node /srv/"), true);
 });
 
 test("program and setup blocks and follow-ups", () => {

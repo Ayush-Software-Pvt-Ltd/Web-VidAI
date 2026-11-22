@@ -41,14 +41,27 @@ export const VIDAI_INTRO =
   "This edit was started from the VidAI app. There is no terminal and nobody can answer questions, so make your best guess and never wait for input.";
 
 /**
+ * How a command is typed on Windows: PowerShell needs `&` in front of a quoted program path (without
+ * it the line is a string followed by garbage), Git Bash and cmd.exe must not get it.
+ * @param {string} example A complete command line.
+ * @returns {string}
+ */
+function windowsShell(example) {
+  return `In PowerShell write the same line with & in front (& ${example}); in Git Bash or cmd.exe write it without. Keep the double quotes and forward slashes as they are, and do the same for CHECK_COMMAND.`;
+}
+
+/**
  * The toolkit sentences of the VidAI paragraph: which program to use, how to call it, where its
  * standing instructions are.
- * @param {{ example: string, home: string, sep: string }} p `example` is a complete command line
- *   with the real values, `home` the folder that holds TOOLKIT_FOLDER, `sep` its path separator.
+ * @param {{ example: string, home: string, sep: string, windows: boolean }} p `example` is a
+ *   complete command line with the real values (on Windows with slashes and double quotes),
+ *   `home` the folder that holds TOOLKIT_FOLDER, `sep` its path separator, `windows` whether the
+ *   server runs on Windows, where the shell decides how a quoted program is started.
  * @returns {string}
  */
 export function toolkitSentences(p) {
-  return `The toolkit is in TOOLKIT_FOLDER and runs with the Python in PYTHON. Every command takes the absolute video folder, so call it as ${p.example} (replace "hf" with the command you need); do not use any other Python or toolkit folder and never write into TOOLKIT_FOLDER. Where older notes (for example MEMORY.md) say CLAUDE_VE_ALL, they mean TOOLKIT_FOLDER. Read ${p.home}${p.sep}CLAUDE.md (short rules) and ${p.home}${p.sep}MEMORY.md (lessons from earlier edits; append a new lesson to it only when you learned one worth keeping) before you start.`;
+  const then = p.windows ? `. ${windowsShell(p.example)} Do not use` : "; do not use";
+  return `The toolkit is in TOOLKIT_FOLDER and runs with the Python in PYTHON. Every command takes the absolute video folder, so call it as ${p.example} (replace "hf" with the command you need)${then} any other Python or toolkit folder and never write into TOOLKIT_FOLDER. Where older notes (for example MEMORY.md) say CLAUDE_VE_ALL, they mean TOOLKIT_FOLDER. Read ${p.home}${p.sep}CLAUDE.md (short rules) and ${p.home}${p.sep}MEMORY.md (lessons from earlier edits; append a new lesson to it only when you learned one worth keeping) before you start.`;
 }
 
 /**

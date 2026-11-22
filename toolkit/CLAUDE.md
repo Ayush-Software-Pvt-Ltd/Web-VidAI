@@ -7,13 +7,15 @@
 - The header of every VidAI message gives the names and values; no shell variables are set.
 
 ## Command form
-- Write each command as the value of `PYTHON`, then `<TOOLKIT_FOLDER>/ve.py <command> "<MAIN_FOLDER>"`.
-- Every command takes the absolute video folder, and so do `words.py` and `thumbs.py`.
+- Copy the command line of the `VidAI:` paragraph and change only the script and its arguments: `"<PYTHON>" "<TOOLKIT_FOLDER>/ve.py" <command> "<MAIN_FOLDER>"`.
+- On Windows keep its double quotes and forward slashes; in PowerShell put `&` in front, in Git Bash and cmd.exe do not.
+- Every `ve.py` command takes the absolute video folder; the helper scripts (`transcribe.py`, `windows.py`, `sheet.py`, `thumbs.py`) are run the same way with their own arguments.
 - Run the commands one at a time; the toolkit obeys `LIMITS:` itself.
 
 ## Order of work
 1. Read `MEMORY.md`, then `ve.py prep`.
-2. Transcribe the A-roll (`transcribe.py`, `windows.py`) and plan the edit.
+2. `ve.py lang` tells the spoken language; then transcribe the A-roll with `transcribe.py` (`--lang <code>` or `--lang auto`) and `windows.py`, and plan the edit.
+   Look at raw A-roll or b-roll with `sheet.py <video> <out.jpg> --every 6` (or `--times 1,5.5`), one frame with `thumbs.py grab <video> <seconds> <out.png>`.
 3. `ve.py plan`, then `ve.py gfx` and `ve.py broll` for graphics and b-roll.
 4. `ve.py frames` and `ve.py qa` to look at the result.
 5. `ve.py build`, then `ve.py hf` to write the project into `PROJECT_FOLDER`.

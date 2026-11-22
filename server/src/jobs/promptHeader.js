@@ -96,12 +96,39 @@ export function parentOf(path) {
 }
 
 /**
- * The command line that writes the project: `"<python>" "<toolkit>/ve.py" hf "<video folder>"`.
+ * True when the server runs on Windows, told from its paths (a drive letter or a network share),
+ * so the texts stay pure.
+ * @param {PromptContext} ctx
+ * @returns {boolean}
+ */
+export function isWindows(ctx) {
+  return /^(?:[A-Za-z]:[\\/]|\\\\)/u.test(ctx.python);
+}
+
+/**
+ * A command line in the form the agent copies into its shell. On Windows the backslashes of the
+ * paths become slashes: every Windows shell and program accepts them, and inside double quotes
+ * they never need escaping (a trailing backslash before a quote breaks PowerShell arguments).
+ * Elsewhere the line is unchanged.
+ * @param {PromptContext} ctx
+ * @param {string} line
+ * @returns {string}
+ */
+export function shellLine(ctx, line) {
+  return isWindows(ctx) ? line.replaceAll("\\", "/") : line;
+}
+
+/**
+ * The command line that writes the project: `"<python>" "<toolkit>/ve.py" hf "<video folder>"`,
+ * in the form of `shellLine`.
  * @param {PromptContext} ctx
  * @returns {string}
  */
 export function hfCommandLine(ctx) {
-  return `"${ctx.python}" "${joinPath(ctx.toolkitFolder, "ve.py")}" hf "${ctx.mainFolder}"`;
+  return shellLine(
+    ctx,
+    `"${ctx.python}" "${joinPath(ctx.toolkitFolder, "ve.py")}" hf "${ctx.mainFolder}"`,
+  );
 }
 
 /**
@@ -157,7 +184,7 @@ export function headerBlock(ctx) {
     `VIDEO_TYPE = ${typeWord(ctx.videoType)}`,
     `BROLL_FOLDER = ${ctx.brollFolder}`,
     `PROJECT_FOLDER = ${ctx.projectFolder}`,
-    `CHECK_COMMAND = ${ctx.checkCommand}`,
+    `CHECK_COMMAND = ${shellLine(ctx, ctx.checkCommand)}`,
   ];
   if (ctx.machine !== null) lines.push(machineLine(ctx.machine));
   lines.push(limitsLine(ctx.limits));

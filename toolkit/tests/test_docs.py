@@ -29,6 +29,17 @@ class InstructionFiles(unittest.TestCase):
         lines = (TOOLKIT / "CLAUDE.md").read_text(encoding="utf-8").splitlines()
         self.assertTrue(20 <= len(lines) <= 40, len(lines))
 
+    def test_claude_md_names_commands_that_exist(self):
+        text = (TOOLKIT / "CLAUDE.md").read_text(encoding="utf-8")
+        kit = TOOLKIT / "CLAUDE_VE_ALL"
+        ve = (kit / "ve.py").read_text(encoding="utf-8")
+        for script in sorted(set(re.findall(r"`(\w+\.py)", text))):
+            self.assertTrue((kit / script).is_file(), f"CLAUDE.md names {script}, which does not exist")
+        for command in sorted(set(re.findall(r"`ve\.py (\w+)", text))):
+            self.assertIn(f'sub.add_parser("{command}")', ve, f"CLAUDE.md names ve.py {command}")
+        for needle in ("ve.py lang", "--lang auto", "sheet.py", "thumbs.py grab", "&"):
+            self.assertIn(needle, text)
+
     def test_memory_note_and_one_sentence_per_line(self):
         text = (TOOLKIT / "MEMORY.md").read_text(encoding="utf-8")
         self.assertIn("shared by everybody's edits", text)
@@ -37,7 +48,7 @@ class InstructionFiles(unittest.TestCase):
             self.assertIsNone(re.search(r"[.!?] [A-Z]", line), f"MEMORY.md line {n} has two sentences")
 
     def test_version(self):
-        self.assertEqual((TOOLKIT / "VERSION").read_text().strip(), "1.3.1")
+        self.assertEqual((TOOLKIT / "VERSION").read_text().strip(), "1.3.2")
 
 
 if __name__ == "__main__":

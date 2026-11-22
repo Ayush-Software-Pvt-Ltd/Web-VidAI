@@ -7,7 +7,7 @@ The toolkit is only ever read after that: nothing is written into it while it ru
 ## Layout
 
 - `CLAUDE_VE_ALL/` is the code and the shared material.
-  - `ve.py` is the driver (`doctor`, `prep`, `plan`, `gfx`, `broll`, `build`, `hf`, `review`, `fcp`, `premiere`, `import`, `frames`, `audio`, `qa`, `hardware`).
+  - `ve.py` is the driver (`doctor`, `prep`, `lang`, `plan`, `gfx`, `broll`, `build`, `hf`, `review`, `fcp`, `premiere`, `import`, `frames`, `audio`, `qa`, `hardware`).
   - `transcribe.py`, `windows.py`, `words.py`, `timing.py`, `sheet.py` and `thumbs.py` are small helper programs.
   - `vekit/` is the library: `paths.py` (folder layout), `resources.py` (CPU budget, GPU slots, hardware choice), `asr.py` (speech recognition), `tools.py` (ffmpeg and friends), and the editing code (`plan.py`, `model.py`, `render.py`, `broll.py`, `gfx.py`, `fcpxml.py`, `premiere.py`, `hfproject.py`, `qa.py`).
   - `gfx/_shared/` is the one copy of the design kits and fonts, `gfx/templates/` the graphics templates, `sfx/` the sound effects.
@@ -29,7 +29,17 @@ The program is found from its own location, so any working directory is fine.
 ```
 
 On Windows the Python is `<data dir>\toolkit\venv\Scripts\python.exe`.
+In PowerShell a quoted program path needs `&` in front: `& "C:/.../python.exe" "C:/.../ve.py" prep "C:/.../Video folder"`; Git Bash and cmd.exe take the same line without the `&`.
+Forward slashes and double quotes work in all three, so the server writes the commands for the agent that way.
 Working files go to `<video folder>/CLAUDE_VE/` and deliverables to `<video folder>/output/`.
+
+## Language
+
+`ve.py lang <video folder>` prints the spoken language of each A-roll (after `prep`) as `a1  language: hi 0.93 (en 0.05, ur 0.01)`.
+`transcribe.py` and `windows.py` take `--lang <code>` (default `hi`) or `--lang auto`.
+`auto` detects once, prints the same line and uses that language for every pass, chunk and window; an explicit code is never detected.
+The detection is Whisper's guess on up to three windows of 30 s spread over the audio, with silent windows left out and the probabilities averaged.
+The Hindi default prompt is used only when the language is `hi`, and the JSON files record the language used in `language`.
 
 ## The HyperFrames project (`ve.py hf`)
 

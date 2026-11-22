@@ -154,6 +154,85 @@ class AsrTest(common.Case):
                              env=common.clean_env(), timeout=60)
         self.assertEqual(out.stdout.strip(), "[]", out.stderr)
 
+    def test_detect_language_faster_averages_the_windows(self):
+        import numpy as np
+        probs = iter([[("hi", 0.9), ("en", 0.1)], [("hi", 0.5), ("en", 0.4), ("ur", 0.1)],
+                      [("en", 0.2), ("hi", 0.7), ("ur", 0.1)]])
+        seen = []
+        mod = types.ModuleType("faster_whisper")
+
+        class WhisperModel:
+            def __init__(self, name, **kw):
+                pass
+
+            def detect_language(self, audio):
+                seen.append(len(audio))
+                return "x", 0.0, next(probs)
+        mod.WhisperModel = WhisperModel
+        self.with_modules(faster_whisper=mod)
+        self.env(VE_ASR_BACKEND="faster", VE_ASR_DEVICE="cpu")
+        audio = np.full(100 * 16000, 0.1, dtype="float32")
+        got = asr.detect_language(audio)
+        self.assertEqual(seen, [480000] * 3)
+        self.assertEqual(got["language"], "hi")
+        self.assertEqual(got["probability"], 0.7)
+        self.assertEqual(got["top"], [("hi", 0.7), ("en", 0.233), ("ur", 0.067)])
+        self.assertEqual(asr.describe_language(got), "language: hi 0.70 (en 0.23, ur 0.07)")
+
+    def test_detect_language_mlx(self):
+        import numpy as np
+        calls = []
+        core, pkg, audio_mod, tr_mod = (types.ModuleType(n) for n in (
+            "mlx.core", "mlx_whisper", "mlx_whisper.audio", "mlx_whisper.transcribe"))
+        core.float16 = "float16"
+        audio_mod.N_FRAMES, audio_mod.N_SAMPLES = 3000, 480000
+
+        class Mel:
+            def astype(self, dtype):
+                return self
+
+        audio_mod.log_mel_spectrogram = lambda w, n_mels, padding: calls.append(("mel", len(w), n_mels, padding)) or Mel()
+        audio_mod.pad_or_trim = lambda mel, n, axis: mel
+
+        class Model:
+            class dims:
+                n_mels = 128
+
+            def detect_language(self, mel):
+                return None, {"hi": 0.2, "en": 0.75, "ur": 0.05}
+
+        class ModelHolder:
+            @staticmethod
+            def get_model(name, dtype):
+                calls.append(("model", name, dtype))
+                return Model()
+        tr_mod.ModelHolder = ModelHolder
+        mlx = types.ModuleType("mlx")
+        mlx.core = core
+        pkg.audio, pkg.transcribe = audio_mod, tr_mod
+        self.with_modules(**{"mlx": mlx, "mlx.core": core, "mlx_whisper": pkg, "mlx_whisper.audio": audio_mod,
+                             "mlx_whisper.transcribe": tr_mod})
+        self.env(VE_ASR_BACKEND="mlx")
+        got = asr.detect_language(np.full(16000 * 5, 0.1, dtype="float32"))
+        self.assertEqual((got["language"], got["probability"]), ("en", 0.75))
+        self.assertEqual(calls, [("model", "mlx-community/whisper-large-v3-mlx", "float16"),
+                                 ("mel", 80000, 128, 480000)])
+
+    def test_detection_windows_are_spread_and_skip_silence(self):
+        import numpy as np
+        size = 30 * 16000
+        audio = np.full(150 * 16000, 0.1, dtype="float32")
+        self.assertEqual(len(asr._detection_windows(audio[:size], 3)), 1)
+        self.assertEqual(len(asr._detection_windows(audio[:size * 2], 3)), 2)
+        self.assertEqual(len(asr._detection_windows(audio, 3)), 3)
+        audio[:] = 0.0                          # only the middle is spoken: the silent windows are not listened to
+        audio[60 * 16000:90 * 16000] = 0.1
+        wins = asr._detection_windows(audio, 3)
+        self.assertEqual(len(wins), 1)
+        self.assertGreater(float(wins[0].max()), 0)
+        silent = np.zeros(150 * 16000, dtype="float32")
+        self.assertEqual(len(asr._detection_windows(silent, 3)), 3)
+
 
 class GpuFaster:
     """A fake faster_whisper whose CUDA model can be made to fail the way a missing library does."""
@@ -390,6 +469,93 @@ class TranscribeScriptTest(common.Case):
         import json
         full = json.loads((out / "a1.full.json").read_text(encoding="utf-8"))
         self.assertEqual([w["w"] for w in full["words"]], ["नमस्ते", "दुनिया"])
+
+    FAKE_DETECTING_FASTER = (
+        "import os, sys\n"
+        "class _W:\n"
+        "    def __init__(s, w, st, e, p): s.word, s.start, s.end, s.probability = w, st, e, p\n"
+        "class _S:\n"
+        "    def __init__(s, a, b, t, w): s.start, s.end, s.text, s.words = a, b, t, w\n"
+        "class WhisperModel:\n"
+        "    def __init__(self, *a, **k): pass\n"
+        "    def detect_language(self, audio):\n"
+        "        if os.environ.get('FAKE_NO_DETECT'): raise SystemExit('detect_language must not run')\n"
+        "        lang = os.environ.get('FAKE_LANG', 'hi')\n"
+        "        return lang, 0.9, [(lang, 0.9), ('ur', 0.1)]\n"
+        "    def transcribe(self, audio, **k):\n"
+        "        t = ' %s %s' % (k['language'], 'prompted' if k.get('initial_prompt') else 'plain')\n"
+        "        return iter([_S(0.0, 1.0, t, [_W(t, 0.0, 0.4, 0.9)])]), None\n")
+
+    def run_script(self, args, **env):
+        fake = self.tmp / "fakes"
+        fake.mkdir(exist_ok=True)
+        (fake / "faster_whisper.py").write_text(self.FAKE_DETECTING_FASTER, encoding="utf-8")
+        e = common.clean_env(VE_ASR_BACKEND="faster", VE_ASR_DEVICE="cpu", PYTHONPATH=str(fake),
+                             PYTHONDONTWRITEBYTECODE="1", PYTHONIOENCODING="utf-8", **env)
+        return subprocess.run([sys.executable] + [str(a) for a in args], env=e, capture_output=True, text=True,
+                              encoding="utf-8", timeout=120)
+
+    def tone(self, name="a_16k.wav"):
+        wav = self.tmp / name
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=300:d=2:r=16000", "-ac", "1",
+                        str(wav)], check=True, stdin=subprocess.DEVNULL)
+        return wav
+
+    @unittest.skipUnless(common.have_ffmpeg(), "needs ffmpeg")
+    def test_lang_auto_detects_once_and_the_hindi_prompt_follows_the_language(self):
+        import json
+        wav = self.tone()
+        r = self.run_script([common.KIT / "transcribe.py", wav, self.tmp / "en", "a1", "--pass", "full", "--lang", "auto"],
+                            FAKE_LANG="en")
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        self.assertIn("language: en 0.90 (ur 0.10)", r.stdout)
+        full = json.loads((self.tmp / "en" / "a1.full.json").read_text(encoding="utf-8"))
+        self.assertEqual((full["language"], full["words"][0]["w"]), ("en", "en plain"))
+        r = self.run_script([common.KIT / "transcribe.py", wav, self.tmp / "hi", "a1", "--pass", "chunks", "--lang", "auto"])
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        chunks = json.loads((self.tmp / "hi" / "a1.chunks.json").read_text(encoding="utf-8"))
+        self.assertEqual(chunks["language"], "hi")
+        self.assertIn("hi prompted", chunks["chunks"][0]["text"])
+
+    @unittest.skipUnless(common.have_ffmpeg(), "needs ffmpeg")
+    def test_an_explicit_language_is_not_detected(self):
+        import json
+        wav = self.tone()
+        r = self.run_script([common.KIT / "transcribe.py", wav, self.tmp / "o", "a1", "--pass", "full", "--lang", "en"],
+                            FAKE_NO_DETECT="1", FAKE_LANG="hi")
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        self.assertNotIn("language:", r.stdout)
+        full = json.loads((self.tmp / "o" / "a1.full.json").read_text(encoding="utf-8"))
+        self.assertEqual(full["words"][0]["w"], "en plain")
+        r = self.run_script([common.KIT / "windows.py", wav, self.tmp / "w.json", "0-1.5", "--lang", "hi"],
+                            FAKE_NO_DETECT="1")
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        self.assertIn("hi prompted", r.stdout)
+
+    @unittest.skipUnless(common.have_ffmpeg(), "needs ffmpeg")
+    def test_windows_lang_auto(self):
+        import json
+        wav = self.tone()
+        r = self.run_script([common.KIT / "windows.py", wav, self.tmp / "w.json", "0-1.5", "--lang", "auto"],
+                            FAKE_LANG="en")
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        self.assertIn("language: en 0.90", r.stdout)
+        out = json.loads((self.tmp / "w.json").read_text(encoding="utf-8"))
+        self.assertEqual((out["language"], out["pieces"][0]["text"]), ("en", "en plain"))
+
+    @unittest.skipUnless(common.have_ffmpeg(), "needs ffmpeg")
+    def test_ve_lang_prints_the_language_of_each_aroll(self):
+        main = self.tmp / "Video one"
+        audio = main / "CLAUDE_VE" / "audio"
+        audio.mkdir(parents=True)
+        (main / "CLAUDE_VE" / "project.json").write_text('{"aroll": {"a1": "Main.mp4"}}', encoding="utf-8")
+        (audio / "a1_16k.wav").write_bytes(self.tone().read_bytes())
+        r = self.run_script([common.KIT / "ve.py", "lang", main], FAKE_LANG="en")
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        self.assertEqual(r.stdout.strip(), "a1  language: en 0.90 (ur 0.10)")
+        r = self.run_script([common.KIT / "ve.py", "lang", self.tmp / "none"])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("ve.py prep", r.stderr)
 
 
 if __name__ == "__main__":

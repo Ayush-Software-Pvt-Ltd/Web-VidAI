@@ -227,21 +227,37 @@ test("without machine facts there is no MACHINE line, and the header is otherwis
   assert.ok(text.includes("\nLIMITS: Use at most 6 processor cores"));
 });
 
-test("the VidAI paragraph names the Windows toolkit commands with backslashes", () => {
+test("on Windows the VidAI paragraph gives the toolkit command with slashes and says where PowerShell needs &", () => {
   const input = {
     ...editInput(),
-    toolkitFolder: "C:\\VidAI\\toolkit\\CLAUDE_VE_ALL",
-    python: "C:\\VidAI\\toolkit\\venv\\Scripts\\python.exe",
+    toolkitFolder: "C:\\Users\\Ed\\AppData\\Roaming\\VidAI Server\\toolkit\\CLAUDE_VE_ALL",
+    python: "C:\\Users\\Ed\\AppData\\Roaming\\VidAI Server\\toolkit\\venv\\Scripts\\python.exe",
     mainFolder: "D:\\Editing\\Tech\\Video",
   };
+  const line =
+    '"C:/Users/Ed/AppData/Roaming/VidAI Server/toolkit/venv/Scripts/python.exe" "C:/Users/Ed/AppData/Roaming/VidAI Server/toolkit/CLAUDE_VE_ALL/ve.py" hf "D:/Editing/Tech/Video"';
   const paragraph = vidaiParagraph(input, true);
   assert.ok(
     paragraph.includes(
-      '"C:\\VidAI\\toolkit\\venv\\Scripts\\python.exe" "C:\\VidAI\\toolkit\\CLAUDE_VE_ALL\\ve.py" hf "D:\\Editing\\Tech\\Video"',
+      `call it as ${line} (replace "hf" with the command you need). In PowerShell`,
     ),
   );
-  assert.ok(paragraph.includes("C:\\VidAI\\toolkit\\CLAUDE.md"));
-  assert.ok(paragraph.includes("C:\\VidAI\\toolkit\\MEMORY.md"));
+  assert.ok(paragraph.includes(`In PowerShell write the same line with & in front (& ${line});`));
+  assert.ok(paragraph.includes("in Git Bash or cmd.exe write it without."));
+  assert.ok(paragraph.includes("and do the same for CHECK_COMMAND."));
+  // The files to read are named with the separator of the toolkit folder.
+  assert.ok(
+    paragraph.includes("C:\\Users\\Ed\\AppData\\Roaming\\VidAI Server\\toolkit\\CLAUDE.md"),
+  );
+  assert.ok(
+    paragraph.includes("C:\\Users\\Ed\\AppData\\Roaming\\VidAI Server\\toolkit\\MEMORY.md"),
+  );
+});
+
+test("on macOS the toolkit command is plain and PowerShell is not mentioned", () => {
+  const paragraph = vidaiParagraph(editInput(), true);
+  assert.ok(paragraph.includes('hf "/Users/e/Editing/Tech Reviews/2026-11-01 Unboxing" (replace'));
+  assert.ok(!paragraph.includes("PowerShell"));
 });
 
 test("the message ends with the progress markers of an edit and names the completion marker once in the paragraph", () => {

@@ -89,7 +89,7 @@ The commands and the order of work are in `CLAUDE.md`.
 - Keep both the full first pass and the chunked pass; each recovers words the other misses.
 - Latin brand and tech terms are often misheard in Hindi mode ("Qi2" became "चीटू", "MagSafe" became "maxif"); never copy them from the transcript to the screen.
 - Hindi-mode Whisper mangles English sentences in a Hinglish edit; check English lines with `language="en"`, also numbers (English mode reads numbers reliably).
-- Detect the language on a few windows first; auto-detect on the first 30 s can say Hindi because of crew chatter between takes.
+- Detect the language with `ve.py lang` or `--lang auto` (three windows spread over the audio), never with your own code; the first 30 s alone can say Hindi because of crew chatter between takes.
 - A script or transcript from the creator speeds this up a lot: correct spellings, chapter titles, and a faster alignment pass instead of a full transcription.
 - `transcribe.py` and `vekit.qa_transcribe` take `--lang en`; English synthetic voices transcribe almost perfectly, but a word can still be missing (check gaps in the energy envelope).
 - Whisper output stops after about 30 s of audio per call; transcribe long edited blocks in windows under 30 s when checking a cut.
