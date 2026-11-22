@@ -16,7 +16,7 @@
 1. Read `MEMORY.md`, then `ve.py prep`.
 2. `ve.py lang` tells the spoken language; then transcribe the A-roll with `transcribe.py` (`--lang <code>` or `--lang auto`) and `windows.py`, and plan the edit.
    Look at raw A-roll or b-roll with `sheet.py <video> <out.jpg> --every 6` (or `--times 1,5.5`), one frame with `thumbs.py grab <video> <seconds> <out.png>`.
-3. `ve.py plan`, then `ve.py gfx` and `ve.py broll` for graphics and b-roll.
+3. `ve.py plan`, then `ve.py gfx` (no options) and `ve.py broll` for graphics and b-roll.
 4. `ve.py frames` and `ve.py qa` to look at the result.
 5. `ve.py build`, then `ve.py hf` to write the project into `PROJECT_FOLDER`.
 6. Thumbnails, `meta.txt` and `info.txt`.
@@ -24,6 +24,7 @@
 
 ## Never
 - Render a video file of the edit, in any form.
+- Render at 2160: `--res` is 720 or 1080 only, and the server makes the 2160 final itself.
 - Change an original file (A-roll, b-roll, sound).
 - Write outside `CLAUDE_VE`, `output` and `info.txt` of the video folder.
 - Write into the toolkit, except to append a lesson to `MEMORY.md`.

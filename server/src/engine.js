@@ -584,6 +584,9 @@ export function createEngine(context, options = {}) {
       ...render,
       async start() {
         await render.runner.sweep();
+        // Before any job starts a browser: the preference outlives a server restart, but the
+        // browser may have been installed by an earlier version of VidAI.
+        await render.gpuPreference.apply();
       },
     },
     { name: "player", routes: createPlayerRoutes() },

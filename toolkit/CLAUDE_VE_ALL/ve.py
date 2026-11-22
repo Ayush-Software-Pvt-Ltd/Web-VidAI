@@ -9,9 +9,9 @@ the deliverables to <video folder>/output/.  Run it with the toolkit's own Pytho
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py prep   <VIDEO>            recon the video folder, write project.json, extract audio
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py lang   <VIDEO>            spoken language of each A-roll (after prep)
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py plan   <VIDEO>            timeline.py -> build/timeline.json (+ warnings, pacing)
-  $PY <toolkit>/CLAUDE_VE_ALL/ve.py gfx    <VIDEO> [--res 1080 2160]   render the graphics the timeline uses
+  $PY <toolkit>/CLAUDE_VE_ALL/ve.py gfx    <VIDEO> [--res 1080]   render the graphics the timeline uses (720 or 1080 only)
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py broll  <VIDEO>            conform the b-roll mezzanines only
-  $PY <toolkit>/CLAUDE_VE_ALL/ve.py build  <VIDEO> --res 720|1080|2160 [--timeline FILE]
+  $PY <toolkit>/CLAUDE_VE_ALL/ve.py build  <VIDEO> --res 720|1080 [--timeline FILE]
                                                     render picture + sound + encode
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py hf     <VIDEO>            HyperFrames project <VIDEO>/output/<name>.hf/ (the deliverable)
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py review <VIDEO>            the same as hf
@@ -21,10 +21,10 @@ the deliverables to <video folder>/output/.  Run it with the toolkit's own Pytho
                                                     read the creator's export -> build/timeline_fcp.json
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py frames <VIDEO> --res 720    one composited frame per shot + contact sheets
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py audio  <VIDEO>            render the mix only (loudness check / QA transcription)
-  $PY <toolkit>/CLAUDE_VE_ALL/ve.py qa     <VIDEO> --res 720|2160       contact sheets + pacing + loudness of a render
+  $PY <toolkit>/CLAUDE_VE_ALL/ve.py qa     <VIDEO> --res 720|1080       contact sheets + pacing + loudness of a render
 
 Environment (all optional): VE_CHANNEL_DIR, VE_CPU_CORES, VE_GPU_SLOTS_DIR, VE_JOB_ID, VE_HW, VE_FFMPEG,
-VE_FFPROBE, VE_NPX, VE_NODE, VE_HYPERFRAMES, VE_ASR_BACKEND, VE_ASR_DEVICE, VE_FONT (see vekit/resources.py and vekit/asr.py).
+VE_FFPROBE, VE_NPX, VE_NODE, VE_HYPERFRAMES, VE_ASR_BACKEND, VE_ASR_DEVICE, VE_FONT, VE_ALLOW_2160 (see vekit/resources.py and vekit/asr.py).
 """
 import argparse
 import json
@@ -214,7 +214,7 @@ def load_tl(a):
 
 def cmd_gfx(a):
     tl = load_tl(a)
-    gfx.render_all(tl, pdir_of(a.main), [int(r) for r in a.res], force=a.force)
+    gfx.render_all(tl, pdir_of(a.main), [resources.check_resolution(r) for r in a.res], force=a.force)
 
 
 def cmd_broll(a):
@@ -223,7 +223,7 @@ def cmd_broll(a):
 
 
 def cmd_build(a):
-    main, res = a.main, int(a.res)
+    main, res = a.main, resources.check_resolution(a.res)
     pdir = pdir_of(main)
     tl = load_tl(a)
     project = json.loads((pdir / "project.json").read_text(encoding="utf-8"))
@@ -355,7 +355,7 @@ def shot_label(tl, base, layers):
 def cmd_frames(a):
     tl = load_tl(a)
     pdir = pdir_of(a.main)
-    res = int(a.res)
+    res = resources.check_resolution(a.res)
     outdir = pdir / "build" / str(res) / "qa_frames"
     outdir.mkdir(parents=True, exist_ok=True)
     shots = render.shots_of(tl)
@@ -391,7 +391,7 @@ def cmd_audio(a):
 def cmd_qa(a):
     pdir = pdir_of(a.main)
     project = json.loads((pdir / "project.json").read_text(encoding="utf-8"))
-    res = int(a.res)
+    res = resources.check_resolution(a.res)
     out = video_dir(a.main) / "output" / project["final_name"] if res == 2160 else pdir / "renders" / f"preview_{res}.mp4"
     tl = load_tl(a)
     rows = pacing(tl)

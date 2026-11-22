@@ -38,6 +38,47 @@ describe("parseBrowserPath", () => {
 });
 
 describe("ensureBrowser", () => {
+  it("sets the graphics preference of the browser it found and never fails because of it", async () => {
+    /** @type {string[][]} */
+    const asked = [];
+    const prepare = createPrepare({
+      hyperframesBin: "/pkg/bin/hyperframes.mjs",
+      dataDir: dataDir(),
+      env: { PATH: "/bin" },
+      run: async () => result({ stdout: BROWSER_OUTPUT }),
+      gpuPreference: {
+        apply: async (extra = []) => {
+          asked.push([...extra]);
+          return {
+            applied: [...extra],
+            already: [],
+            failed: [],
+            skipped: null,
+          };
+        },
+      },
+    });
+    const out = await prepare.ensureBrowser();
+    assert.deepEqual(asked, [[out.path]]);
+    assert.match(out.message, /NVIDIA GPU/u);
+    const quiet = await createPrepare({
+      hyperframesBin: "/pkg/bin/hyperframes.mjs",
+      dataDir: dataDir(),
+      env: { PATH: "/bin" },
+      run: async () => result({ stdout: BROWSER_OUTPUT }),
+      gpuPreference: {
+        apply: async () => ({
+          applied: [],
+          already: [],
+          failed: [],
+          skipped: "this is not Windows",
+        }),
+      },
+    }).ensureBrowser();
+    assert.equal(quiet.ok, true);
+    assert.doesNotMatch(quiet.message, /NVIDIA/u);
+  });
+
   it("runs `browser ensure` with the pinned script and returns the path", async () => {
     /** @type {{ args: readonly string[], env: Record<string, string | undefined> }[]} */
     const calls = [];

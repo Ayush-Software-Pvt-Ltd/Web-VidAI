@@ -341,6 +341,7 @@ A per-edit value above the total is stored as typed and never refused; a job get
 
 Shows, each with a state and a hint how to fix it: Claude Code (path, version, login), OpenCode 2 (path, version), ffmpeg and ffprobe (path, version, hardware encoders found), Python (path, version), toolkit environment, HyperFrames (version) and its browser, speech model, the speech device and video encoder in use (below), free disk space of the data directory, the addresses of the server, the certificate (names, end date, SHA-256 fingerprint).
 "Prepare" runs the toolkit preparation of section 7 and shows its log.
+The renderer's browser line of a Windows computer with an NVIDIA GPU says in the Prepare log that the GPU is set for it (section 9, "Graphics in the browser").
 A group "Speech and video hardware" shows, from `ve.py hardware` (the same logic as `ve.py doctor`), what speech recognition really runs on (`GPU (CUDA)`, `Apple GPU (MLX)` or `CPU`) and the video encoder and decoder actually chosen (for example `h264_nvenc and hevc_nvenc, decoding with cuda`, or `libx264 (software)`), and the NVIDIA graphics card when there is one.
 Each line has a `problem` sentence with its fix when an NVIDIA GPU is present but not used: speech names the missing CUDA libraries or the failure and says to press Prepare, video names why NVENC did not start (ffmpeg's last line) or that the ffmpeg build has no NVENC.
 The answer is asked at most once per Prepare and per 30 seconds; before the toolkit environment exists the lines say "Not checked yet."
@@ -470,6 +471,9 @@ Each video's working files are in `<video>/CLAUDE_VE/`; everything there can be 
 The toolkit obeys the resource limits of section 9 through `vekit/resources.py`.
 It writes only inside `<video>/CLAUDE_VE/`, `<video>/output/` and `<video>/info.txt`, never into its own folder; jobs run with `PYTHONDONTWRITEBYTECODE=1`.
 Paths it stores (`timeline.json`, `recon.json`) are relative to the video folder, so a moved video folder keeps working.
+Every render of the toolkit (`ve.py gfx`, `build`, `frames`, `qa`, and the graphics of `thumbs.py`) is at 720 or 1080: it refuses `--res 2160` with one line on stderr, and `VE_ALLOW_2160=1` (administrator and tests) lifts that.
+Only the final render (section 12) works at 2160, and it needs none of the toolkit's picture files: the project's graphics are HyperFrames compositions that `hyperframes render` draws itself, so an edit never renders the 2160 graphics set; the `.mov` files of `ve.py gfx` are for the toolkit's own previews, QA frames and review exports.
+The work folders of `ve.py gfx` and `thumbs.py` are removed with retries and never raise (Windows keeps a file locked for a moment after Chrome or ffmpeg ends), and the cache key of a graphic is written as soon as its file is in place, so a failing cleanup cannot cost the cache.
 `npm run toolkit:test` runs its own tests (`toolkit/tests/`, Python's unittest).
 
 ## 8. Jobs and queues
@@ -856,6 +860,17 @@ The slots are files, so that programs in any language can take part:
 The server removes slots held by processes of ended jobs, slots with a number at or above `total`, and leftover `slot-<i>.<anything>` names.
 At 5 percent everything that uses the GPU runs one task at a time.
 
+### Graphics in the browser (Windows with an NVIDIA GPU)
+
+HyperFrames draws graphics and frames in headless Chrome, which on Windows starts ANGLE on Direct3D 11 without choosing an adapter and so gets the default one: often the processor's integrated GPU (Task Manager shows its "3D" and "Video Processing" engines busy while the NVIDIA card idles).
+No HyperFrames option or environment variable adds a Chrome argument that chooses the adapter, so the server uses the operating system's own per-program preference (Settings, System, Display, Graphics, "High performance").
+`server/src/platform/gpuPreference.js` writes `GpuPreference=2;` with `reg.exe` as the value named by the full path of each browser program, under `HKCU\Software\Microsoft\DirectX\UserGpuPreferences` (no administrator rights, the preference of the account the server runs as).
+The programs are the browser `hyperframes browser ensure` found (Prepare, step "browser"), every installed headless shell in HyperFrames' cache (`<HYPERFRAMES_CACHE_DIR or ~\.cache\hyperframes>\chrome\chrome-headless-shell`) and in Puppeteer's cache (`~\.cache\puppeteer\chrome-headless-shell`), and Google Chrome, so the server's renders, the timeline's pictures and the toolkit's `ve.py gfx` and `thumbs.py` all start the same programs on the NVIDIA card.
+It is done only on Windows when `nvidia-smi` names a GPU, at every server start (before any job runs) and after the browser step; a program that already has "High performance" is not written again, and a choice of "Power saving" or "Let Windows decide" for such a program is replaced.
+A failure is one log line and never fails Prepare or the start.
+The Prepare log line of the browser step says that the NVIDIA GPU is set for it.
+Video encoding is separate: `ffmpeg` tries NVENC before Quick Sync and AMF (section 7), so Quick Sync is used only when NVENC does not start.
+
 ## 10. The project
 
 The result of an edit is the folder `<video>/output/<video folder name>.hf/`, a HyperFrames project that also follows VidAI's own rules (the profile), so that it can be played, edited by hand and rendered without the agent.
@@ -1024,6 +1039,7 @@ The runner renders the project as it is when the job starts, with one `hyperfram
 
 A render needs room: about 10 GB of temporary files and 4.5 GB of memory for 15 minutes at 1080 (measured: 2.6 times real time with 4 workers, every frame and every cut right, sound within a tenth of a millisecond).
 At 2160 the same edit needs more: measured on a 60 second project with five 4K cuts, 87 to 94 s with 8 workers, 17 to 18 GB of memory and 4.5 to 4.8 GB of temporary files (about 1 minute of 1080 needs 12.3 GB of memory and 0.87 GB of temporary files), so a 15 minute edit at 2160 takes about 22 to 24 minutes, about 18 GB of memory at 8 workers and 30 to 75 GB of temporary files.
+Nothing else renders at 2160: the preview copies (section 11) are at most 1280 on the long side, and the toolkit stays at 720 or 1080 (section 7).
 The final file at 2160 is 3840x2160 with the exact frame count, H.264 High and AAC; `--gpu` works but gives no speed gain at 2160.
 A render is refused with a sentence that names the resolution and the numbers when the disk that holds `cache/` has less free space than the render needs: at 1080, 1 GB per minute of video plus 5 GB; at 2160, 5 GB per minute of video plus 8 GB.
 The sentence reads `There is not enough free disk space to render this video at 2160p: it needs 83.0 GB (5 GB for each minute of its 15:00 plus 8 GB) and only 12.3 GB are free. Free some space on the server and try again.`

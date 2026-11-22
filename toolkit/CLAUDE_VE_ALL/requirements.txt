@@ -1,4 +1,4 @@
-# Python packages of the toolkit.  Python 3.9 or newer.
+# Python packages of the toolkit.  Python 3.10 or newer.
 # The server installs them into <data dir>/toolkit/venv; nothing here is installed by the toolkit itself.
 
 # every machine

@@ -85,6 +85,15 @@ class PipelineTest(common.Case):
         self.ve("prep", "Vidéo काम 1", cwd=self.channel)
         self.ve("prep", "..", cwd=self.video / "CLAUDE_VE")
 
+    def test_every_render_command_refuses_2160(self):
+        self.prepared()
+        for args in (("gfx", "--res", "1080", "2160"), ("build", "--res", "2160"), ("frames", "--res", "2160"),
+                     ("qa", "--res", "2160")):
+            r = self.ve(args[0], self.video, *args[1:], check=False)
+            self.assertNotEqual(r.returncode, 0, args)
+            self.assertIn("only for the final render", r.stderr)
+            self.assertEqual(len(r.stderr.strip().splitlines()), 1, r.stderr)
+
     def test_build_fcp_premiere_import_qa(self):
         self.prepared()
         cv = self.video / "CLAUDE_VE"

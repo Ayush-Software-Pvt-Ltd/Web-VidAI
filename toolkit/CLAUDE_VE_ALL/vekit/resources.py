@@ -6,6 +6,8 @@ The server tells every job process how much of the machine it may use:
   VE_GPU_SLOTS_DIR    folder with limits.json and the slot-<i> files (absent: no GPU limit)
   VE_JOB_ID           the job's id, written into the slot files
   VE_HW               none | videotoolbox | nvenc | qsv | amf (absent or auto: pick what ffmpeg offers)
+  VE_ALLOW_2160       1 lets the toolkit render at 2160 (administrator and tests only; the server's own
+                      final render never calls the toolkit, so an edit never needs it)
 
 CPU: `jobs()` parallel ffmpeg processes of `ffmpeg_threads()` threads each never use more than
 `cores()` processors together; `hf_workers()` x `hf_jobs()` is the same budget for HyperFrames.
@@ -57,6 +59,25 @@ def jobs() -> int:
 def ffmpeg_threads() -> int:
     """Threads per ffmpeg process, so that jobs() x ffmpeg_threads() stays within cores()."""
     return max(1, cores() // jobs())
+
+
+PREVIEW_RESOLUTIONS = (720, 1080)
+
+
+def check_resolution(value) -> int:
+    """The resolution class (short side) of a toolkit render: 720 or 1080.  2160 belongs to the
+    server's final render, which renders the HyperFrames project itself; the toolkit refuses it
+    with one line unless the administrator or a test sets VE_ALLOW_2160=1."""
+    try:
+        res = int(value)
+    except (TypeError, ValueError):
+        raise SystemExit(f"Resolution {value!r} is not a number; use 720 or 1080.")
+    if res in PREVIEW_RESOLUTIONS or (res == 2160 and os.environ.get("VE_ALLOW_2160") == "1"):
+        return res
+    if res == 2160:
+        raise SystemExit("Resolution 2160 is only for the final render, which the server makes itself; "
+                         "an edit renders at 720 or 1080 only.")
+    raise SystemExit(f"Resolution {res} is not available; use 720 or 1080.")
 
 
 def hf_workers() -> int:

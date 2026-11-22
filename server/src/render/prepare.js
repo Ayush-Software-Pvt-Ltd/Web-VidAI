@@ -31,6 +31,8 @@ const TEST_TIMEOUT_MS = 10 * 60_000;
  * @property {() => string | null} [ffmpeg] For the test render (the renderer finds its own when null).
  * @property {() => string | null} [ffprobe]
  * @property {() => string | null} [browserPath] The browser found by `ensureBrowser`, for the test render.
+ * @property {{ apply: (extra?: readonly string[]) => Promise<import("../platform/gpuPreference.js").GpuPreferenceResult> }} [gpuPreference]
+ *   Chooses the high-performance GPU for the browser on Windows with an NVIDIA GPU (never throws).
  * @property {typeof runHelper} [run] Test seam.
  * @property {import("../log.js").Logger} [log]
  */
@@ -88,7 +90,15 @@ export function createPrepare(deps) {
         const found = parseBrowserPath(result.stdout);
         if (result.code === 0 && found !== null) {
           foundBrowser = found;
-          return { ok: true, message: `The renderer's browser is ready: ${found}`, path: found };
+          const gpu = await deps.gpuPreference?.apply([found]);
+          const onGpu = gpu !== undefined && [...gpu.applied, ...gpu.already].includes(found);
+          return {
+            ok: true,
+            message: `The renderer's browser is ready: ${found}${
+              onGpu ? " It is set to use the NVIDIA GPU in the Windows graphics settings." : ""
+            }`,
+            path: found,
+          };
         }
         const why = cleanLine(
           result.timedOut ? "it took too long" : lastLine(result.stderr || result.stdout),

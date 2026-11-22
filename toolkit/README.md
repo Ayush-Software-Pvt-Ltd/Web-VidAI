@@ -91,6 +91,9 @@ What cannot be represented is dropped with a plain warning:
 the background and picture-in-picture of synced B-roll, a graphic resumed part-way, and the loudness levelling and limiter of the final mix (the server does that).
 HyperFrames is pinned in `vekit/tools.py` (`hyperframes@0.9.80`), the same version as the server's.
 HyperFrames 0.9 refuses a symbolic link that leaves the project folder, so the render work copies of `ve.py gfx` and `thumbs.py` get `shared` as a tree of hard links.
+Their work folders (`vekit/scratch.py`) are removed with retries and never raise, because on Windows Chrome or ffmpeg may still hold a file for a moment; the cache key of a graphic is written as soon as its file is in place.
+Every render of the toolkit (`gfx`, `build`, `frames`, `qa`) is at 720 or 1080 and refuses 2160 with one line: the final render is the server's own `hyperframes render` of the project (SPEC section 12), which never calls the toolkit, so an edit never needs the 2160 graphics.
+`VE_ALLOW_2160=1` is an administrator and test override that lifts the refusal.
 
 Writing is safe and repeatable.
 The project is built in `output/.<name>.hf.new`, checked, and then swapped in, with the old copy kept as `.<name>.hf.old` until the swap succeeds.
@@ -120,6 +123,6 @@ Without them the programs use the whole machine and take no GPU slot, which is h
 python3 -B -m unittest discover -s toolkit/tests
 ```
 
-They need Python 3.9 or newer with numpy, soundfile and pillow, and ffmpeg and ffprobe on the PATH.
+They need Python 3.10 or newer with numpy, soundfile and pillow, and ffmpeg and ffprobe on the PATH.
 The end-to-end tests are skipped without ffmpeg.
 They use tiny generated media, a fake HyperFrames (`tests/support/fake_npx.py`) and fake speech packages, so nothing is downloaded and no hardware is needed.

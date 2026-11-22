@@ -19,7 +19,7 @@ sys.dont_write_bytecode = True
 
 # every variable the toolkit reads (SPEC section 9 and vekit/tools.py)
 VE_VARS = ("VE_CPU_CORES", "VE_GPU_SLOTS_DIR", "VE_JOB_ID", "VE_HW", "VE_CHANNEL_DIR", "VE_FFMPEG",
-           "VE_FFPROBE", "VE_NPX", "VE_NODE", "VE_HYPERFRAMES", "VE_ASR_BACKEND", "VE_ASR_DEVICE", "VE_FONT")
+           "VE_FFPROBE", "VE_NPX", "VE_NODE", "VE_HYPERFRAMES", "VE_ASR_BACKEND", "VE_ASR_DEVICE", "VE_FONT", "VE_ALLOW_2160")
 
 
 def clean_env(**extra):

@@ -67,7 +67,7 @@ The commands and the order of work are in `CLAUDE.md`.
 - Use ffmpeg for all footage work (cuts, punch-ins, b-roll conform, audio) and a browser-based renderer (HyperFrames: HTML + GSAP) for graphics.
 - Rendering a long timeline entirely in a browser renderer is slow and fragile; build graphics as short clips instead.
 - Graphics render as ProRes 4444 with alpha: transparent for overlays, opaque for full-screen cards.
-- Author graphics at 1920x1080 (1080x1920 for vertical) and render at 2x with `--resolution landscape-4k` or `portrait-4k` when needed; one layout then serves both sizes.
+- Author graphics at 1920x1080 (1080x1920 for vertical); the server renders the final video from them at 1080 or 2160.
 - Build one template per graphic type driven by variables, plus a JSON spec of items; new text then needs no HTML edits.
 - Keep the whole edit as data (a timeline of kept segments, visuals anchored to raw timestamps, overlays) and generate everything from it.
 - Anchor b-roll and overlays to raw source timestamps of spoken words, not to output times; anchors then survive changes to cut points.

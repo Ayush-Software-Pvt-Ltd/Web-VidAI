@@ -14,13 +14,13 @@ import argparse
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 from PIL import Image
 
 from vekit import gfx, resources, tools
 from vekit.paths import video_dir
+from vekit.scratch import scratch_dir
 
 
 
@@ -48,7 +48,7 @@ def render(main, only, at, size):
         n = p.name
         if want and n not in want:
             continue
-        with tempfile.TemporaryDirectory(prefix=f"thumb_{n}_") as tmp:
+        with scratch_dir(f"thumb_{n}_") as tmp:
             work = Path(tmp) / "t"
             shutil.copytree(p, work)
             link = work / "shared"

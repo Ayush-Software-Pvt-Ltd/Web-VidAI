@@ -13,6 +13,7 @@
 
 import { createRenderRunner } from "./runner.js";
 import { createPrepare } from "./prepare.js";
+import { createGpuPreference } from "../platform/gpuPreference.js";
 import { renderFunctions } from "../rpc/render.js";
 import { freeBytes as systemFreeBytes } from "../platform/disk.js";
 import { findFfmpeg, findFfprobe } from "../platform/tools.js";
@@ -38,6 +39,7 @@ import { findHyperframesCli } from "../timeline/lint.js";
  * @property {import("./runner.js").PathSource} [ffprobe]
  * @property {import("./runner.js").PathSource} [browserPath] Default: the browser `prepare.ensureBrowser` found
  *   (`prepare.browserPath()`), else the renderer looks for its own.
+ * @property {ReturnType<typeof createGpuPreference>} [gpuPreference] Default: the Windows graphics preference of the browser (a test seam).
  * @property {(dir: string) => Promise<number>} [freeBytes]
  * @property {Partial<import("./runner.js").RenderRunnerDeps>} [runnerOptions] Test seams.
  */
@@ -49,8 +51,10 @@ export function createRenderModule(deps) {
   const freeBytes = deps.freeBytes ?? systemFreeBytes;
   const ffmpeg = deps.ffmpeg ?? (() => findFfmpeg());
   const ffprobe = deps.ffprobe ?? (() => findFfprobe());
+  const gpuPreference = deps.gpuPreference ?? createGpuPreference({ log: deps.log });
   const prepare = createPrepare({
     hyperframesBin,
+    gpuPreference,
     dataDir: deps.dataDir,
     log: deps.log,
     ffmpeg: () => (typeof ffmpeg === "function" ? ffmpeg() : ffmpeg),
@@ -92,6 +96,7 @@ export function createRenderModule(deps) {
     }),
     runner,
     prepare,
+    gpuPreference,
   };
 }
 

@@ -17,12 +17,12 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import resources, tools
 from .paths import SHARED, TEMPLATES
+from .scratch import scratch_dir
 HF = tools.HYPERFRAMES_PACKAGE
 SKIP = {".hyperframes", "renders", "node_modules", "shared"}
 
@@ -115,7 +115,7 @@ def render_one(name, src, variables, res, four_k, rate, pdir, force=False, log=p
     kfile = out.with_suffix(".key")
     if not force and out.exists() and kfile.exists() and kfile.read_text(encoding="utf-8") == key:
         return name, res, "cached"
-    with tempfile.TemporaryDirectory(prefix=f"gfx_{name}_") as tmp:
+    with scratch_dir(f"gfx_{name}_") as tmp:
         work = Path(tmp) / "p"
         shutil.copytree(src, work, ignore=shutil.ignore_patterns(*SKIP), symlinks=False)
         link_shared(work / "shared")
@@ -143,11 +143,12 @@ def render_one(name, src, variables, res, four_k, rate, pdir, force=False, log=p
         else:
             shutil.move(raw, tmp_out)
         os.replace(tmp_out, out)
-    kfile.write_text(key, encoding="utf-8")
+        kfile.write_text(key, encoding="utf-8")         # at once: the folder's removal may still be slow
     return name, res, "rendered"
 
 
 def render_all(tl, pdir, resolutions, force=False, jobs=None, log=print):
+    resolutions = [resources.check_resolution(r) for r in resolutions]
     todo = jobs_for(tl, pdir, resolutions)
     missing = [j for j in todo if not (j[1] / "index.html").exists()]
     if missing:
