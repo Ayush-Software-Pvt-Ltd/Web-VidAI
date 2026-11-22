@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en" data-resolution="@RES@" data-composition-variables='@DECLARED@'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=@W@, height=@H@" />
+    <script src="shared/js/gsap.min.js"></script>
+    <style>
+/*@KIT_CSS*/
+      #root .safe { align-items: stretch; }
+      #root .rows { display: flex; flex-direction: column; flex: none; }
+      #root .row { position: relative; display: flex; align-items: center; flex: none; overflow: hidden; }
+      #root .badge { flex: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 800; line-height: 1; }
+      #root .itxt { font-weight: 700; line-height: 1.26; overflow-wrap: normal; }
+      #root .shine { position: absolute; top: 0; bottom: 0; width: 34%; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="@DURATION@" data-width="@W@" data-height="@H@">
+      <div id="safe" class="safe">
+        <div id="kicker" class="kicker"></div>
+        <div id="title" class="title"></div>
+        <div id="rows" class="rows"></div>
+      </div>
+    </div>
+    <script>
+/*@KIT_JS*/
+      const D = @DURATION@;
+      const DEF = @DEFAULTS@;
+      const v = K.vars(DEF);
+      K.ready(v).then(function () {
+        const root = document.getElementById("root");
+        const tl = gsap.timeline({ paused: true });
+        const S = K.setup(root, v);
+        K.bg(root, tl, D, S, 3);
+        const safe = document.getElementById("safe");
+        const box = K.place(safe, S);
+        const u = S.u;
+        const kicker = document.getElementById("kicker"), title = document.getElementById("title"), rowsEl = document.getElementById("rows");
+        const items = K.list(v.items).slice(0, 6);
+        const hasK = !!v.kicker.trim(), hasT = !!v.title.trim();
+        const ta = S.center ? "center" : "left";
+        K.txt(kicker, v.kicker); kicker.style.color = S.accent; kicker.style.textAlign = ta;
+        kicker.style.display = hasK ? "block" : "none";
+        K.txt(title, v.title); title.style.color = S.text; title.style.textAlign = ta;
+        title.style.display = hasT ? "block" : "none";
+        let used = 0;
+        if (hasK) { K.fit(kicker, box.w, 100 * u, 40 * u, 22 * u); kicker.style.marginBottom = 14 * u + "px"; used += kicker.offsetHeight + 14 * u; }
+        if (hasT) { K.fit(title, box.w, box.h * 0.2, (S.port ? 84 : 92) * u, 34 * u); K.wrapMode(title); title.style.marginBottom = 34 * u + "px"; used += title.offsetHeight + 34 * u; }
+        const n = items.length, gap = Math.round(26 * u);
+        const rowH = Math.round(Math.min((S.port ? 210 : 190) * u, (box.h - used - (n - 1) * gap) / n));
+        const pad = Math.round(Math.min(26 * u, rowH * 0.16));
+        const bs = Math.round(Math.min(rowH - 2 * pad, 110 * u));
+        const rpad = Math.round(pad * 2.4);
+        const tw = Math.floor(box.w - 10 * u - (12 * u + pad) - rpad - bs - 1.4 * pad - 2);
+        rowsEl.style.gap = gap + "px";
+        const texts = [], rows = [], badges = [], shines = [];
+        let size = 1e9;
+        items.forEach(function (t, i) {
+          const row = K.el("div", "row", rowsEl);
+          row.style.height = rowH + "px"; row.style.padding = "0 " + rpad + "px 0 " + (12 * u + pad) + "px";
+          row.style.borderRadius = 24 * u + "px"; row.style.background = S.faint;
+          row.style.borderLeft = 10 * u + "px solid " + S.accent;
+          const b = K.el("div", "badge", row);
+          b.style.width = b.style.height = bs + "px"; b.style.background = S.accent; b.style.color = S.ink;
+          b.style.fontSize = bs * 0.5 + "px"; b.style.marginRight = pad * 1.4 + "px";
+          if (v.style === "numbers") b.textContent = String(i + 1);
+          else if (v.style === "checks") K.icon(b, "check", bs * 0.58, S.ink, 3);
+          else { const dot = K.el("div", "", b); dot.style.width = dot.style.height = bs * 0.34 + "px"; dot.style.borderRadius = "50%"; dot.style.background = S.ink; }
+          const x = K.el("div", "itxt", row);
+          K.txt(x, t); x.style.color = S.text; x.style.textAlign = "left";
+          size = Math.min(size, K.fit(x, tw, rowH - 2 * pad, (S.port ? 68 : 76) * u, 24 * u));
+          const sh = K.el("div", "shine", row); sh.setAttribute("data-layout-allow-overflow", "");
+          sh.style.background = "linear-gradient(90deg," + K.rgba("#ffffff", 0) + "," + K.rgba("#ffffff", 0.16) + "," + K.rgba("#ffffff", 0) + ")";
+          rows.push(row); texts.push(x); badges.push(b); shines.push(sh);
+        });
+        texts.forEach(function (x) { K.fit(x, tw, rowH - 2 * pad, size, size); K.wrapMode(x); });
+        K.wrapMode(title);
+        const step = Math.min(0.32, 1.9 / n);
+        tl.fromTo(kicker, { y: -24 * u, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power4.out" }, 0.04);
+        tl.fromTo(title, { y: 44 * u, opacity: 0 }, { y: 0, opacity: 1, duration: 0.65, ease: "power4.out" }, 0.1);
+        const t0 = hasT ? 0.45 : 0.2;
+        rows.forEach(function (row, i) {
+          const at = t0 + i * step;
+          tl.fromTo(row, { x: (S.port ? 90 : 160) * u, opacity: 0 }, { x: 0, opacity: 1, duration: 0.7, ease: "power4.out" }, at);
+          tl.fromTo(badges[i], { scale: 0 }, { scale: 1, duration: 0.5, ease: "back.out(2.2)" }, at + 0.12);
+          tl.fromTo(shines[i], { x: "-120%", opacity: 1 }, { x: "420%", opacity: 1, duration: 1.1, ease: "power2.inOut" }, at + 0.55);
+        });
+        tl.fromTo(rowsEl, { y: 0 }, { y: -14 * u, duration: D, ease: "none" }, 0);
+        K.drift(tl, safe, D, S, { scale: 1.03 });
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>

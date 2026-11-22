@@ -14,15 +14,27 @@ import {
   uniqueId,
 } from "./document.js";
 import {
+  arollSources,
+  innerChanges,
+  innerOfHost,
+  innerProblem,
+  readInner,
+  writeInner,
+} from "./editInner.js";
+import { syncPieces } from "./editSync.js";
+import {
+  copyIdText,
   copyMotionText,
   innerFrames,
   motionAt,
   motionFrames,
   motionOfHost,
   readMotion,
+  snap,
   writeMotion,
 } from "./editMotion.js";
 import { framesToSecondsText } from "./frames.js";
+import { compositionFileProblem } from "./profileComposition.js";
 import { carriesFade, fadeChanges, fadeOutFrames, planFades } from "./lanes.js";
 import { MEDIA_TOLERANCE, checkDocument, kindNoun, sourceLengthFrames } from "./profile.js";
 import {
@@ -38,6 +50,7 @@ import {
 /** @typedef {import("./document.js").ParsedClip} ParsedClip */
 /** @typedef {import("./profileEditJson.js").EditFacts} EditFacts */
 /** @typedef {import("./editMotion.js").MotionFile} MotionFile */
+/** @typedef {import("./editInner.js").InnerFile} InnerFile */
 /** @typedef {import("./editMotion.js").MotionSpec} MotionSpec */
 
 /**
@@ -53,7 +66,11 @@ import {
  * @property {number} rate
  * @property {boolean} isHost
  * @property {MotionFile | null} motion The file of a B-roll with motion (`editMotion.js`).
- * @property {MotionSpec | null} motionSpec The movement it will have.
+ * @property {MotionSpec | null} motionSpec The movement it will have (a B-roll with motion, or a layout).
+ * @property {InnerFile | null} inner The timed media a host's file plays (`editInner.js`), when it is
+ *   not a B-roll with motion.
+ * @property {number} innerShift Frames the host's first frame moved on in the source (its inner media's
+ *   in-points move by that much).
  * @property {number | null} sourceLength Source length in project frames (video, audio, motion B-roll).
  * @property {boolean} removed
  * @property {ParsedClip} parsed
@@ -69,6 +86,7 @@ import {
  * @property {number} start
  * @property {number} dur
  * @property {number | null} mediaStart
+ * @property {number} innerShift
  * @property {MotionSpec | null} motionSpec
  */
 
@@ -79,9 +97,6 @@ import {
  */
 
 const MAX_FRAME = 1_000_000_000;
-
-/** An in-point within this many frames of a whole frame is taken as that frame (no drift). */
-const SNAP = 0.01;
 
 /** @param {unknown} value @param {string} what @returns {number} */
 function frameOf(value, what) {
@@ -121,11 +136,6 @@ function validateOp(op) {
   }
 }
 
-/** @param {number} x @returns {number} */
-function snap(x) {
-  return Math.abs(x - Math.round(x)) <= SNAP ? Math.round(x) : x;
-}
-
 /**
  * @param {ParsedProject} parsed
  * @param {EditFacts} facts
@@ -133,8 +143,10 @@ function snap(x) {
  */
 function buildClips(parsed, facts) {
   const fps = facts.fps;
+  const sources = arollSources(parsed.clips);
   return parsed.clips.map((c) => {
     const motion = c.isHost && c.id !== null ? motionOfHost(facts, c.id) : null;
+    const inner = c.isHost && c.id !== null && !motion ? innerOfHost(facts, c.id, sources) : null;
     const timed = c.tag === "video" || c.tag === "audio";
     const sourcePath = motion ? motion.src : timed ? c.src : null;
     const source = sourcePath !== null ? facts.sourcesByPath.get(sourcePath) : undefined;
@@ -154,7 +166,9 @@ function buildClips(parsed, facts) {
       rate: motion ? motion.rate : (c.rate ?? 1),
       isHost: c.isHost,
       motion,
-      motionSpec: motion ? motion.spec : null,
+      motionSpec: motion ? motion.spec : (inner?.layout?.spec ?? null),
+      inner,
+      innerShift: 0,
       sourceLength: source ? sourceLengthFrames(source, fps) : null,
       removed: false,
       parsed: c,
@@ -368,6 +382,18 @@ function checkAnchoredMedia(clip, newDur, k) {
 }
 
 /**
+ * The same limits for the media inside a host's file.
+ * @param {EditClip} clip
+ * @param {number} newDur
+ * @param {number} k Frames the first edge moves by (negative: earlier).
+ */
+function checkInnerMedia(clip, newDur, k) {
+  if (!clip.inner) return;
+  const problem = innerProblem(clip.inner, newDur, k, MEDIA_TOLERANCE);
+  if (problem !== null) throw invalidInput(problem);
+}
+
+/**
  * @param {EditClip[]} clips
  * @param {EditClip} clip
  * @param {"start" | "end"} edge
@@ -441,7 +467,9 @@ function planTrimOther(clips, clip, edge, frame) {
         `This clip cannot start before frame ${prevEnd}, where the previous clip on its track ends.`,
       );
     checkAnchoredMedia(clip, newDur, k);
+    checkInnerMedia(clip, newDur, k);
     if (clip.mediaStart !== null) clip.mediaStart += k * clip.rate;
+    clip.innerShift += k;
     clip.start = frame;
     clip.dur = newDur;
   } else {
@@ -457,6 +485,7 @@ function planTrimOther(clips, clip, edge, frame) {
     if (frame > total)
       throw invalidInput(`This clip cannot end after the end of the video (frame ${total}).`);
     checkAnchoredMedia(clip, newDur, 0);
+    checkInnerMedia(clip, newDur, 0);
     clip.dur = newDur;
   }
   return { added: [], verb: "Trim" };
@@ -469,7 +498,7 @@ function planTrimOther(clips, clip, edge, frame) {
  * @returns {Plan}
  */
 function planSplit(clip, frame, taken) {
-  if (clip.isHost && !clip.motion)
+  if (clip.isHost && !clip.motion && !clip.inner)
     throw invalidInput("A motion graphic cannot be split; trim it or delete it instead.");
   assertPlain(clip, SPEED);
   const end = clip.start + clip.dur;
@@ -483,7 +512,7 @@ function planSplit(clip, frame, taken) {
   const first = frame - clip.start;
   /** @type {MotionSpec | null} */
   let secondSpec = null;
-  if (clip.motion && clip.motionSpec) {
+  if (clip.motionSpec) {
     // The movement is linear, so each part keeps its own piece of it exactly: they meet at the value
     // of the movement at the cut.
     const spec = clip.motionSpec;
@@ -498,6 +527,7 @@ function planSplit(clip, frame, taken) {
     start: frame,
     dur: end - frame,
     mediaStart: clip.mediaStart === null ? null : clip.mediaStart + first * clip.rate,
+    innerShift: first,
     motionSpec: secondSpec,
   };
   clip.dur = first;
@@ -614,6 +644,25 @@ function planAllFades(clips, plan, facts) {
 }
 
 /**
+ * The A-roll as it is after the edit: what is audible at every frame (`editSync.js`).
+ * @param {EditClip[]} clips
+ * @param {Plan} plan
+ * @returns {import("./editSync.js").ArollSegment[]}
+ */
+function arollSegments(clips, plan) {
+  /** @type {import("./editSync.js").ArollSegment[]} */
+  const segments = [];
+  /** @param {EditClip} c @param {number} start @param {number} dur @param {number | null} mediaStart */
+  const add = (c, start, dur, mediaStart) => {
+    if (c.track !== 0 || c.parsed.src === null || mediaStart === null) return;
+    segments.push({ src: c.parsed.src, start, dur, mediaStart, rate: c.rate });
+  };
+  for (const c of clips) if (!c.removed) add(c, c.start, c.dur, c.mediaStart);
+  for (const a of plan.added) add(a.from, a.start, a.dur, a.mediaStart);
+  return segments;
+}
+
+/**
  * @param {string} html
  * @param {ParsedProject} parsed
  * @param {EditClip[]} clips
@@ -626,6 +675,8 @@ function write(html, parsed, clips, plan, facts) {
   const seconds = (/** @type {number} */ frames) => framesToSecondsText(frames, fps);
   const inPoint = (/** @type {number} */ frames) => framesToSecondsText(Math.max(0, frames), fps);
   const fades = planAllFades(clips, plan, facts);
+  const segments = arollSegments(clips, plan);
+  const taken = new Set(parsed.idCounts.keys());
   /** @type {import("./document.js").TextEdit[]} */
   const edits = [];
   /** @type {ProjectFile[]} */
@@ -654,6 +705,28 @@ function write(html, parsed, clips, plan, facts) {
     if (remove.length > 0) edits.push(...attrRemovalEdits(html, element, remove));
     const motion = c.motion;
     if (
+      c.inner &&
+      innerChanges(c.inner, {
+        shift: c.innerShift,
+        duration: c.dur,
+        moves:
+          c.motionSpec !== (c.inner.layout?.spec ?? null) || (c.dur !== c.dur0 && !!c.inner.layout),
+        pieces: syncPieces(segments, c.start, c.dur),
+      })
+    ) {
+      files.push({
+        path: `compositions/${c.id}.html`,
+        text: writeInner(c.inner, {
+          fps,
+          shift: c.innerShift,
+          duration: c.dur,
+          spec: c.motionSpec,
+          sync: { pieces: syncPieces(segments, c.start, c.dur), taken },
+        }),
+        before: c.inner.text,
+      });
+    }
+    if (
       motion &&
       c.motionSpec &&
       c.mediaStart !== null &&
@@ -674,12 +747,13 @@ function write(html, parsed, clips, plan, facts) {
   }
   for (const a of plan.added) {
     const motion = a.from.motion;
+    const inner = a.from.inner;
     /** @type {Record<string, string>} */
     const changes = { id: a.id, "data-start": seconds(a.start), "data-duration": seconds(a.dur) };
     /** @type {string[]} */
     const remove = [];
     if (!motion && a.mediaStart !== null) changes["data-media-start"] = inPoint(a.mediaStart);
-    if (motion) {
+    if (motion || inner) {
       changes["data-composition-id"] = a.id;
       changes["data-composition-src"] = `compositions/${a.id}.html`;
     }
@@ -701,6 +775,27 @@ function write(html, parsed, clips, plan, facts) {
           inner: innerFrames(a.from.sourceLength ?? a.dur, a.mediaStart, a.from.rate, a.dur, fps),
           duration: a.dur,
           spec: a.motionSpec,
+        }),
+        before: null,
+      });
+    }
+    if (inner) {
+      const text = copyIdText(inner.text, inner.id, a.id);
+      const copy = readInner(text, a.id, facts, arollSources(parsed.clips));
+      if (
+        compositionFileProblem(text, a.id) !== null ||
+        !copy ||
+        copy.media.length !== inner.media.length
+      )
+        throw invalidInput("A motion graphic cannot be split; trim it or delete it instead.");
+      files.push({
+        path: `compositions/${a.id}.html`,
+        text: writeInner(copy, {
+          fps,
+          shift: a.innerShift,
+          duration: a.dur,
+          spec: a.motionSpec,
+          sync: { pieces: syncPieces(segments, a.start, a.dur), taken },
         }),
         before: null,
       });

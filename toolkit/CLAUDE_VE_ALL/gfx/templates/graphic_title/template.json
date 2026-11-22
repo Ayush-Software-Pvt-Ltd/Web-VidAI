@@ -1,0 +1,10 @@
+{
+  "summary": "Kinetic title: small kicker, big title (last word in the accent colour), subtitle",
+  "duration": 4.5,
+  "variables": [
+    {"id": "title", "type": "text", "required": true, "max": 120, "default": "Big idea in few words", "help": "the title; shrinks to fit"},
+    {"id": "kicker", "type": "text", "max": 50, "default": "", "help": "small line above the title"},
+    {"id": "subtitle", "type": "text", "max": 160, "default": "", "help": "line under the title"},
+    {"id": "align", "type": "enum", "choices": ["center", "left"], "default": "center", "help": "text alignment"}
+  ]
+}

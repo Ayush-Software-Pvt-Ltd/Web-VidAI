@@ -40,6 +40,14 @@ export const INNER_EXTRA_SECONDS = 600;
 /** Slack, in frames, when comparing an out-point with the source length (as in the profile). */
 const TOLERANCE = 0.01;
 
+/** An in-point within this many frames of a whole frame is taken as that frame (no drift). */
+const SNAP = 0.01;
+
+/** @param {number} x @returns {number} */
+export function snap(x) {
+  return Math.abs(x - Math.round(x)) <= SNAP ? Math.round(x) : x;
+}
+
 /**
  * The movement: a linear slide and zoom of the box that holds the video.
  * @typedef {Object} MotionSpec
@@ -72,8 +80,28 @@ function pair(v) {
 }
 
 /** @param {string | null} text @returns {number | null} A plain non-negative decimal, else null. */
-function plainNumber(text) {
+export function plainNumber(text) {
   return text !== null && /^\s*(?:\d+(?:\.\d*)?|\.\d+)\s*$/.test(text) ? Number(text) : null;
+}
+
+/**
+ * Reads the text of `data-vidai-motion` (and of `data-vidai-layout-motion`, which has the same shape).
+ * @param {string} raw
+ * @returns {{ spec: MotionSpec, seconds: number } | null} Null when it is not that shape.
+ */
+export function parseMotionJson(raw) {
+  /** @type {unknown} */
+  let value;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof value !== "object" || value === null) return null;
+  const v = /** @type {Record<string, unknown>} */ (value);
+  if (!pair(v.scale) || !pair(v.x) || typeof v.duration !== "number" || !(v.duration > 0))
+    return null;
+  return { spec: { scale: v.scale, x: v.x }, seconds: v.duration };
 }
 
 /**
@@ -103,18 +131,8 @@ export function readMotion(text, id) {
   const motion = motions[0];
   if (videos.length !== 1 || motions.length !== 1 || !video || !motion) return null;
   const raw = attrValue(motion, "data-vidai-motion");
-  if (raw === null) return null;
-  /** @type {unknown} */
-  let value;
-  try {
-    value = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (typeof value !== "object" || value === null) return null;
-  const v = /** @type {Record<string, unknown>} */ (value);
-  if (!pair(v.scale) || !pair(v.x) || typeof v.duration !== "number" || !(v.duration > 0))
-    return null;
+  const parsed = raw === null ? null : parseMotionJson(raw);
+  if (!parsed) return null;
   const src = attrValue(video, "src");
   const mediaStartText = attrValue(video, "data-media-start") ?? "0";
   const durationText = attrValue(video, "data-duration");
@@ -134,8 +152,8 @@ export function readMotion(text, id) {
     rate,
     mediaStartText,
     durationText: durationText ?? "",
-    spec: { scale: v.scale, x: v.x },
-    movementSeconds: v.duration,
+    spec: parsed.spec,
+    movementSeconds: parsed.seconds,
   };
 }
 
@@ -241,18 +259,30 @@ function escapeRegExp(text) {
 }
 
 /**
- * The file of a copy: every use of the composition id (the root, box and video ids, the composition id
- * and the timeline key) becomes the new id. Paths such as `assets/media/b-1.mp4` are left alone.
+ * The text of a copy of a composition file: every use of the composition id (the root, the boxes and
+ * videos inside it, `#<id>-...` selectors, the composition id and the timeline key) becomes the new id.
+ * Paths such as `assets/media/b-1.mp4` are left alone.
+ * @param {string} text
+ * @param {string} id
+ * @param {string} newId
+ * @returns {string}
+ */
+export function copyIdText(text, id, newId) {
+  const pattern = new RegExp(
+    `(?<![\\w./-])${escapeRegExp(id)}(?=-[A-Za-z]\\w*(?:-\\d+)*(?![\\w.-])|["'\\]])`,
+    "g",
+  );
+  return text.replace(pattern, newId);
+}
+
+/**
+ * The file of a copy of a B-roll with motion.
  * @param {MotionFile} file
  * @param {string} newId
  * @returns {string} The new text; throws `invalidInput` when the result would not read back.
  */
 export function copyMotionText(file, newId) {
-  const pattern = new RegExp(
-    `(?<![\\w./-])${escapeRegExp(file.id)}(?=-(?:root|motion|video)(?![\\w-])|["'\\]])`,
-    "g",
-  );
-  const text = file.text.replace(pattern, newId);
+  const text = copyIdText(file.text, file.id, newId);
   if (readMotion(text, newId) === null) {
     throw invalidInput(
       "This B-roll's file is not in the shape VidAI wrote, so it cannot be split.",

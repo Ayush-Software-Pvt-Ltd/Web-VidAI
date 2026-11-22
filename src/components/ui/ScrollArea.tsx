@@ -93,8 +93,14 @@ function Scrollbar({ orientation }: { orientation: "vertical" | "horizontal" }) 
     <RadixScrollArea.Scrollbar
       orientation={orientation}
       className={cn(
-        "flex touch-none p-0.5 transition-opacity duration-150 select-none data-[state=hidden]:opacity-0",
-        orientation === "vertical" ? "h-full w-2.5" : "h-2.5 flex-col",
+        "flex touch-none transition-opacity duration-150 select-none data-[state=hidden]:opacity-0",
+        // Radix maps the pointer (screen px) onto sizes it measures in layout px, so a thumb
+        // dragged under the page zoom runs ahead of the pointer. The scrollbar undoes the zoom
+        // (the same trick as the popups, src/styles.css) and takes its thickness back with it.
+        "[zoom:calc(1/var(--page-zoom,1))] p-[calc(var(--spacing)*0.5*var(--page-zoom,1))]",
+        orientation === "vertical"
+          ? "h-full w-[calc(var(--spacing)*2.5*var(--page-zoom,1))]"
+          : "h-[calc(var(--spacing)*2.5*var(--page-zoom,1))] flex-col",
       )}
     >
       <RadixScrollArea.Thumb className="relative flex-1 rounded-full bg-fg/25 hover:bg-fg/40" />

@@ -20,6 +20,9 @@ the deliverables to <video folder>/output/.  Run it with the toolkit's own Pytho
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py import <VIDEO> <export.fcpxml|.fcpxmld|.xml>
                                                     read the creator's export -> build/timeline_fcp.json
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py frames <VIDEO> --res 720    one composited frame per shot + contact sheets
+  $PY <toolkit>/CLAUDE_VE_ALL/ve.py frames <VIDEO> --project [--times 1,5.5] [--every S]
+                                                              still frames of the written HyperFrames project
+                                                              (what the user sees) + contact sheets + WARN lines
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py audio  <VIDEO>            render the mix only (loudness check / QA transcription)
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py qa     <VIDEO> --res 720|1080       contact sheets + pacing + loudness of a render
 
@@ -39,7 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from vekit import asr, broll, fcpxml, gfx, hfproject, premiere, qa, render, resources, tools  # noqa: E402
+from vekit import asr, broll, fcpxml, gfx, graphic, hfproject, premiere, qa, render, resources, tools  # noqa: E402
 from vekit.model import Timeline  # noqa: E402
 from vekit.paths import DTD, KIT, project_dir, rel, video_dir  # noqa: E402
 from vekit.plan import plan  # noqa: E402
@@ -186,25 +189,36 @@ def cmd_plan(a):
     rows = pacing(tl)
     lens = [f2s(b - s) for s, b, _ in rows]
     nb = sum(1 for c in tl.connected if c.lane == 1 and tl.assets[c.asset]["kind"] == "broll")
-    print(f"duration {f2s(tl.duration):.2f}s, {len(tl.spine)} spine clips, "
-          f"{sum(1 for c in tl.connected if c.lane == 1) - nb} graphics, {nb} b-roll, "
-          f"{sum(1 for c in tl.connected if c.asset.startswith('gfx:hit_'))} hits, "
-          f"{sum(1 for c in tl.connected if c.lane == 2 and not c.asset.startswith('gfx:hit_'))} overlays")
-    print(f"visible shots {len(rows)}, mean {sum(lens) / len(lens):.2f}s, max {max(lens):.2f}s")
-    if a.verbose:
-        for s, b, label in rows:
-            flag = "  <-- long" if f2s(b - s) > 3.2 and not label.startswith("check") else (
-                "  <-- short" if f2s(b - s) < 0.6 else "")
-            print(f"  {f2s(s):7.2f} {f2s(b - s):5.2f}s  {label}{flag}")
+    report = []                                        # everything, for CLAUDE_VE/plan.txt
+
+    def say(line, screen=True):
+        report.append(line)
+        if screen:
+            print(line)
+
+    say(f"duration {f2s(tl.duration):.2f}s, {len(tl.spine)} spine clips, "
+        f"{sum(1 for c in tl.connected if c.lane == 1) - nb} graphics, {nb} b-roll, "
+        f"{sum(1 for c in tl.connected if c.asset.startswith('gfx:hit_'))} hits, "
+        f"{sum(1 for c in tl.connected if c.lane == 2 and not c.asset.startswith('gfx:hit_'))} overlays")
+    say(f"visible shots {len(rows)}, mean {sum(lens) / len(lens):.2f}s, max {max(lens):.2f}s")
+    for s, b, label in rows:
+        flag = "  <-- long" if f2s(b - s) > 3.2 and not label.startswith("check") else (
+            "  <-- short" if f2s(b - s) < 0.6 else "")
+        say(f"  {f2s(s):7.2f} {f2s(b - s):5.2f}s  {label}{flag}", screen=a.verbose)
     for w in warns:
-        print("WARN", w)
+        say(f"WARN {w}")
     # synced b-roll (a second angle such as a screen recording) is different footage every time
     # and a graphic resumed after a cut to the host (in-point > 0) is the same use continuing
     names = [c.name for c in tl.connected if c.lane == 1 and "ranges" not in tl.assets[c.asset]
              and not (tl.assets[c.asset]["kind"] == "gfx" and c.src > 0)]
     for n in sorted(set(names)):
         if names.count(n) > 2:
-            print("WARN graphic/b-roll used more than twice:", n)
+            say(f"WARN graphic/b-roll used more than twice: {n}")
+    # the same report in a file every run (UTF-8, whatever the shell does with output), so nobody redirects
+    out = pdir_of(a.main) / "plan.txt"
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(report) + "\n")
+    print(f"Full report (every shot and warning): {rel(out, video_dir(a.main))}")
 
 
 def load_tl(a):
@@ -215,6 +229,10 @@ def load_tl(a):
 def cmd_gfx(a):
     tl = load_tl(a)
     gfx.render_all(tl, pdir_of(a.main), [resources.check_resolution(r) for r in a.res], force=a.force)
+
+
+def cmd_graphic(a):
+    return graphic.run(a)
 
 
 def cmd_broll(a):
@@ -353,6 +371,12 @@ def shot_label(tl, base, layers):
 
 
 def cmd_frames(a):
+    if a.project:
+        from vekit import projectframes
+        return projectframes.run(a)
+    if a.times or a.every is not None:
+        print("ERROR frames: --times and --every belong to --project.", file=sys.stderr)
+        return 1
     tl = load_tl(a)
     pdir = pdir_of(a.main)
     res = resources.check_resolution(a.res)
@@ -457,6 +481,10 @@ def main():
     p = sub.add_parser("gfx"); p.add_argument("main"); p.add_argument("--res", nargs="+", default=["1080"])
     p.add_argument("--force", action="store_true"); p.add_argument("--timeline")
     p = sub.add_parser("broll"); p.add_argument("main"); p.add_argument("--timeline")
+    p = sub.add_parser("graphic"); p.add_argument("main", nargs="?"); p.add_argument("name", nargs="?")
+    p.add_argument("--template"); p.add_argument("--var", nargs="+", action="extend", default=[])
+    p.add_argument("--duration"); p.add_argument("--orientation", choices=["landscape", "portrait"])
+    p.add_argument("--list", action="store_true")
     p = sub.add_parser("build"); p.add_argument("main"); p.add_argument("--res", required=True); p.add_argument("--timeline")
     p = sub.add_parser("fcp"); p.add_argument("main"); p.add_argument("--version", default="v1"); p.add_argument("--timeline")
     p = sub.add_parser("premiere"); p.add_argument("main"); p.add_argument("--version", default="v1"); p.add_argument("--timeline")
@@ -464,6 +492,7 @@ def main():
     p = sub.add_parser("review"); p.add_argument("main"); p.add_argument("--timeline")
     p = sub.add_parser("import"); p.add_argument("main"); p.add_argument("export")
     p = sub.add_parser("frames"); p.add_argument("main"); p.add_argument("--res", default="720"); p.add_argument("--timeline")
+    p.add_argument("--project", action="store_true"); p.add_argument("--times", nargs="+"); p.add_argument("--every", type=float)
     p = sub.add_parser("audio"); p.add_argument("main"); p.add_argument("--timeline")
     p = sub.add_parser("qa"); p.add_argument("main"); p.add_argument("--res", required=True); p.add_argument("--timeline")
     p = sub.add_parser("prep"); p.add_argument("main")
@@ -471,7 +500,7 @@ def main():
     sub.add_parser("doctor")
     sub.add_parser("hardware")
     a = ap.parse_args()
-    sys.exit(asr.guarded(lambda: {"prep": cmd_prep, "plan": cmd_plan, "gfx": cmd_gfx, "broll": cmd_broll, "build": cmd_build,
+    sys.exit(asr.guarded(lambda: {"prep": cmd_prep, "plan": cmd_plan, "gfx": cmd_gfx, "graphic": cmd_graphic, "broll": cmd_broll, "build": cmd_build,
      "fcp": cmd_fcp, "premiere": cmd_premiere, "hf": cmd_hf,
      "review": cmd_review, "import": cmd_import, "frames": cmd_frames, "audio": cmd_audio,
      "lang": cmd_lang, "qa": cmd_qa, "doctor": cmd_doctor, "hardware": cmd_hardware}[a.cmd](a) or 0))

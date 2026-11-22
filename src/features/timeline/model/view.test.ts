@@ -10,6 +10,7 @@ import {
   contentWidth,
   fitZoom,
   frameAtX,
+  pointerX,
   rulerTicks,
   scrollToReveal,
   tickSteps,
@@ -150,5 +151,24 @@ describe("ruler ticks", () => {
       const ticks = rulerTicks({ pxPerFrame: 4, scroll: 0 }, fps, 5000, 900);
       expect(ticks.some((t) => t.label === "0:01")).toBe(true);
     }
+  });
+});
+
+describe("pointerX", () => {
+  it("is the offset into the viewport when nothing is zoomed", () => {
+    expect(pointerX(350, { left: 100, width: 600 }, 600)).toBe(250);
+  });
+
+  it("scales the screen px of a zoomed page back to layout px", () => {
+    // A page zoom of 1.4: the box is 600 layout px wide, 840 on screen, starting at 140 on screen.
+    const rect = { left: 140, width: 840 };
+    expect(pointerX(140, rect, 600)).toBe(0);
+    expect(pointerX(140 + 420, rect, 600)).toBeCloseTo(300, 9);
+    expect(pointerX(140 + 840, rect, 600)).toBeCloseTo(600, 9);
+  });
+
+  it("does not divide by zero before the viewport is measured", () => {
+    expect(pointerX(30, { left: 10, width: 0 }, 0)).toBe(20);
+    expect(pointerX(30, { left: 10, width: 100 }, 0)).toBe(20);
   });
 });

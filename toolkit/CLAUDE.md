@@ -13,14 +13,16 @@
 - Run the commands one at a time; the toolkit obeys `LIMITS:` itself.
 
 ## Order of work
-1. Read `MEMORY.md`, then `ve.py prep`.
-2. `ve.py lang` tells the spoken language; then transcribe the A-roll with `transcribe.py` (`--lang <code>` or `--lang auto`) and `windows.py`, and plan the edit.
-   Look at raw A-roll or b-roll with `sheet.py <video> <out.jpg> --every 6` (or `--times 1,5.5`), one frame with `thumbs.py grab <video> <seconds> <out.png>`.
-3. `ve.py plan`, then `ve.py gfx` (no options) and `ve.py broll` for graphics and b-roll.
-4. `ve.py frames` and `ve.py qa` to look at the result.
-5. `ve.py build`, then `ve.py hf` to write the project into `PROJECT_FOLDER`.
-6. Thumbnails, `meta.txt` and `info.txt`.
-7. Run `CHECK_COMMAND`, fix every error, run it again until it passes.
+1. Read `MEMORY.md` and the section "Writing the edit" of `README.md` next to this file (the `timeline.py` contract, graphic templates, layouts); then `ve.py prep`.
+2. `ve.py lang` tells the spoken language; then transcribe the A-roll with `transcribe.py` (`--lang <code>` or `--lang auto`) and `windows.py`.
+   Look at raw footage with `sheet.py <video> <out.jpg> --every 6` (or `--times 1,5.5`), one frame with `thumbs.py grab <video> <seconds> <out.png>`.
+3. Write `CLAUDE_VE/timeline.py`: a full-screen graphic or b-roll about every 20 to 30 seconds over the whole video, keyword `HITS` on key terms, several templates, no repeats.
+4. Make graphics with `ve.py graphic "<MAIN_FOLDER>" <name> --template <t> --var key=value` (`ve.py graphic --list`); hand-write a page only when no template fits.
+5. `ve.py plan` writes `CLAUDE_VE/plan.txt`; fix the cause of every `WARN` line in `timeline.py` and plan again.
+6. `ve.py hf` writes the project into `PROJECT_FOLDER`; `ve.py gfx`, `broll` and `build` are not needed.
+7. `ve.py frames --project` shows what the user will see: look at its contact sheet and `WARN` lines, fix your own edit (graphic, timeline, layout) and repeat steps 5 to 7 until it looks right.
+8. Thumbnails, `meta.txt` and `info.txt`.
+9. Run `CHECK_COMMAND`, fix every error, run it again until it passes.
 
 ## Never
 - Render a video file of the edit, in any form.
@@ -29,8 +31,9 @@
 - Write outside `CLAUDE_VE`, `output` and `info.txt` of the video folder.
 - Write into the toolkit, except to append a lesson to `MEMORY.md`.
 - Put animation in `index.html` or nest a clip inside another element.
-- Write your own transcription or ffmpeg scripts instead of the toolkit's commands.
+- Write your own transcription, ffmpeg or debug scripts instead of the toolkit's commands.
 - Set `VE_*` environment variables; they belong to the administrator and the tests.
+- Read or run the toolkit's internal modules (`vekit/`) or redirect command output into files; the commands, their `--help`, `README.md` and `plan.txt` are the interface.
 - Work around a failing toolkit command: write its one-line error into `info.txt` and stop.
 
 ## Done

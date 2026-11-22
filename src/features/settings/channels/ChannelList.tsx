@@ -15,6 +15,7 @@ import {
 import { PathText, Tooltip, TruncatedText } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { CHANNEL_TYPE_LABELS } from "@/lib/status";
+import { screenPerLayout } from "@/lib/zoom";
 import type { Channel } from "@/lib/types";
 import { shiftFor } from "./reorder";
 
@@ -28,8 +29,13 @@ interface Drag {
   id: string;
   from: number;
   to: number;
+  /** The pointer's start, in screen px (`clientY`). */
   startY: number;
+  /** Screen px per layout px (the page zoom), for the distances below. */
+  scale: number;
+  /** How far the row is dragged, in layout px. */
   dy: number;
+  /** The height of a row, in layout px. */
   rowHeight: number;
 }
 
@@ -82,13 +88,15 @@ export function ChannelList({
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const row = event.currentTarget.closest("li");
+    const scale = screenPerLayout(event.currentTarget.closest("ul") ?? event.currentTarget);
     setDrag({
       id,
       from: index,
       to: index,
       startY: event.clientY,
+      scale,
       dy: 0,
-      rowHeight: row?.getBoundingClientRect().height ?? 32,
+      rowHeight: row ? row.getBoundingClientRect().height / scale : 32,
     });
   };
 
@@ -96,7 +104,7 @@ export function ChannelList({
     if (!drag) return;
     const min = -drag.from * drag.rowHeight;
     const max = (channels.length - 1 - drag.from) * drag.rowHeight;
-    const dy = Math.max(min, Math.min(max, event.clientY - drag.startY));
+    const dy = Math.max(min, Math.min(max, (event.clientY - drag.startY) / drag.scale));
     const to = Math.round(drag.from + dy / drag.rowHeight);
     setDrag({ ...drag, dy, to });
   };

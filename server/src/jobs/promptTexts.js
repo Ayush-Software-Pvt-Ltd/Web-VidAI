@@ -61,7 +61,7 @@ function windowsShell(example) {
  */
 export function toolkitSentences(p) {
   const then = p.windows ? `. ${windowsShell(p.example)} Do not use` : "; do not use";
-  return `The toolkit is in TOOLKIT_FOLDER and runs with the Python in PYTHON. Every command takes the absolute video folder, so call it as ${p.example} (replace "hf" with the command you need)${then} any other Python or toolkit folder and never write into TOOLKIT_FOLDER. Where older notes (for example MEMORY.md) say CLAUDE_VE_ALL, they mean TOOLKIT_FOLDER. Read ${p.home}${p.sep}CLAUDE.md (short rules) and ${p.home}${p.sep}MEMORY.md (lessons from earlier edits; append a new lesson to it only when you learned one worth keeping) before you start.`;
+  return `The toolkit is in TOOLKIT_FOLDER and runs with the Python in PYTHON. Every command takes the absolute video folder, so call it as ${p.example} (replace "hf" with the command you need)${then} any other Python or toolkit folder and never write into TOOLKIT_FOLDER. Where older notes (for example MEMORY.md) say CLAUDE_VE_ALL, they mean TOOLKIT_FOLDER. Read ${p.home}${p.sep}CLAUDE.md (short rules), the section "Writing the edit" of ${p.home}${p.sep}README.md (the timeline.py contract, the graphic templates and the layouts) and ${p.home}${p.sep}MEMORY.md (lessons from earlier edits; append a new lesson to it only when you learned one worth keeping) before you start.`;
 }
 
 /**

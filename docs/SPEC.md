@@ -699,6 +699,7 @@ Waits are measured on the wall clock.
 - Entries are readable: a tool call becomes one line of at most 160 characters (for example "Bash: Render graphics at 1080", using the tool's description when there is one) with the full input in `detail`.
   The agent's own messages are kept as written, and the UI renders their Markdown, never as HTML.
   Thinking blocks are not logged.
+  A tool result that is an error reads "Error: <first line of the output>", except one that VidAI itself cut short: when a pause or stop asked the agent to stop the current step, the steps still running end with an error result that is only the answer to that request, and it reads "Stopped by the pause" ("Stopped when the job was stopped" after a stop) with the output so far in `detail`; the server decides this from having sent the interrupt, never from the text.
 - Absolute paths in tool lines and results are shown relative to the video folder (`CLAUDE_VE/timeline.py`), or to the channel directory or the video's server folder (`<data dir>/projects/<videoKey>/`); whole path prefixes only, on Windows in all spellings (`C:\...`, `C:/...`, `/c/...`); `detail` keeps the original.
 - Every API key given to a job is registered with the scrubber and replaced by `[api key]` in every entry, in the file and in the events, also in its JSON-escaped form; text is scrubbed before it is cut to a length, so a cut can never leave half a secret.
 - Lines that name the program say "Claude Code" or "OpenCode 2" ("OpenCode 2 is running (model vidai/glm-5.3)", "Sent the edit instructions to OpenCode 2", "Pausing: asking OpenCode 2 to stop the current step").
@@ -897,12 +898,21 @@ The result of an edit is the folder `<video>/output/<video folder name>.hf/`, a 
 7. A media clip's `data-media-start` and duration stay inside its source file, whose length is in `edit.json`; a media clip without an entry there breaks the rule. The same holds for the video inside a B-roll with motion (below): its source is listed in `edit.json`, its in-point plus the host's length stays inside the source, and it lasts at least as long as the host.
 8. A motion graphic host has `id` equal to its `data-composition-id` and its file is `compositions/<id>.html`; the file is a HyperFrames sub-composition with its own paused timeline; everything that moves is inside such a file.
 9. `index.html` holds no animation: besides `<script src="shared/...">` (GSAP from the design kit) its one script is VidAI's fixed root script (`server/src/timeline/rootScript.js`), which registers a timeline with a single empty tween as long as the root's `data-duration` (read from the attribute, so hand edits never touch the script), and no `data-start` refers to another clip.
-10. Every `src` and every file reference is a relative path inside the project without `..`; nothing is loaded from the network.
+10. Every `src` and every file reference is a relative path inside the project without `..`, and names a file that is in the project (links under `assets/media/` are followed); nothing is loaded from the network.
+    This holds for `index.html` and for every `compositions/*.html` (`src`, `href`, `data-composition-src`, CSS `url()`, `@import` and inline styles): drive letters and other schemes (`file:`, `http:`), backslashes, absolute paths, `//` and `..` are refused.
+    In a composition file a `data:` URL and a `#fragment` are allowed (they load nothing); in `index.html` only a `#fragment` is.
 11. The agent never renders a video file of the edit (this one cannot be read from the files; the prompt says it).
+12. A full-screen graphic (a host of the kind `graphic`, which hides the clip under it) has an opaque background over the whole frame: the composition's root paints a background (a colour that is not transparent, a gradient or an image), or its first child is a `video`, `img` or `canvas`, or its first child paints a background and covers the frame (`inset: 0`, all four sides 0, `100%` of width and height, or the frame's size in pixels).
+    A graphic that may show the video through it is an overlay, not a full-screen graphic.
+    The sentence is: `The full-screen graphic "<id>" has no opaque background over the whole frame, so the video shows through it; give its page a background color or image.`
 
 A B-roll clip that moves (a slow push, pull or drift) is a host like a motion graphic: `data-vidai-kind="broll"` on track 1, with the video and its one movement inside `compositions/<id>.html`.
 That file has one fixed shape, written the same by the toolkit and by the server: the element `#<id>-motion` carries `data-vidai-motion='{"scale":[from,to],"x":[from,to],"duration":<seconds>}'`, the `<video>` inside it carries `data-media-start` (the in-point) and `data-duration` (as long as the source allows, at most 600 seconds past the host), and the file's script reads the attribute and runs one linear movement over the host's length.
 A hand edit of such a clip rewrites only attribute values in that file; a host whose file has another shape (written by an agent, or by toolkit 1.2.0) is treated as a graphic.
+A synced B-roll with a composed layout (a phone or tablet screen recording over a background picture, with the speaker in a round box) is one host of the same kind: `data-vidai-kind="broll"` on track 1, and its file `compositions/<id>.html` holds the background `<img id="<id>-bg">`, the muted screen recording `<video id="<id>-screen">` and, inside `<div id="<id>-pip">`, the muted round host video `<video id="<id>-host">`, all inside `<div id="<id>-zoom">`, which carries `data-vidai-layout-motion` (the same JSON as `data-vidai-motion`) when the whole picture moves.
+Each video carries `data-start="0"`, its own `data-media-start` (the source time of the host's first frame; the host video is the A-roll file at the same moment, so the speaker's lips match the sound) and a `data-duration` as for a B-roll with motion; the server keeps the host video on the A-roll after hand edits (section 11), where it may become several videos.
+The ids end in `-screen` and `-host`, not `-video`, so the host is not a B-roll with motion; the server edits it by what the file contains (below).
+Rule 7 holds for every video of a host's file whose `src` is listed in `edit.json`: its in-point plus the host's length (times its speed) stays inside its source; for a video that follows the A-roll (section 11) the length is the part of the host it plays.
 
 Loudness of a clip is its `data-volume`.
 Fades are the clip's `data-fade-in` and `data-fade-out` (seconds, linear), set by one rule that the toolkit and the server share (`server/test/support/fixtures/fade-rule.json` is run by both):
@@ -917,8 +927,9 @@ After every hand edit the server sets the fades of the A-roll again by this rule
 Times are read with a tolerance of a hundredth of a frame and written within a billionth of a second of the exact frame time; frame rates are kept as exact fractions (`30`, `29.97` and `30000/1001` are all accepted in `data-fps`).
 `edit.json` is `{ toolkitVersion, fps, width, height, sources: [{ name, path, originalPath, frames, fps }], graphics: [{ id, template, variables, label }] }`, where a source's `path` is the `src` its clips use and its `frames` and `fps` are the file's own.
 
-`server/src/timeline/profile.js` checks rules 1 to 10 and returns each violation as a sentence that names the element; `hyperframes lint` must also report no errors (its warnings do not count, and a lint that cannot run is logged and is not an error of the project).
+`server/src/timeline/profile.js` checks rules 1 to 10 and 12 and returns each violation as a sentence that names the element; `hyperframes lint` must also report no errors (its warnings do not count, and a lint that cannot run is logged and is not an error of the project).
 `server/src/timeline/checkCli.js <project folder>` is the same check as a command for the agent: it ends with 0 when the project is fine, 1 with one error per line, 2 for a wrong call.
+The toolkit's own check (`check_project`, run by `ve.py hf`) holds the same rules 10 and 12 with the same wording, and `server/test/support/fixtures/project-rules.json` (compositions with the rules each breaks) is run by both suites, so the two checkers stay in step.
 Opening a timeline runs only the profile check.
 The check runs after every agent job and after every hand edit.
 
@@ -944,6 +955,7 @@ Preview copies: a video file is heavy for a browser when it is not H.264 with AA
 For each heavy file of a project the server makes a preview copy in `cache/proxy/` (H.264, at most 1280 on the long side, the same frame rate at a constant rate, one key frame per second, AAC, fast start), named by the file's real path, size and time.
 A request for the file through the preview address is answered with the copy when it exists.
 Copies are made in the background, one file at a time, after an edit completes and whenever a timeline is opened with copies missing; the screen says "Preparing smooth preview (1 of 3)" and plays the originals meanwhile.
+Every copy that comes ready reloads the player at the same frame, because a file the player already opened keeps playing from the original, and a browser plays an original without sound when it cannot decode the sound codec (measured in Chrome: AC-3, ALAC, 32-bit and float big-endian PCM; the picture plays, no error is raised).
 Renders always use the originals.
 
 - A file is also heavy when it is H.264 with 10 bits or not 4:2:0, is HDR (PQ or HLG), is interlaced, or is stored rotated; key frames are measured over the first 10 seconds, whose end counts as one.
@@ -955,8 +967,12 @@ Renders always use the originals.
 
 ### Timeline data
 
-`getTimeline(videoId)` returns the revision number, frame rate, size, duration in frames, the tracks with their clips (id, kind, label, start and duration in frames, track, and for media the source name, in-point and source length in frames, for graphics the file), the change requests, whether undo and redo are possible, and `locked` (`null` or the job that holds the project).
+`getTimeline(videoId)` returns the revision number, frame rate, size, duration in frames, the tracks (listed from top to bottom as the screen shows them) with their clips (id, kind, label, start and duration in frames, track, and for media the source name, in-point and source length in frames, for graphics the file), the change requests, whether undo and redo are possible, and `locked` (`null` or the job that holds the project).
 All times on the wire are whole frames.
+
+The tracks are listed as Premiere Pro stacks them: picture tracks upward, the layer drawn on top first, then the sound.
+The `z-index` of a picture clip is its track number (section 10 rule 4), so the list is track 4 (End fade, covers everything), 3 (Keyword hits), 2 (Overlays), 1 (B-roll and graphics), 0 (A-roll, the bottom picture layer), then the sound tracks 10 (Sound 1), 11 (Sound 2) and up.
+The server decides this order (`toTimeline` in `server/src/timeline/model.js`) and the screen only keeps it: the track headers, the lanes, the Up and Down arrows between clips and a click on a lane all follow the list, so never rely on the A-roll being the first entry; find a track by its `index`.
 The project is locked while a job of the video is active; a locked timeline plays and accepts change requests but no hand edits.
 
 ### Hand edits
@@ -968,12 +984,21 @@ Edits change only attributes of clip elements (and remove or add clip elements);
 |---|---|---|
 | `trim` (an edge to a frame) | the video gets shorter or longer by the change and everything after the edit point shifts (ripple); limited by the source file and a minimum of 2 frames | the edge moves; limited by the neighbours on its track, the source file (media), the end of the video and a minimum of 2 frames |
 | `delete` | the clip is removed and everything after it shifts earlier | the clip is removed |
-| `split` (at a frame inside the clip) | two clips, the second continuing in the source | two clips; a graphic cannot be split |
+| `split` (at a frame inside the clip) | two clips, the second continuing in the source | two clips; a graphic cannot be split, a B-roll with motion or layout can |
 | `move` | the clip is taken out and inserted at another cut (reorder); clips of other tracks that start inside it move with it | the clip moves in time on its track, limited by its neighbours and the ends of the video |
 
 Ripple rule for other tracks: a clip that starts after the removed or inserted part shifts by its length; a clip that starts inside a removed part now starts at the cut point; a clip that would end after the end of the video is shortened to fit, and removed if less than 2 frames remain.
 The end fade picture is the exception: it always stays at the end of the video with its length (at most the video's), whatever is trimmed, deleted or inserted before it.
 A B-roll with motion (section 10) is edited like any other B-roll: trimming is limited by its source file, trimming its first edge moves where it begins in the source, the movement always runs over the clip's new length, and a split gives each part its piece of the movement, the two meeting at the cut (the second part gets its own file `compositions/<id>-2.html`).
+A host whose file plays timed media of the project's sources (a layout host, section 10) is edited the same way: every `<video>` or `<audio>` in the file with `data-start="0"` and a `src` listed in `edit.json` is an inner medium, and when the host's first edge moves by k frames (a trim, or the second part of a split) the `data-media-start` of every inner medium moves by k frames of its source (k times its speed), so the screen keeps showing the same source frames at the same timeline frames; the trim is limited by every inner source, and the inner `data-duration` follows the rule of a B-roll with motion.
+An inner medium whose `src` is also the `src` of an A-roll clip (the round host video) follows the A-roll instead: after every edit it shows, at every frame of the host, the source frame the A-roll plays at that timeline frame, so the speaker's lips stay on the voice whatever happened (a move of the host, a trim, split, delete, reorder or speed of the A-roll under it).
+For that the file holds one inner video for each stretch of the host over one A-roll clip, with its own `data-start` (seconds into the host), `data-duration`, `data-media-start` and `data-playback-rate` (absent at speed 1) and the `src` of that clip; neighbouring stretches that continue each other in the same source at the same speed are one video.
+The first video is the element that was there, the others are copies of it with new ids (`<id>-2`, `<id>-3`, ...) and copies of its CSS rules by id, and surplus videos are removed; a medium counts as followed when it has any plain `data-start`, and the profile checks rule 7 for each video over the part of the host it plays.
+A stretch of the host over no A-roll (only a host that reaches past the end of the video) has no video, so the picture is hidden there.
+The file is rewritten after any edit whose result does not already match (the last video may last longer than needed), so a clip that was out of step is put right by the next edit; an edit that leaves the host over the same source frames leaves the file alone.
+A `data-vidai-layout-motion` movement behaves like `data-vidai-motion`: it runs over the clip's new length and a split gives each part its piece.
+A move or an edit of the A-roll does not change the other inner media (the screen recording moves with the clip, as a B-roll's source does), and media that `edit.json` does not list (a picture, a decorative clip) are left alone.
+Such a host can be split into `compositions/<id>-2.html` (all ids of the file get the new id); a graphic that plays no such media cannot.
 The files of such clips are written before `index.html`, and all are put back when the revision cannot be saved.
 When shifting makes two clips of one track overlap, the later clip keeps its place and the earlier one is shortened, or removed if less than 2 frames remain.
 Deleting the last A-roll clip is refused.
@@ -1155,6 +1180,7 @@ Text size is applied by the page itself as CSS `zoom` on the root element.
 Cmd/Ctrl with `=`, `+`, `-` and `0` are left to the browser's own zoom; the other shortcuts work where the browser lets a page have the key.
 Hints and tooltips leave out a shortcut the browser keeps for itself (`PlatformInfo.offersShortcut`: the zoom keys, and Cmd+`,` on a Mac).
 The page also sets `--page-zoom` on the root element: popups (menus, selects, tooltips) are positioned with it so they stay at their anchor, and the size limits of dialogs, sheets and toasts divide the viewport by it so they fit a small browser window.
+Under the zoom Chromium reports pointer positions and rectangles in screen px while styles and sizes are layout px, so code that moves or sizes something by a pointer distance or a measured rectangle converts with `src/lib/zoom.ts` (`screenPerLayout`, `toLayoutPx`); the scrollbars of `ScrollArea` undo the zoom for the same reason.
 The library rescans when the tab becomes visible or gets focus.
 When the event stream breaks, a full-page notice says that VidAI is not running and how to start it, and the page keeps trying to reconnect; when the stream is back the page reloads, so it never shows stale state (the same happens when the instance id of `hello` changes).
 Closing the tab changes nothing: edits keep running on the server, and opening the address again shows their current state.

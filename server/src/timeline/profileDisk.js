@@ -66,3 +66,32 @@ export async function listHtmlFiles(projectReal, folder, limit = 500) {
   await walk(folder);
   return found;
 }
+
+/**
+ * Whether a file reference (already known to be a relative path inside the project) names something
+ * that exists, a link being followed (a link under `assets/media/` may lead out of the project). A
+ * query or fragment is dropped and a percent escape is tried both ways.
+ * @param {string} projectReal The real path of the project folder.
+ * @param {string} value The reference as written.
+ * @returns {Promise<boolean>}
+ */
+export async function referenceExists(projectReal, value) {
+  const bare = (value.trim().split(/[?#]/)[0] ?? "").trim();
+  if (bare === "") return true;
+  /** @type {string[]} */
+  const spellings = [bare];
+  try {
+    spellings.push(decodeURIComponent(bare));
+  } catch {
+    // a malformed escape is taken as it is
+  }
+  for (const spelling of spellings) {
+    try {
+      await fs.stat(path.join(projectReal, ...spelling.split("/")));
+      return true;
+    } catch {
+      // try the next spelling
+    }
+  }
+  return false;
+}

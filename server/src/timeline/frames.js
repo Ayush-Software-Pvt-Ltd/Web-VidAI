@@ -219,3 +219,16 @@ function decimalText(scaled, decimals) {
   const digits = scaled.toString().padStart(decimals + 1, "0");
   return `${digits.slice(0, -decimals)}.${digits.slice(-decimals)}`;
 }
+
+/**
+ * The length of a source in project frames (fractional when the rates differ).
+ * @param {{ frames: number, fps: Fps }} source
+ * @param {Fps} projectFps
+ * @returns {number}
+ */
+export function sourceLengthFrames(source, projectFps) {
+  return (
+    Number(BigInt(source.frames) * BigInt(projectFps.num) * BigInt(source.fps.den)) /
+    Number(BigInt(projectFps.den) * BigInt(source.fps.num))
+  );
+}

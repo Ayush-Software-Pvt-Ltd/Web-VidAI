@@ -21,19 +21,24 @@ How every element of the timeline (build/timeline.json) is written:
                the file's script reads, and the video's data-media-start and data-duration are plain
                attributes, so the server can trim, move and split such a clip like a plain B-roll
                (editMotion.js; broll_composition below writes the same shape).
+               A synced b-roll with a composed layout (a box, rounded corners, "bg", "pip"; broll.py) is one host
+               per kept piece too, since the layers (background picture, screen in its box, the host in a circle)
+               need more z-levels than track 1 has: its file holds the picture, the screen video, and the host as a
+               second muted video of the A-roll file in a round box (layout_composition); the A-roll on track 0
+               keeps the sound.
   graphic      compositions/<id>.html made from the template (or the video's gfx_src folder), variables
                filled in; the host is on track 1 (full screen), 2 (overlay), 3 (keyword hit), 4 (end fade).
   sfx / music  <audio> on tracks 10 and up (a new track where two overlap), data-volume from the dB value;
                the sound file is copied to assets/sfx/.
 
-Not represented (the exporter says so on screen and the README lists it): the background picture and host
-circle of a synced b-roll layout, a graphic resumed in the middle (`G:name@seconds`) and the final -14 LUFS
-levelling and limiter of the old mix (the server levels the sound after rendering).
+Not represented (the exporter says so on screen and the README lists it): a graphic resumed in the middle
+(`G:name@seconds`) and the final -14 LUFS levelling and limiter of the old mix (the server levels the sound after rendering).
 """
 import html
 import json
 import math
 import os
+import posixpath
 import re
 import shutil
 import subprocess
@@ -53,7 +58,7 @@ TRACK = {"aroll": 0, "broll": 1, "graphic": 1, "overlay": 2, "hit": 3, "fade": 4
 FIRST_SOUND_TRACK = 10
 ROOT_SCRIPT = (Path(__file__).with_name("hf_root_script.js")).read_text(encoding="utf-8").strip()
 GSAP = "shared/js/gsap.min.js"
-SKIP_NAMES = {".DS_Store", "Thumbs.db", ".hyperframes", "renders", "node_modules", "shared"}
+SKIP_NAMES = {".DS_Store", "Thumbs.db", ".hyperframes", "renders", "node_modules", "shared", "graphic.json"}
 DECIMALS = 9
 DECLICK = "0.008"                            # seconds of the fade at a cut in the sound (the text a file holds)
 INNER_EXTRA = 600                            # seconds a B-roll's inner video may last beyond its host
@@ -61,6 +66,19 @@ INNER_EXTRA = 600                            # seconds a B-roll's inner video ma
 
 class ExportError(Exception):
     """A problem described in plain sentences."""
+
+
+def graphic_record(src_dir):
+    """{"template", "variables"} from the graphic.json that `ve.py graphic` wrote beside a graphic's index.html,
+    or None (a hand-written graphic folder, or a file that is not readable or not of that shape)."""
+    try:
+        rec = json.loads((Path(src_dir) / "graphic.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(rec, dict) or not isinstance(rec.get("template"), str) or not rec["template"]:
+        return None
+    variables = rec.get("variables")
+    return {"template": rec["template"], "variables": dict(variables) if isinstance(variables, dict) else {}}
 
 
 # ------------------------------------------------------------------------------ small helpers
@@ -163,6 +181,7 @@ class Item:
         self.fade_in = self.fade_out = None                # seconds as text, set by plan_fades()
         self.graphic = kw.get("graphic")
         self.uses = kw.get("uses")                       # the media file a B-roll host plays (for edit.json)
+        self.also = kw.get("also", ())                   # more files of a layout host (the host's A-roll)
         self.host_values = None
 
     @property
@@ -265,6 +284,7 @@ class Exporter:
         self.W, self.H = (1920, 1080) if self.tl.width >= self.tl.height else (1080, 1920)
         self.sources, self.names, self.items = {}, set(), []
         self.sound_files = {}
+        self.layout_files = {}                               # assets/layout/<name> -> the picture it shows
         self.graphics = []
         self.total = 0
 
@@ -325,9 +345,6 @@ class Exporter:
         sw, sh = src.info["w"], src.info["h"]
         if "ranges" in a:                                     # a synced b-roll: one clip per kept piece
             lay = a.get("layout") or {}
-            if lay.get("bg") or lay.get("pip"):
-                self.warn(f"B-roll {label}: the background picture and host circle of its layout are not in the "
-                          "project; only the picture box is.")
             crop = tuple(lay["crop"]) if lay.get("crop") else None
             x0, y0, x1, y1 = crop or (0, 0, 1, 1)
             if lay.get("box"):
@@ -338,6 +355,9 @@ class Exporter:
                 vis = (bx * W + (bw * W - ow) / 2, by * H + (bh * H - oh) / 2, ow, oh)
             else:
                 vis = (0, 0, W, H)
+            if lay.get("bg") or lay.get("pip") or lay.get("box") or lay.get("radius"):
+                self._layout_broll(c, a, src, label, lay, vis, crop)
+                return
             style = place(W, H, sw, sh, vis, crop=crop, radius=lay.get("radius", 0) * H,
                           scale=c.scale, pos=tuple(c.pos))
             rec, on = c.rec, c.src
@@ -368,6 +388,71 @@ class Exporter:
         else:
             self.items.append(Item("broll", c.rec, dur, label, src=src, media_start=media_start, rate=rate, style=style,
                                    muted=True))
+
+    def _layout_picture(self, rel_path, what, label):
+        """The project path of a picture of a layout (the background): linked into assets/layout/."""
+        path = Path(self.tl.path(rel_path))
+        if not path.exists():
+            raise ExportError(f"B-roll {label}: the {what} {path} is not there, so the project cannot show it.")
+        for dest, original in self.layout_files.items():
+            if original == path:
+                return dest
+        taken = {Path(d).name.lower() for d in self.layout_files}
+        dest = f"assets/layout/{link_name(path.name, taken)}"
+        self.layout_files[dest] = path
+        return dest
+
+    def _layout_broll(self, c, a, src, label, lay, vis, crop):
+        """A synced b-roll whose layout is composed (a box, rounded corners, a background picture, the host in a
+        circle): the toolkit's own build lays it out on a background, so the project does the same.
+        The pieces cannot be separate clips: track 1 holds one clip at a time and a clip's z-index is its track,
+        so a background, the screen and the host's circle (three layers above the A-roll) have no tracks to sit on.
+        Each kept piece is therefore one host of kind broll (track 1, like a B-roll with motion) whose
+        compositions/<id>.html holds the layers: the background picture, the screen recording in its box (crop and
+        rounded corners as clip-path) and the host as a second video of the A-roll file, muted (the A-roll clip
+        on track 0 keeps the sound), in a round box.  The pieces follow the A-roll's cuts like plain pieces."""
+        fps, W, H = self.fps, self.W, self.H
+        sw, sh = src.info["w"], src.info["h"]
+        pip = lay.get("pip")
+        host_src = None
+        if pip:
+            host_src = self.source(self.tl.path(pip["file"]))
+            hw, hh = host_src.info["w"], host_src.info["h"]
+            bx, by, bw, bh = pip["box"]
+            d = min(bw * W, bh * H)
+            hx0, hy0, hx1, hy1 = pip.get("crop") or (0, 0, 1, 1)
+            ew, eh = d / (hx1 - hx0), d / (hy1 - hy0)           # the crop window is stretched to the circle
+            circle = {"x": bx * W + (bw * W - d) / 2, "y": by * H + (bh * H - d) / 2, "d": d,
+                      "style": "inset:auto;left:%s;top:%s;width:%s;height:%s;object-fit:fill" % (
+                          px(-hx0 * ew), px(-hy0 * eh), px(ew), px(eh))}
+        bg = self._layout_picture(lay["bg"], "background picture", label) if lay.get("bg") else None
+        style = place(W, H, sw, sh, vis, crop=crop, radius=lay.get("radius", 0) * H)
+        host_style = ""
+        if c.scale != 1.0 or tuple(c.pos) != (0.0, 0.0):          # the clip's own transform moves the whole layout
+            parts = []
+            if c.pos[0] or c.pos[1]:
+                parts.append(f"translate({px(c.pos[0] * H / 100.0)},{px(-c.pos[1] * H / 100.0)})")
+            if c.scale != 1.0:
+                parts.append(f"scale({num(round(c.scale, 5))})")
+            host_style = "transform:" + " ".join(parts)
+        rec, on = c.rec, c.src
+        for t, n in a["ranges"]:
+            mstart = Fraction(t).limit_denominator(10000)
+            spec = {"screen": {"src": src, "media_start": mstart, "style": style}, "bg": bg, "motion": None,
+                    "hosting": None}
+            if pip:
+                at = mstart - Fraction(pip["offset"]).limit_denominator(10000)
+                if at < 0:
+                    self.warn(f"B-roll {label}: the host circle starts before its A-roll file at "
+                              f"{float(Fraction(rec) / fps):.2f} seconds; it starts at the first frame.")
+                    at = Fraction(0)
+                spec["hosting"] = dict(circle, src=host_src, media_start=at)
+            if a.get("motion", "none") != "none":
+                spec["motion"] = self._broll_host(src, mstart, Fraction(1), "", a, on, on + n)
+            self.items.append(Item("broll", rec, n, label, uses=src, style=host_style,
+                                   also=(host_src,) if host_src else (), graphic={"layout": spec}))
+            rec += n
+            on += n
 
     def _broll_host(self, src, media_start, rate, style, a, on0, on1):
         """What a B-roll with motion needs for its sub-composition: the same playback as a plain B-roll clip
@@ -423,8 +508,10 @@ class Exporter:
             if c.scale != 1.0:
                 parts.append(f"scale({num(round(c.scale, 5))})")
             style = "transform:" + " ".join(parts)
-        self.items.append(Item(kind, c.rec, c.dur, label, style=style,
-                               graphic={"src_dir": src_dir, "template": tpl or name, "variables": var}))
+        g = {"src_dir": src_dir, "template": tpl or name, "variables": var}
+        if not tpl:
+            g["meta"] = graphic_record(src_dir)             # what `ve.py graphic` made it from, for edit.json
+        self.items.append(Item(kind, c.rec, c.dur, label, style=style, graphic=g))
 
     # -- ordering, tracks, ids
     def arrange(self):
@@ -555,6 +642,7 @@ class Exporter:
     # -- facts and words
     def edit_json(self):
         used = {(it.src or it.uses).path for it in self.items if it.src or it.uses}
+        used |= {x.path for it in self.items for x in it.also}
         try:
             version = (KIT.parent / "VERSION").read_text(encoding="utf-8").strip()
         except OSError:
@@ -593,7 +681,149 @@ class Exporter:
 
 VARS_TERNARY = re.compile(r"\(\s*window\.__hyperframes\s*&&\s*window\.__hyperframes\.getVariables\s*\)\s*\?\s*"
                           r"window\.__hyperframes\.getVariables\(\)\s*:\s*\{\}")
+URL_IN_CSS = re.compile(r"""url\(\s*(["']?)([^"')]*)\1\s*\)""", re.I)
 URL_LOCAL = re.compile(r"(?:[a-z][a-z0-9+.-]*:|//|/|#|shared/|assets/)", re.I)
+
+
+# -- a graphic page's own look: its page background and text style belong on the graphic's root
+
+PAGE_SELECTORS = {"html", "body", "html body", ":root"}
+TEXT_PROPS = ("color", "font", "line-height", "letter-spacing", "word-spacing", "text-align", "text-transform",
+              "text-shadow", "text-rendering", "direction", "white-space")
+NOT_COLORS = {"transparent", "none", "inherit", "initial", "unset", "revert", "repeat", "no-repeat", "repeat-x",
+              "repeat-y", "space", "round", "center", "top", "bottom", "left", "right", "cover", "contain", "auto",
+              "fixed", "scroll", "local", "border-box", "padding-box", "content-box", "text", "to", "at", "from"}
+
+
+def split_top(text, sep):
+    """`text` cut at `sep` outside parentheses and quotes."""
+    out, depth, quote, cur = [], 0, None, []
+    for ch in text:
+        if quote:
+            quote = None if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif ch == sep and depth == 0:
+            out.append("".join(cur))
+            cur = []
+            continue
+        cur.append(ch)
+    out.append("".join(cur))
+    return out
+
+
+def declarations(text):
+    """[(property, value)] of a style attribute or the inside of a rule."""
+    out = []
+    for d in split_top(text or "", ";"):
+        name, colon, value = d.partition(":")
+        if colon and name.strip() and value.strip():
+            out.append((name.strip().lower(), value.strip()))
+    return out
+
+
+def css_rules(css):
+    """[(start, end, selector text, inside text)] of the rules at the top level of `css` (comments removed);
+    a block of an at-rule is one entry whose selector starts with @."""
+    out, i = [], 0
+    while True:
+        j = css.find("{", i)
+        if j < 0:
+            return out
+        depth, k = 1, j + 1
+        while k < len(css) and depth:
+            depth += {"{": 1, "}": -1}.get(css[k], 0)
+            k += 1
+        out.append((i, k, css[i:j].rsplit(";", 1)[-1].strip(), css[j + 1:k - 1]))
+        i = k
+
+
+def color_paints(value):
+    """False for transparent, none and a colour with alpha 0; True for anything that draws."""
+    v = value.lower().replace("!important", "").strip()
+    if "var(" in v:
+        return True
+    v = re.sub(r"(?:linear|radial|conic|repeating-\w+)-gradient\([^)]*(?:\([^)]*\)[^)]*)*\)|url\([^)]*\)", " ", v)
+    for m in re.finditer(r"#[0-9a-f]{3,8}\b|(?:rgb|hsl|hwb|lab|lch|oklab|oklch)a?\([^)]*\)|[a-z][a-z-]*", v):
+        t = m.group(0)
+        if t.startswith("#"):
+            if (len(t) == 5 and t[4] == "0") or (len(t) == 9 and t[7:] == "00"):
+                continue
+            return True
+        if "(" in t:
+            alpha = re.split(r"[,/]", t[t.index("(") + 1:-1])
+            if len(alpha) >= 4 or "/" in t:
+                try:
+                    if float(alpha[-1].strip().rstrip("%")) == 0:
+                        continue
+                except ValueError:
+                    pass
+            return True
+        if t not in NOT_COLORS and not re.fullmatch(r"[a-z]*(?:px|em|rem|vw|vh|deg|turn|rad|%)", t):
+            return True
+    return False
+
+
+def background_state(decls):
+    """(the background declarations that still apply, whether they draw anything) after the cascade of `decls`."""
+    kept = []
+    for prop, value in decls:
+        if prop == "background":
+            kept = [("background", value)]
+        elif prop.startswith("background-"):
+            kept = [(k, v) for k, v in kept if k != prop] + [(prop, value)]
+    painted = False
+    for prop, value in kept:
+        if prop == "background":
+            painted = "gradient(" in value.lower() or "url(" in value.lower() or color_paints(value)
+        elif prop == "background-color":
+            painted = painted or color_paints(value)
+        elif prop == "background-image":
+            painted = painted or "gradient(" in value.lower() or "url(" in value.lower() or "var(" in value.lower()
+    return kept, painted
+
+
+def page_style(css, html_attrs, body_attrs):
+    """Split the page-level rules (`html`, `body`) off `css`.  Returns (css without them, the declarations that
+    belong on the graphic's root): the background that shows (the body's over the html's) and the text style."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    layers = {"html": [], "body": []}
+    cut = []
+    for start, end, sel, inside in css_rules(css):
+        names = [re.sub(r"\s+", " ", x.strip().lower()) for x in sel.split(",")]
+        if not names or not all(n in PAGE_SELECTORS for n in names):
+            continue
+        cut.append((start, end))
+        d = declarations(inside)
+        for n in names:
+            layers["body" if "body" in n else "html"].extend(d)
+    for tag, attrs in (("html", html_attrs), ("body", body_attrs)):
+        m = re.search(r"""\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')""", attrs or "", re.I)
+        if m:
+            layers[tag].extend(declarations(html.unescape(m.group(1) if m.group(1) is not None else m.group(2))))
+    for start, end in reversed(cut):
+        css = css[:start] + css[end:]
+    body_kept, body_paints = background_state(layers["body"])
+    html_kept, html_paints = background_state(layers["html"])
+    kept = body_kept if body_paints else html_kept if html_paints else []
+    text = {}
+    for prop, value in layers["html"] + layers["body"]:
+        if prop in TEXT_PROPS or prop.startswith("font-") or prop.startswith("text-"):
+            text[prop] = value
+    return css, kept + list(text.items())
+
+
+def outside_ref(ref):
+    """The ref of a file that leaves the graphic's own folder (it starts with ..), else None."""
+    r = ref.strip().replace("\\", "/")
+    if not r or re.match(r"(?:[a-z][a-z0-9+.-]*:|//|/|#)", r, re.I):
+        return None
+    n = posixpath.normpath(r.split("?")[0].split("#")[0])
+    return n if n == ".." or n.startswith("../") else None
 
 
 def declared_defaults(text):
@@ -606,8 +836,10 @@ def declared_defaults(text):
         return None
 
 
-def sub_composition(text, cid, variables, prefix=None, warn=print):
+def sub_composition(text, cid, variables, prefix=None, warn=print, outside=None):
     """A graphics page (its root is composition "main") as the sub-composition file of host `cid`.
+    The page's background and text style (on html, body or the body's style attribute) move to the root, which
+    sits over the host.  `outside(ref)` gives the new place (under `prefix`) of a file beside the graphic's folder.
     Returns (file text, values the script still reads from its host or None)."""
     declared = declared_defaults(text)
     values = dict(declared or {})
@@ -621,12 +853,15 @@ def sub_composition(text, cid, variables, prefix=None, warn=print):
     whole = head + "\n" + body
     links = re.findall(r"<link\b[^>]*>", whole, re.I)
     css = "\n".join(re.findall(r"<style\b[^>]*>(.*?)</style>", whole, re.S | re.I))
-    css = re.sub(r"(?m)^[ \t]*html\s*,\s*body\s*\{[^}]*\}[ \t]*$", "", css)
+    css, carried = page_style(css, (re.search(r"<html\b([^>]*)>", text, re.I) or (None, ""))[1],
+                              (re.search(r"<body\b([^>]*)>", text, re.I) or (None, ""))[1])
     ext = [s for s in re.findall(r"<script\b[^>]*\bsrc=[^>]*>\s*</script>", whole, re.I) if "gsap" not in s]
     scripts = "\n".join(re.findall(r"<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>", body, re.S | re.I))
     markup = re.sub(r"<script\b.*?</script>", "", body, flags=re.S | re.I).strip()
     m = re.search(r'data-composition-id\s*=\s*"([^"]*)"', markup)
     orig = m.group(1) if m else "main"
+    root = re.search(r'<\w+\b[^>]*\bdata-composition-id="[^"]*"[^>]*>', markup)
+    root_id = (re.search(r'\bid="([^"]+)"', root.group(0)) or (None, "root"))[1] if root else "root"
     # ids unique across the page: prefix every id of the markup (and its uses) with the composition id
     for i in sorted(set(re.findall(r'\bid="([^"]+)"', markup)), key=len, reverse=True):
         new = f"{cid}-{i}"
@@ -636,6 +871,10 @@ def sub_composition(text, cid, variables, prefix=None, warn=print):
         scripts = re.sub(rf"#{e}(?![\w-])", "#" + new, scripts)
         scripts = re.sub(rf"""getElementById\(\s*(["']){e}\1\s*\)""",
                          lambda mm, n=new: f"getElementById({mm.group(1)}{n}{mm.group(1)})", scripts)
+
+    root_sel = f"#{cid}-{root_id}"
+    if carried:
+        css = f"{root_sel} {{ " + " ".join(f"{k}: {v};" for k, v in carried) + f" }}\n{css}"
 
     def root_tag(mm):
         tag = re.sub(r'\s+data-(?:start|duration)="[^"]*"', "", mm.group(0))
@@ -648,16 +887,27 @@ def sub_composition(text, cid, variables, prefix=None, warn=print):
     if host_values:
         warn(f"graphic {cid}: its script reads its variables in a way that cannot be filled in; the host carries them.")
     if prefix:                                  # a video's own graphic: its files were copied to assets/gfx/<id>/
+        def moved(ref):
+            if URL_LOCAL.match(ref.strip()):
+                return None
+            if outside_ref(ref):                # beside the graphic's folder: the writer copies it in
+                new = outside(ref) if outside else None
+                return prefix + new if new else None
+            return prefix + ref
+
         def fix(mm):
-            return mm.group(0) if URL_LOCAL.match(mm.group(3).strip()) else f"{mm.group(1)}={mm.group(2)}{prefix}{mm.group(3)}{mm.group(2)}"
+            new = moved(mm.group(3))
+            return mm.group(0) if new is None else f"{mm.group(1)}={mm.group(2)}{new}{mm.group(2)}"
 
         def fix_url(mm):
-            return mm.group(0) if URL_LOCAL.match(mm.group(2).strip()) else f"url({mm.group(1)}{prefix}{mm.group(2)}{mm.group(1)})"
+            new = moved(mm.group(2))
+            return mm.group(0) if new is None else f"url({mm.group(1)}{new}{mm.group(1)})"
         markup = re.sub(r"""\b(src|href)=(["'])(.*?)\2""", fix, markup)
+        markup = re.sub(r"""url\((["']?)([^"')]+)\1\)""", fix_url, markup)
         css = re.sub(r"""url\((["']?)([^"')]+)\1\)""", fix_url, css)
         links = [re.sub(r"""\b(href)=(["'])(.*?)\2""", fix, x) for x in links]
     literal = json.dumps(values, ensure_ascii=False).replace("</", "<\\/")
-    keep = f"#{cid}-root {{ position: absolute; inset: 0; overflow: hidden; }}"
+    keep = f"{root_sel} {{ position: absolute; inset: 0; overflow: hidden; }}"
     script = f"(function () {{\nvar __vars = {literal};\n{scripts.strip()}\n}})();"
     out = ["<!doctype html>", '<html lang="en">', '<head><meta charset="UTF-8" /></head>', "<body>", "<template>",
            *links, f"<style>\n{keep}\n{css.strip()}\n</style>", markup, *ext, f"<script>\n{script}\n</script>",
@@ -716,6 +966,98 @@ def broll_composition(cid, spec, dur, fps, W, H):
 
 # ------------------------------------------------------------------------------ writing the folder
 
+def _inner_video(vid, src, media_start, inner, track, style, extra=""):
+    attrs = [f'id="{vid}"', 'class="clip"', f'src="{attr(src.path)}"', "muted", "playsinline", 'data-start="0"',
+             f'data-duration="{seconds(inner, 1)}"', f'data-media-start="{num(media_start)}"',
+             f'data-track-index="{track}"']
+    if style:
+        attrs.append(f'style="{attr(style)}"')
+    return f"<video {' '.join(attrs)}{extra}></video>"
+
+
+def layout_composition(cid, spec, dur, fps, W, H):
+    """compositions/<cid>.html of a synced B-roll piece with a composed layout (see Exporter._layout_broll):
+    the background picture (or black), the screen recording in its box, the host in a round box, all muted,
+    and, when the b-roll has motion, the one movement of the whole picture (the conformed copy zoomed the
+    composed frame).  Returns (text, variables).  The videos are `<cid>-screen` and `<cid>-host`, never
+    `<cid>-video`, so the server edits the host like a graphic and never mistakes it for a B-roll with motion."""
+    screen, hosting, motion = spec["screen"], spec["hosting"], spec["motion"]
+    layers = []
+    if spec["bg"]:
+        layers.append(f'<img id="{cid}-bg" src="{attr(spec["bg"])}" alt="" />')
+    inner = inner_frames(screen["src"], screen["media_start"], Fraction(1), dur, fps)
+    layers.append(_inner_video(f"{cid}-screen", screen["src"], screen["media_start"], Fraction(inner) / fps, 1,
+                               screen["style"]))
+    css = [f"#{cid}-root {{ position: absolute; inset: 0; overflow: hidden; background: #000; }}",
+           f"#{cid}-zoom {{ position: absolute; inset: 0; transform-origin: 50% 50%; }}",
+           f"#{cid}-screen {{ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }}"]
+    if spec["bg"]:
+        css.insert(2, f"#{cid}-bg {{ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; z-index: 0; }}")
+    variables = {"screen": screen["src"].path, "screenStart": float(num(screen["media_start"])),
+                 "background": spec["bg"] or "", "host": "", "hostStart": 0}
+    if hosting:
+        h_inner = inner_frames(hosting["src"], hosting["media_start"], Fraction(1), dur, fps)
+        layers.append(f'<div id="{cid}-pip" style="left:{px(hosting["x"])};top:{px(hosting["y"])};'
+                      f'width:{px(hosting["d"])};height:{px(hosting["d"])}">'
+                      + _inner_video(f"{cid}-host", hosting["src"], hosting["media_start"], Fraction(h_inner) / fps, 2,
+                                     hosting["style"]) + "</div>")
+        css += [f"#{cid}-pip {{ position: absolute; overflow: hidden; border-radius: 50%; z-index: 2; }}",
+                f"#{cid}-host {{ position: absolute; }}"]
+        variables.update(host=hosting["src"].path, hostStart=float(num(hosting["media_start"])))
+    zoom_attr, tween = "", ""
+    if motion:
+        (z0, x0), (z1, x1) = motion["from"], motion["to"]
+        value = ('{"scale":[%s,%s],"x":[%s,%s],"duration":%s}'
+                 % (num(round(z0, 6)), num(round(z1, 6)), num(round(x0, 6)), num(round(x1, 6)), seconds(dur, fps)))
+        zoom_attr = f" data-vidai-layout-motion='{value}'"
+        tween = (f'const m = JSON.parse(document.getElementById("{cid}-zoom").getAttribute("data-vidai-layout-motion"));\n'
+                 f'tl.fromTo("#{cid}-zoom", {{ scale: m.scale[0], x: m.x[0] }}, '
+                 '{ scale: m.scale[1], x: m.x[1], duration: m.duration, ease: "none" }, 0);')
+        variables.update(motion=motion_name(motion))
+    out = ["<!doctype html>", '<html lang="en">', '<head><meta charset="UTF-8" /></head>', "<body>", "<template>",
+           "<style>", *css, "</style>",
+           f'<div id="{cid}-root" data-composition-id="{cid}" data-width="{W}" data-height="{H}">',
+           f"  <div id=\"{cid}-zoom\"{zoom_attr}>", *["    " + x for x in layers], "  </div>", "</div>",
+           "<script>", "(function () {", "const tl = gsap.timeline({ paused: true });"]
+    if tween:
+        out.append(tween)
+    out += [f'window.__timelines["{cid}"] = tl;', "})();", "</script>", "</template>", "</body>", "</html>", ""]
+    return "\n".join(out), variables
+
+
+def motion_name(motion):
+    return "zoom" if motion["from"][1] == 0 and motion["to"][1] == 0 else "drift"
+
+
+def outside_copier(src_dir, dest_dir, cid, warn, limit):
+    """The `outside` function of sub_composition for a graphic folder: a file that sits beside the folder
+    (../product_images/x.png) is copied to <dest_dir>/_outside/ and its new place returned; None when the
+    file is missing or lies outside the video's folder `limit`."""
+    src_dir, dest_dir = Path(src_dir), Path(dest_dir)
+    done = {}
+
+    def copy(ref):
+        target = Path(os.path.normpath(src_dir / outside_ref(ref)))
+        if target in done:
+            return done[target]
+        inside = os.path.realpath(target).startswith(os.path.realpath(limit) + os.sep)
+        if not target.is_file() or not inside:
+            warn(f"graphic {cid}: the file {ref} is not in the video's folder, so the graphic cannot show it.")
+            return None
+        parts = [x for x in outside_ref(ref).split("/") if x != ".."]
+        name = "/".join(parts)
+        n = 1
+        while any(v == "_outside/" + name for v in done.values()):
+            n += 1
+            name = "/".join(parts[:-1] + [f"{n}-{parts[-1]}"])
+        dest = dest_dir / "_outside" / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(target, dest)
+        done[target] = "_outside/" + name
+        return done[target]
+    return copy
+
+
 def write_project(ex, stage):
     stage = Path(stage)
     for d in ("assets/media", "compositions"):
@@ -723,6 +1065,8 @@ def write_project(ex, stage):
     for s in ex.sources.values():
         if s.original:
             link_media(s.original, stage / s.path)
+    for dest, path in ex.layout_files.items():
+        link_media(path, stage / dest)
     for dest, path in ex.sound_files.items():
         (stage / dest).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, stage / dest)
@@ -730,6 +1074,11 @@ def write_project(ex, stage):
         if not it.graphic:
             continue
         g = it.graphic
+        if "layout" in g:
+            text, variables = layout_composition(it.id, g["layout"], it.dur, ex.fps, ex.W, ex.H)
+            write_text(stage / "compositions" / f"{it.id}.html", text, encoding="utf-8")
+            ex.graphics.append({"id": it.id, "template": "broll-layout", "variables": variables, "label": it.label})
+            continue
         if "broll" in g:
             text, variables = broll_composition(it.id, g["broll"], it.dur, ex.fps, ex.W, ex.H)
             write_text(stage / "compositions" / f"{it.id}.html", text, encoding="utf-8")
@@ -744,9 +1093,12 @@ def write_project(ex, stage):
                     (stage / "assets" / "gfx" / it.id / rel).parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(p, stage / "assets" / "gfx" / it.id / rel)
         text, it.host_values = sub_composition((g["src_dir"] / "index.html").read_text(encoding="utf-8"), it.id,
-                                               g["variables"], prefix, ex.warn)
+                                               g["variables"], prefix, ex.warn,
+                                               outside_copier(g["src_dir"], stage / "assets" / "gfx" / it.id, it.id, ex.warn, ex.pdir.parent)
+                                               if prefix else None)
         write_text(stage / "compositions" / f"{it.id}.html", text, encoding="utf-8")
-        ex.graphics.append({"id": it.id, "template": g["template"], "variables": g["variables"], "label": it.label})
+        meta = g.get("meta") or {"template": g["template"], "variables": g["variables"]}
+        ex.graphics.append({"id": it.id, "template": meta["template"], "variables": meta["variables"], "label": it.label})
     shutil.copytree(SHARED, stage / "shared", ignore=shutil.ignore_patterns(".DS_Store", "Thumbs.db"))
     write_text(stage / "index.html", ex.index_html(), encoding="utf-8")
     write_text(stage / "edit.json", json.dumps(ex.edit_json(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -815,6 +1167,108 @@ class _Index(HTMLParser):
             self._script["text"] += data
 
 
+class _Comp(HTMLParser):
+    """A composition file: its elements (tag, attributes, parent), the file references and the CSS text."""
+    VOID = _Index.VOID
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.elements, self.refs, self.css, self._stack, self._style = [], [], [], [], False
+
+    def handle_starttag(self, tag, attrs):
+        a = {k: (v if v is not None else "") for k, v in attrs}
+        if tag == "style":
+            self._style = True
+            self.css.append("")
+        elif tag != "script":
+            self.elements.append({"tag": tag, "a": a, "parent": self._stack[-1] if self._stack else None})
+            if a.get("style"):
+                self.css.append("")
+        for k in ("src", "href", "data-composition-src"):
+            if a.get(k):
+                self.refs.append(a[k])
+        for m in URL_IN_CSS.finditer(a.get("style") or ""):
+            self.refs.append(m.group(2))
+        if tag not in self.VOID and tag not in ("style", "script"):
+            self._stack.append(len(self.elements) - 1)
+
+    def handle_endtag(self, tag):
+        if tag == "style":
+            self._style = False
+        elif tag not in self.VOID and tag != "script" and self._stack:
+            self._stack.pop()
+
+    def handle_data(self, data):
+        if self._style:
+            self.css[-1] += data
+            self.refs.extend(m.group(2) for m in URL_IN_CSS.finditer(data))
+            self.refs.extend(m.group(2) for m in re.finditer(r"""@import\s+(["'])(.*?)\1""", data))
+
+    def declared(self, i):
+        """The declarations that apply to element i from rules with a plain #id or .class selector, then its style."""
+        a = self.elements[i]["a"]
+        ids, classes = {a.get("id")} - {None, ""}, set((a.get("class") or "").split())
+        out = []
+        for chunk in self.css:
+            for _, _, sel, inside in css_rules(re.sub(r"/\*.*?\*/", "", chunk, flags=re.S)):
+                for one in sel.split(","):
+                    one = one.strip()
+                    if (one[:1] == "#" and one[1:] in ids) or (one[:1] == "." and one[1:] in classes):
+                        out.extend(declarations(inside))
+                        break
+        return out + declarations(html.unescape(a.get("style") or ""))
+
+
+def covers_frame(decls, W, H):
+    """Whether the declarations make a box that covers the whole frame (inset 0, or full width and height)."""
+    d = dict(decls)
+    zero = lambda v: bool(re.fullmatch(r"0+(?:\.0+)?(?:px|%)?", (v or "").strip()))  # noqa: E731
+    if d.get("position") in ("absolute", "fixed"):
+        if d.get("inset") and all(zero(x) for x in d["inset"].split()):
+            return True
+        if all(zero(d.get(k)) for k in ("top", "left", "right", "bottom")):
+            return True
+
+    def full(v, edge):
+        v = (v or "").strip().lower()
+        m = re.fullmatch(r"([\d.]+)px", v)
+        return v in ("100%", "100vw" if edge == W else "100vh") or bool(m and float(m.group(1)) >= edge)
+    return full(d.get("width"), W) and full(d.get("height"), H)
+
+
+def hides_the_video(folder, cid, W, H):
+    """False when the composition of a full-screen graphic has no opaque background over the frame."""
+    try:
+        c = _Comp()
+        c.feed((Path(folder) / "compositions" / f"{cid}.html").read_text(encoding="utf-8"))
+    except OSError:
+        return True
+    roots = [i for i, e in enumerate(c.elements) if e["a"].get("data-composition-id") == cid]
+    if not roots:
+        return True
+    root = roots[0]
+    if background_state(c.declared(root))[1]:
+        return True
+    first = next((i for i, e in enumerate(c.elements) if e["parent"] == root), None)
+    if first is None:
+        return False
+    if c.elements[first]["tag"] in ("video", "img", "canvas"):      # a picture or footage as the card
+        return True
+    d = c.declared(first)
+    return background_state(d)[1] and covers_frame(d, W, H)
+
+
+def reference_problem(value):
+    """"path" when a reference is no relative path inside the project, else None (a data: URL and #fragment are fine)."""
+    v = value.strip()
+    if not v or v.startswith("#") or v.lower().startswith("data:"):
+        return None
+    if re.match(r"(?:[a-z][a-z0-9+.-]*:|//|/)", v, re.I) or "\\" in v:
+        return "path"
+    n = posixpath.normpath(v.split("?")[0].split("#")[0])
+    return "path" if n == ".." or n.startswith("../") else None
+
+
 def motion_problems(folder, cid, dur, fps, sources):
     """Rule 7 of a B-roll host with motion: its video is in compositions/<cid>.html (the sentences are
     those of the server's profile.js)."""
@@ -844,8 +1298,33 @@ def motion_problems(folder, cid, dur, fps, sources):
     return []
 
 
+def layout_problems(folder, cid, dur, fps, sources):
+    """Rule 7 for the videos of a layout host (compositions/<cid>.html written by layout_composition)."""
+    try:
+        text = (Path(folder) / "compositions" / f"{cid}.html").read_text(encoding="utf-8")
+    except OSError:
+        return []
+    out = []
+    for m in re.finditer(r"<video\b([^>]*)>", text):
+        a = dict(re.findall(r'([\w-]+)="([^"]*)"', m.group(1)))
+        if not str(a.get("id", "")).startswith(f"{cid}-") or "muted" not in m.group(1).split():
+            continue
+        s = sources.get(a.get("src"))
+        if s is None:
+            out.append(f"Rule 7: the host \"{cid}\" plays {a.get('src')} in compositions/{cid}.html, which edit.json "
+                       "does not list under sources.")
+            continue
+        ms, rate = Fraction(a.get("data-media-start", "0")), Fraction(a.get("data-playback-rate", "1"))
+        length = Fraction(s["frames"]) / Fraction(str(s["fps"]))
+        if ms < 0 or ms + dur * rate > length + Fraction(1, 100) / fps:
+            out.append(f"Rule 7: the host \"{cid}\" plays seconds {float(ms):.3f} to {float(ms + dur * rate):.3f} of "
+                       f"{s['name']}, which is {float(length):.3f} seconds long.")
+    return out
+
+
 def check_project(folder):
-    """Rules 1 to 7 and 10 of the profile (SPEC section 10) and the host rule 8, as plain sentences;
+    """Rules 1 to 7 and 10 of the profile (SPEC section 10) for index.html and the composition files, the host rule 8
+    and rule 12 (a full-screen graphic has an opaque background), as plain sentences;
     an empty list is a pass."""
     folder = Path(folder)
     bad = []
@@ -871,7 +1350,7 @@ def check_project(folder):
     if (str(edit.get("width")), str(edit.get("height"))) != size or Fraction(str(edit.get("fps"))) != fps:
         bad.append("Rule 1: the root's size or frame rate differs from edit.json.")
     sources = {s["path"]: s for s in edit.get("sources", [])}
-    ids, tracks = set(), {}
+    ids, tracks, full_screen = set(), {}, []
     for tag, a in p.clips:
         cid = a.get("id")
         who = f'The {tag} "{cid or "?"}"'
@@ -928,6 +1407,9 @@ def check_project(folder):
             bad.append(f"Rule 8: the host {cid} must show compositions/{cid}.html and have that id as its composition id.")
         elif a.get("data-composition-src") is not None:
             bad += motion_problems(folder, cid, dur, fps, sources)
+            bad += layout_problems(folder, cid, dur, fps, sources)
+            if kind == "graphic":
+                full_screen.append(cid)
     aroll = sorted(tracks.get(0, []))
     if not aroll or aroll[0][0] != 0:
         bad.append("Rule 5: the A-roll does not start at 0.")
@@ -947,6 +1429,23 @@ def check_project(folder):
             bad.append(f"Rule 10: {who} has the path {value}, which is not a relative path inside the project.")
         elif not (folder / v).exists():
             bad.append(f"Rule 10: {who} refers to {value}, which is not in the project.")
+    for f in sorted((folder / "compositions").glob("*.html")):
+        c = _Comp()
+        try:
+            c.feed(f.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        who = f"compositions/{f.name}"
+        for value in dict.fromkeys(c.refs):
+            if reference_problem(value):
+                bad.append(f"Rule 10: {who} has the path {value}, which is not a relative path inside the project.")
+            elif value.strip() and not value.strip().startswith(("#", "data:")) and \
+                    not (folder / value.strip().split("?")[0].split("#")[0]).exists():
+                bad.append(f"Rule 10: {who} refers to {value}, which is not in the project.")
+    for cid in full_screen:
+        if not hides_the_video(folder, cid, int(size[0]), int(size[1])):
+            bad.append(f"Rule 12: the full-screen graphic {cid} has no opaque background over the whole frame, "
+                       "so the video shows through it; give its page a background color or image.")
     inline = [s for s in p.scripts if s["src"] is None]
     for s in p.scripts:
         if s["src"] is not None and (not s["src"].startswith("shared/") or ".." in s["src"]):

@@ -1,0 +1,10 @@
+{
+  "summary": "Quote with a big quotation mark, words that arrive one by one, author and role",
+  "duration": 5,
+  "variables": [
+    {"id": "quote", "type": "text", "required": true, "max": 280, "default": "Make it simple, make it move.", "help": "the quote without quotation marks; shrinks to fit"},
+    {"id": "author", "type": "text", "max": 60, "default": "", "help": "who said it"},
+    {"id": "role", "type": "text", "max": 80, "default": "", "help": "small line under the author"},
+    {"id": "align", "type": "enum", "choices": ["center", "left"], "default": "center", "help": "text alignment"}
+  ]
+}

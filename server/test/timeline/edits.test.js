@@ -67,7 +67,9 @@ test("delete an A-roll clip: everything after it shifts earlier, the ripple rule
   assert.equal(label, "Delete A-roll");
   assert.equal(has(html, "a-2"), false);
   assert.equal(total(html), 1140);
-  const aroll = timeline(html).tracks[0]?.clips.map((c) => [c.id, c.start]);
+  const aroll = timeline(html)
+    .tracks.find((x) => x.index === 0)
+    ?.clips.map((c) => [c.id, c.start]);
   assert.deepEqual(aroll, [
     ["a-1", 0],
     ["a-3", 150],
@@ -102,7 +104,8 @@ test("delete the first and the last A-roll clip", () => {
   const first = apply(long.html, { type: "delete", clipId: "a-1" }).html;
   assert.deepEqual(
     timeline(first)
-      .tracks[0]?.clips.slice(0, 2)
+      .tracks.find((x) => x.index === 0)
+      ?.clips.slice(0, 2)
       .map((c) => [c.id, c.start]),
     [
       ["a-2", 0],
@@ -160,18 +163,18 @@ test("the ripple rule: a clip with less than 2 frames left is removed, with 2 it
   const g1 = generate("30", spec(99));
   const a = applyOp(g1.html, { type: "delete", clipId: "a-2" }, g1.facts).html;
   assert.equal(
-    timeline(a, g1.facts).tracks[3]?.clips.length,
+    timeline(a, g1.facts).tracks.find((x) => x.index === 3)?.clips.length,
     0,
     "starts at 99 in a 100 frame video: 1 frame left",
   );
   const g2 = generate("30", spec(98));
   const b = applyOp(g2.html, { type: "delete", clipId: "a-2" }, g2.facts).html;
-  const kept = timeline(b, g2.facts).tracks[3]?.clips[0];
+  const kept = timeline(b, g2.facts).tracks.find((x) => x.index === 3)?.clips[0];
   assert.deepEqual([kept?.start, kept?.duration], [98, 2], "2 frames left: kept and shortened");
   const g3 = generate("30", spec(150));
   const c = applyOp(g3.html, { type: "delete", clipId: "a-2" }, g3.facts).html;
   assert.equal(
-    timeline(c, g3.facts).tracks[3]?.clips.length,
+    timeline(c, g3.facts).tracks.find((x) => x.index === 3)?.clips.length,
     0,
     "starts inside the removed part, then at the end: nothing left",
   );
@@ -187,7 +190,9 @@ test("the ripple rule: clips of one track that collide after a delete keep the l
   });
   const out = applyOp(g.html, { type: "delete", clipId: "a-2" }, g.facts).html;
   assert.deepEqual(
-    timeline(out, g.facts).tracks[3]?.clips.map((c) => [c.id, c.start, c.duration]),
+    timeline(out, g.facts)
+      .tracks.find((x) => x.index === 3)
+      ?.clips.map((c) => [c.id, c.start, c.duration]),
     [["h-b", 100, 10]],
   );
 });
@@ -407,7 +412,9 @@ test("move an A-roll clip to another cut: the A-roll is reordered, clips that st
   const { html, label } = apply(long.html, { type: "move", clipId: "a-2", frame: 660 });
   assert.equal(label, "Move A-roll");
   assert.deepEqual(
-    timeline(html).tracks[0]?.clips.map((c) => [c.id, c.start]),
+    timeline(html)
+      .tracks.find((x) => x.index === 0)
+      ?.clips.map((c) => [c.id, c.start]),
     [
       ["a-1", 0],
       ["a-3", 150],
@@ -431,7 +438,8 @@ test("move an A-roll clip to the start, to the end, and refusals", () => {
   const front = apply(long.html, { type: "move", clipId: "a-3", frame: 0 }).html;
   assert.deepEqual(
     timeline(front)
-      .tracks[0]?.clips.slice(0, 3)
+      .tracks.find((x) => x.index === 0)
+      ?.clips.slice(0, 3)
       .map((c) => [c.id, c.start]),
     [
       ["a-3", 0],
@@ -442,7 +450,8 @@ test("move an A-roll clip to the start, to the end, and refusals", () => {
   const back = apply(long.html, { type: "move", clipId: "a-2", frame: 1350 }).html;
   assert.deepEqual(
     timeline(back)
-      .tracks[0]?.clips.slice(-2)
+      .tracks.find((x) => x.index === 0)
+      ?.clips.slice(-2)
       .map((c) => [c.id, c.start]),
     [
       ["a-8", 980],
@@ -453,7 +462,8 @@ test("move an A-roll clip to the start, to the end, and refusals", () => {
   const adjacent = apply(long.html, { type: "move", clipId: "a-2", frame: 480 }).html;
   assert.deepEqual(
     timeline(adjacent)
-      .tracks[0]?.clips.slice(1, 4)
+      .tracks.find((x) => x.index === 0)
+      ?.clips.slice(1, 4)
       .map((c) => c.id),
     ["a-3", "a-2", "a-4"],
   );

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLibraryView } from "@/features/library/viewStore";
 import { setupApp, type TestApp } from "@/test/app";
+import { mockPageZoom } from "@/test/zoom";
 import { MainWindow } from "./MainWindow";
 
 let app: TestApp;
@@ -194,4 +195,25 @@ describe("Activity panel width", () => {
     await openPanel(user, "Night Cream");
     expect(panelWidth()).toBe(640);
   });
+
+  it.each([1.1538, 1.54])(
+    "keeps the divider under the pointer when the page is zoomed to %s",
+    async (zoom) => {
+      // Pointer positions are in screen px, the panel width in layout px.
+      mockPageZoom(zoom, (el) => ({
+        width: Number.parseFloat(el.style.width) || 400,
+        height: 300,
+      }));
+      const user = userEvent.setup();
+      await openPanel(user);
+      const initial = panelWidth();
+      const divider = screen.getByRole("separator", { name: "Resize activity panel" });
+      fireEvent.pointerDown(divider, { button: 0, pointerId: 1, clientX: 800 });
+      fireEvent.pointerMove(divider, { pointerId: 1, clientX: 800 - 40 * zoom });
+      expect(panelWidth()).toBe(initial + 40);
+      fireEvent.pointerMove(divider, { pointerId: 1, clientX: 800 + 20 * zoom });
+      expect(panelWidth()).toBe(initial - 20);
+      fireEvent.pointerUp(divider, { pointerId: 1, clientX: 800 + 20 * zoom });
+    },
+  );
 });

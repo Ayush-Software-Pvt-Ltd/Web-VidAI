@@ -150,8 +150,8 @@ test("the pinned CLI is found, and it runs for real on a fixture (skipped withou
   assert.match(cli, /hyperframes[\\/]bin[\\/]hyperframes\.mjs$/);
   const result = await createLint({ cli })(path.join(PROJECTS, "long"));
   assert.equal(result.problem, null);
-  // The fixtures have no media files, so the real lint reports them missing.
-  assert.ok(result.errors.some((e) => /not found in the project/.test(e)));
+  // The fixtures hold small stand-ins for the files they refer to, so the real lint finds none missing.
+  assert.deepEqual(result.errors, []);
   const gone = await createLint({ cli })(path.join(PROJECTS, "no-such-folder"));
   assert.equal(gone.errors.length, 0);
   assert.equal(typeof gone.problem, "string");

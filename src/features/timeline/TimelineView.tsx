@@ -276,6 +276,7 @@ function Loaded({ videoId, timeline, previewUrl, violations }: LoadedProps) {
                   fps={timeline.fps}
                   duration={timeline.duration}
                   revision={timeline.revision}
+                  copiesDone={copies.done}
                   previewUrl={previewUrl}
                   playback={playback}
                   bridgeRef={holder}

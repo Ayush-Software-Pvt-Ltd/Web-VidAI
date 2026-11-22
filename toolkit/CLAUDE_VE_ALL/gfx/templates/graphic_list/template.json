@@ -1,0 +1,11 @@
+{
+  "summary": "Bullet list of 2 to 6 items (3 to 5 reads best) that arrive one after the other, optional title",
+  "duration": 2.6,
+  "duration_per_item": 0.9,
+  "variables": [
+    {"id": "items", "type": "list", "required": true, "min_items": 2, "max_items": 6, "max": 90, "default": "First point|Second point|Third point", "help": "the items, separated by | (a bar)"},
+    {"id": "title", "type": "text", "max": 90, "default": "", "help": "heading above the list"},
+    {"id": "kicker", "type": "text", "max": 50, "default": "", "help": "small line above the heading"},
+    {"id": "style", "type": "enum", "choices": ["numbers", "bullets", "checks"], "default": "numbers", "help": "what the badge of each item shows"}
+  ]
+}

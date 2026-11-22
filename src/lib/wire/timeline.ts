@@ -86,7 +86,10 @@ export interface Timeline {
   height: number;
   /** The end of the A-roll in frames. */
   duration: number;
-  /** Tracks 0 to 4 always, then every sound track that has clips, in order. */
+  /**
+   * Tracks 0 to 4 always, then every sound track that has clips, from top to bottom on the screen as in
+   * Premiere Pro: 4, 3, 2, 1, 0 (the layer drawn on top first), then 10, 11 and up. The UI keeps this order.
+   */
   tracks: TimelineTrack[];
   notes: TimelineNote[];
   canUndo: boolean;

@@ -46,11 +46,11 @@ test("the Long fixture becomes the expected timeline", () => {
   assert.deepEqual(
     t.tracks.map((x) => [x.index, x.name]),
     [
-      [0, "A-roll"],
-      [1, "B-roll and graphics"],
-      [2, "Overlays"],
-      [3, "Keyword hits"],
       [4, "End fade"],
+      [3, "Keyword hits"],
+      [2, "Overlays"],
+      [1, "B-roll and graphics"],
+      [0, "A-roll"],
       [10, "Sound 1"],
       [11, "Sound 2"],
       [12, "Sound 3"],
@@ -84,7 +84,7 @@ test("the Long fixture becomes the expected timeline", () => {
 test("a source at another frame rate is measured in project frames", () => {
   const f = fixture("long");
   const t = toTimeline(parseProject(f.html), f.facts, extras);
-  const b1 = t.tracks[1]?.clips.find((c) => c.id === "b-1");
+  const b1 = t.tracks.find((x) => x.index === 1)?.clips.find((c) => c.id === "b-1");
   assert.equal(b1?.sourceFrames, 1800, "1500 frames at 25 fps are 1800 frames at 30 fps");
 });
 
@@ -98,11 +98,11 @@ test("the Short fixture has every standard track even when empty", () => {
   assert.deepEqual(
     t.tracks.map((x) => [x.index, x.clips.length]),
     [
-      [0, 3],
-      [1, 1],
-      [2, 0],
-      [3, 1],
       [4, 0],
+      [3, 1],
+      [2, 0],
+      [1, 1],
+      [0, 3],
       [10, 1],
     ],
   );
@@ -120,7 +120,7 @@ test("a rational frame rate is passed on as numerator and denominator", () => {
   const t = toTimeline(parseProject(g.html), g.facts, extras);
   assert.deepEqual(t.fps, { num: 30000, den: 1001 });
   assert.deepEqual(
-    t.tracks[0]?.clips.map((c) => [c.start, c.duration]),
+    t.tracks.find((x) => x.index === 0)?.clips.map((c) => [c.start, c.duration]),
     [
       [0, 100],
       [100, 50],
@@ -138,8 +138,8 @@ test("extras are passed through untouched and clips that cannot be read are left
     notes: /** @type {never} */ ([note]),
   });
   assert.equal(t.notes[0], /** @type {never} */ (note));
-  assert.ok(!t.tracks[0]?.clips.some((c) => c.id === "a-2"));
-  assert.equal(t.tracks[0]?.clips.length, 7);
+  assert.ok(!t.tracks.find((x) => x.index === 0)?.clips.some((c) => c.id === "a-2"));
+  assert.equal(t.tracks.find((x) => x.index === 0)?.clips.length, 7);
 });
 
 test("a B-roll with motion shows its source, in-point and source length like a plain B-roll", () => {

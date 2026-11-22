@@ -3,7 +3,12 @@ import type { Box } from "../model";
 
 const ZERO: Box = { width: 0, height: 0 };
 
-/** The size of an element, kept up to date by a `ResizeObserver` (attach `ref` to the element). */
+/**
+ * The size of an element in layout (CSS) px, kept up to date by a `ResizeObserver` (attach `ref` to
+ * the element), which reports it as soon as it observes. `getBoundingClientRect` is not used: under
+ * a CSS `zoom` on <html> (the app's text size) it counts in screen px, so a size read from it would
+ * not match the one the observer reports (and the styles use) a moment later.
+ */
 export function useMeasure(): [(node: HTMLDivElement | null) => void, Box] {
   const [node, setNode] = useState<HTMLDivElement | null>(null);
   const [size, setSize] = useState<Box>(ZERO);
@@ -12,8 +17,6 @@ export function useMeasure(): [(node: HTMLDivElement | null) => void, Box] {
     if (!node) return;
     const apply = (width: number, height: number) =>
       setSize((was) => (was.width === width && was.height === height ? was : { width, height }));
-    const rect = node.getBoundingClientRect();
-    apply(rect.width, rect.height);
     const observer = new ResizeObserver((entries) => {
       const entry = entries[entries.length - 1];
       if (entry) apply(entry.contentRect.width, entry.contentRect.height);

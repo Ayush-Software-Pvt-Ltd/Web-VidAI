@@ -44,7 +44,8 @@ FAKE_STATE/scenario, else "complete". Scenarios:
   next busy period finishes the edit.
 - early_end: the first busy period only announces a step and ends; the next message completes.
 - hold: a shell command runs until the test drops FAKE_STATE/release.<video folder> (used up),
-  then the job completes; an interrupt cuts it. The server writes FAKE_STATE/started.<video>.
+  then the job completes; an interrupt cuts it (its failed result holds the progress lines it had
+  printed). The server writes FAKE_STATE/started.<video>.
 - tree: like hold, and the command has children in process groups of their own, one of which
   ignores SIGTERM (their pids in FAKE_STATE/tree.pids).
 - background_hold: a command in the background (a `sleep` in a process group of its own, its pid
@@ -311,8 +312,10 @@ class Execution:
             try:
                 metadata = run(call, mid) or metadata
             except Aborted:
+                partial = getattr(self, "partial", None)
                 self.ev("session.tool.failed", assistantMessageID=mid, id=call,
                         error={"type": "aborted", "message": "Tool execution interrupted"},
+                        content=[{"type": "text", "text": partial}] if partial else [],
                         metadata=metadata or {}, executed=False)
                 self.ev("session.step.failed", assistantMessageID=mid,
                         error={"type": "aborted", "message": "Step interrupted"}, rawFinish="tool_calls", cost=0)
@@ -594,6 +597,8 @@ def hold(ex, text, tree=False):
     s = ex.session
     ex.say(f"Looking at the A-roll of {s.get('main', '')}.")
     children = []
+    # What the command had printed when an interrupt cuts it (the failed tool result holds it).
+    ex.partial = "[1/124]    8.19-  10.87 Hello there\n[2/124]   10.87-  12.40 and welcome"
 
     def run():
         if tree:

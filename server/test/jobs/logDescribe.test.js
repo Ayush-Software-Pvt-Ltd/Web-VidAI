@@ -312,3 +312,62 @@ test("a secret is scrubbed from every text the describer reads", () => {
   // `detail` is the original input; the sink scrubs it before it is stored (see logSink.test.js).
   assert.equal(out.entries[1]?.detail, `curl -H ${key}`);
 });
+
+/** @param {string} id @param {string} text @param {boolean} isError */
+const toolResultEvent = (id, text, isError) =>
+  event({
+    type: "user",
+    message: {
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: id, content: text, is_error: isError }],
+    },
+    parent_tool_use_id: null,
+  });
+
+/** @param {string} id */
+const toolUseEvent = (id) =>
+  event({
+    type: "assistant",
+    message: {
+      role: "assistant",
+      content: [
+        { type: "tool_use", id, name: "Bash", input: { command: "python3 transcribe.py" } },
+      ],
+    },
+    parent_tool_use_id: null,
+  });
+
+const PROGRESS = "[1/124]    8.19-  10.87 Hello there\n[2/124]   10.87-  12.40 and welcome";
+
+test("a step cut short by a pause or stop reads as stopped, a real failure as an error", () => {
+  for (const [reason, line] of /** @type {const} */ ([
+    ["pause", "Stopped by the pause"],
+    ["stop", "Stopped when the job was stopped"],
+  ])) {
+    const d = createDescriber();
+    d.describe(toolUseEvent("t1"));
+    d.halting(reason);
+    d.halting(reason === "pause" ? "stop" : "pause");
+    const [cut] = d.describe(toolResultEvent("t1", PROGRESS, true)).entries;
+    assert.equal(cut?.kind, "toolResult");
+    assert.equal(cut?.text, line, "the first reason counts");
+    assert.equal(cut?.detail, PROGRESS, "the output is kept");
+    // A step that was not running when the stop was asked for keeps its error.
+    const [late] = d.describe(toolResultEvent("t2", "boom", true)).entries;
+    assert.equal(late?.text, "Error: boom");
+  }
+
+  // Without a request to stop, an error result is an error, whatever its text.
+  const d = createDescriber();
+  d.describe(toolUseEvent("t1"));
+  const [error] = d.describe(toolResultEvent("t1", PROGRESS, true)).entries;
+  assert.equal(error?.text, "Error: [1/124]    8.19-  10.87 Hello there");
+
+  // A step that ended well before the pause is not touched by it.
+  const e = createDescriber();
+  e.describe(toolUseEvent("t1"));
+  e.halting("pause");
+  const [fine] = e.describe(toolResultEvent("t1", "done", false)).entries;
+  assert.equal(fine?.text, "done");
+  assert.equal(fine?.detail, null);
+});

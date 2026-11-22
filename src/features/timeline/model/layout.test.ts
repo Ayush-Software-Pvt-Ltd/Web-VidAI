@@ -51,12 +51,12 @@ describe("kinds", () => {
 });
 
 describe("layout", () => {
-  it("lays tracks out in the wire's order, one row each", () => {
+  it("lays tracks out in the wire's order, one row each, the top layer first as in Premiere Pro", () => {
     const layout = layoutTimeline(sample(), { pxPerFrame: 2, scroll: 40 });
-    expect(layout.tracks.map((t) => t.track.index)).toEqual([0, 1, 2, 3, 4, 10]);
+    expect(layout.tracks.map((t) => t.track.index)).toEqual([4, 3, 2, 1, 0, 10]);
     expect(layout.height).toBe(6 * ROW_HEIGHT);
-    const a2 = layout.tracks[0]?.clips[1];
-    expect(a2).toMatchObject({ x: 160, width: 300, row: 0, y: 0 });
+    const a2 = layout.tracks[4]?.clips[1];
+    expect(a2).toMatchObject({ x: 160, width: 300, row: 4, y: 4 * ROW_HEIGHT });
     const music = layout.tracks[5]?.clips[0];
     expect(music).toMatchObject({ row: 5, y: 5 * ROW_HEIGHT, x: -40 });
   });
@@ -98,24 +98,27 @@ describe("hit tests", () => {
   });
 
   const layout = layoutTimeline(sample(), { pxPerFrame: 2, scroll: 0 });
+  const AROLL_Y = ROW_HEIGHT * 4 + 5;
   it("finds the part of a clip", () => {
-    // a-2 spans x 200 to 500 on row 0
-    expect(hitTest(layout, 200, 5)).toMatchObject({ part: "start", clip: { id: "a-2" } });
-    expect(hitTest(layout, 207, 5)?.part).toBe("start");
-    expect(hitTest(layout, 208, 5)?.part).toBe("body");
-    expect(hitTest(layout, 491, 5)?.part).toBe("body");
-    expect(hitTest(layout, 492, 5)?.part).toBe("end");
-    expect(hitTest(layout, 499, 5)?.part).toBe("end");
+    // a-2 spans x 200 to 500 on row 4 (the A-roll is the fifth row, below the other picture tracks)
+    expect(hitTest(layout, 200, AROLL_Y)).toMatchObject({ part: "start", clip: { id: "a-2" } });
+    expect(hitTest(layout, 207, AROLL_Y)?.part).toBe("start");
+    expect(hitTest(layout, 208, AROLL_Y)?.part).toBe("body");
+    expect(hitTest(layout, 491, AROLL_Y)?.part).toBe("body");
+    expect(hitTest(layout, 492, AROLL_Y)?.part).toBe("end");
+    expect(hitTest(layout, 499, AROLL_Y)?.part).toBe("end");
   });
   it("misses empty space and outside the rows", () => {
-    expect(hitTest(layout, 501 + 400, 5)).toBeNull();
+    expect(hitTest(layout, 501 + 400, AROLL_Y)).toBeNull();
     expect(hitTest(layout, 100, ROW_HEIGHT * 2 + 3)).toBeNull();
     expect(hitTest(layout, 100, -1)).toBeNull();
     expect(hitTest(layout, 100, ROW_HEIGHT * 99)).toBeNull();
     expect(hitTest(layout, -5, 5)).toBeNull();
   });
   it("picks the row", () => {
-    expect(hitTest(layout, 100, ROW_HEIGHT + 3)?.clip.id).toBe("b-1");
+    expect(hitTest(layout, 100, 3)).toBeNull();
+    expect(hitTest(layout, 100, ROW_HEIGHT * 3 + 3)?.clip.id).toBe("b-1");
+    expect(hitTest(layout, 100, ROW_HEIGHT * 4 + 3)?.clip.id).toBe("a-1");
     expect(hitTest(layout, 100, ROW_HEIGHT * 5 + 3)?.clip.id).toBe("m-1");
   });
   it("keeps a body on a short clip", () => {

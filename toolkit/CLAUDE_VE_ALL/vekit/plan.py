@@ -250,12 +250,23 @@ def plan(main, write=True):
     def raw2rec(part, seconds):
         """Record frame of a raw time; inside removed audio -> the next kept frame of that part
         (in raw order), else the end."""
+        return where(part, seconds)[0]
+
+    def where(part, seconds):
+        """(record frame, how): how is "kept", "cut" (removed audio, moved to the next kept frame
+        of that part, whose raw start is `later`), "after" (past the last kept audio of the part)
+        or "part" (not an A-roll part); the last two land at the end."""
         f = s2f(seconds)
         for r0, p, i, o in rec:
             if p == part and i <= f < o:
-                return r0 + (f - i)
+                return r0 + (f - i), ("kept", None)
         later = [(i, r0) for r0, p, i, o in rec if p == part and i > f]
-        return min(later)[1] if later else total
+        if later:
+            i, r0 = min(later)
+            return r0, ("cut", f2s(i))
+        if part not in parts:
+            return total, ("part", None)
+        return total, ("after", max((f2s(o) for _, p, _, o in rec if p == part), default=0.0))
 
     def anchor(entry):
         part, rest = split_part(entry)
@@ -268,22 +279,49 @@ def plan(main, write=True):
         c = min(cut_points, key=lambda c: abs(c - r))
         return c if abs(c - r) <= near else r
 
-    # ---- 2. picture intervals from VIS
-    vis = []
+    # ---- 2. picture intervals from VIS; every entry that does not get its own interval where
+    #         it was written is explained in a warning that names it as the agent wrote it
+    def sec(frames):
+        return f"{f2s(frames):.2f}s"
+
+    vis = []                      # (output frame, kind, label)
     for e in mod.VIS:
         part, (t0, k) = anchor(e)
-        vis.append((snap_to_cut(raw2rec(part, t0)), k))
+        label = f"VIS entry {part} {t0:.2f}s {k}"
+        r0, (how, detail) = where(part, t0)
+        r = snap_to_cut(r0)
+        if not (k in ("H", "HW", "HT") or k.startswith(("G:", "B:"))):
+            warns.append(f"{label}: {k!r} is not a kind (H, HW, HT, G:<name> or B:<id>); it is treated as H")
+        if how == "part":
+            warns.append(f"{label}: {part} is not an A-roll part (parts: {', '.join(sorted(parts))}); "
+                         f"it lands at the end of the output ({sec(total)}) and shows nothing, so it is dropped")
+        elif how == "after":
+            warns.append(f"{label}: its time is after the last kept audio of {part} (ends at {detail:.2f}s); "
+                         f"it lands at the end of the output ({sec(total)}) and shows nothing, so it is dropped")
+        elif how == "cut":
+            warns.append(f"{label}: its time is in cut audio (cut between SEGS entries, or a pause longer than "
+                         f"{split_at:.2f}s cut out of one); it moved to {sec(r0)} of the output, "
+                         f"where the next kept audio ({detail:.2f}s of {part}) starts")
+        if r != r0:
+            warns.append(f"{label}: it is {abs(r - r0)} frames {'after' if r0 > r else 'before'} the jump cut at "
+                         f"{sec(r)} of the output and moved onto it (anchors within 8 frames of a cut do), "
+                         f"from {sec(r0)}")
+        vis.append((r, k, label, how in ("part", "after")))
     vis.sort(key=lambda x: x[0])
-    import os
-    if os.environ.get("VE_DEBUG_VIS"):
-        print("VIS:", [(r, k) for r, k in vis])
     if not vis or vis[0][0] != 0:
-        vis.insert(0, (0, "H"))
-    ivals = []
-    for n, (r, k) in enumerate(vis):
+        vis.insert(0, (0, "H", "", True))
+    ivals = []                    # [start, end, kind, label]
+    for n, (r, k, label, told) in enumerate(vis):
         e = vis[n + 1][0] if n + 1 < len(vis) else total
         if e > r:
-            ivals.append([r, e, k])
+            ivals.append([r, e, k, label])
+        elif not told:
+            if r >= total:
+                warns.append(f"{label}: it lands at the end of the output ({sec(total)}) and shows nothing, "
+                             f"so it is dropped")
+            else:
+                warns.append(f"{label}: dropped, {vis[n + 1][2]} lands on the same frame ({sec(r)} of the "
+                             f"output) and replaces it")
 
     def cover(k):
         return k.startswith("G:") or k.startswith("B:")
@@ -295,23 +333,32 @@ def plan(main, write=True):
     # run the graphic / tablet to that cut instead (the last frames of a graphic hold safely)
     min_host = s2f(0.6)
     kept = []
-    for n, (r, e, k) in enumerate(ivals):
+    for n, (r, e, k, label) in enumerate(ivals):
         if cover(k) and n + 1 < len(ivals) and not cover(ivals[n + 1][2]):
-            nr, ne, _ = ivals[n + 1]
+            nr, ne, nk, nlabel = ivals[n + 1]
             first = min([c for c in cuts if nr < c < ne], default=ne)
             if first - nr < min_host:
                 e = first
                 ivals[n + 1][0] = first
-        kept.append([r, e, k])
+                gap = f"less than {f2s(min_host):.1f}s of host would show"
+                if first >= ne:
+                    warns.append(f"{nlabel}: dropped, {gap} (until {sec(ne)} of the output), so {label} "
+                                 f"runs on over it to {sec(first)}")
+                else:
+                    warns.append(f"{nlabel}: moved from {sec(nr)} to {sec(first)} of the output, because {gap} "
+                                 f"before the jump cut there, so {label} runs on to the cut")
+        kept.append([r, e, k, label])
     ivals = [iv for iv in kept if iv[1] > iv[0]]
     shots = []
-    for r, e, k in ivals:
+    host_label = {}               # (start, end) of a host shot -> the VIS entry it came from
+    for r, e, k, label in ivals:
         if cover(k):
             shots.append([r, e, k])
             continue
         pts = sorted({r, e} | {c for c in cuts if r < c < e})
         for a, b in zip(pts, pts[1:]):
             shots.append([a, b, k])
+            host_label[(a, b)] = label
     tight = tight_framing(project, W, H)
     last = WIDE
     framing = []
@@ -336,6 +383,10 @@ def plan(main, write=True):
         nxt = framing[n + 1] if n + 1 < len(framing) and framing[n + 1][0] == b else None
         prv = framing[n - 1] if n > 0 and framing[n - 1][1] == a else None
         if nxt or prv:
+            if (nxt or prv)[2] != f:
+                warns.append(f"{host_label.get((a, b)) or 'VIS entry'}: its host piece {sec(a)}-{sec(b)} of the "
+                             f"output is shorter than project min_framing_frames ({minf} frames), so it takes the "
+                             f"framing of the neighbouring piece and no change shows there")
             framing[n] = (a, b, (nxt or prv)[2])
     for a, b, f in framing:
         if b - a < 12:

@@ -4,6 +4,7 @@
  * width, and Enter (or a double click) for the default width.
  */
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { screenPerLayout } from "@/lib/zoom";
 
 const STEP = 16;
 const BIG_STEP = 64;
@@ -22,7 +23,9 @@ export interface PanelResizerProps {
 }
 
 export function PanelResizer({ width, min, max, onResize, onReset, controls }: PanelResizerProps) {
-  const drag = useRef<{ x: number; width: number; last: number } | null>(null);
+  // `scale` is screen px per layout px (the page zoom): pointer positions are in screen px, the
+  // width in layout px.
+  const drag = useRef<{ x: number; width: number; last: number; scale: number } | null>(null);
 
   const clamp = (value: number) => Math.round(Math.min(max, Math.max(min, value)));
 
@@ -31,7 +34,8 @@ export function PanelResizer({ width, min, max, onResize, onReset, controls }: P
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     event.currentTarget.focus({ preventScroll: true });
-    drag.current = { x: event.clientX, width, last: width };
+    const panel = event.currentTarget.parentElement ?? event.currentTarget;
+    drag.current = { x: event.clientX, width, last: width, scale: screenPerLayout(panel) };
     document.documentElement.dataset.resizing = "col";
   };
 
@@ -39,7 +43,7 @@ export function PanelResizer({ width, min, max, onResize, onReset, controls }: P
     const start = drag.current;
     if (!start) return;
     // The panel is at the right: moving the divider left makes it wider.
-    const next = clamp(start.width + start.x - event.clientX);
+    const next = clamp(start.width + (start.x - event.clientX) / start.scale);
     if (next === start.last) return;
     start.last = next;
     onResize(next, false);

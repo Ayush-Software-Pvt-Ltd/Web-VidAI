@@ -8,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelUpdate } from "@/lib/types";
 import { MockBackend } from "@/lib/mock";
+import { mockPageZoom } from "@/test/zoom";
 import { USER_ID } from "@/lib/mock/seed/session";
 import { HOME } from "@/lib/mock/seed/storage";
 import {
@@ -165,6 +166,33 @@ describe("Channels: list", () => {
       expect(adminChannels(backend)[1]?.name).toBe(BEAUTY);
     });
   });
+
+  it.each([1.1538, 1.54])(
+    "moves the dragged row with the pointer when the page is zoomed to %s",
+    async (zoom) => {
+      const { backend } = await renderChannels();
+      // A row is 46 layout px high; pointer positions and rectangles are in screen px.
+      mockPageZoom(zoom, (el) =>
+        el.tagName === "LI" ? { width: 300, height: 46 } : { width: 300, height: 400 },
+      );
+      const handle = screen.getByRole("button", { name: `Reorder ${BEAUTY}` });
+      const dragged = handle.closest("li");
+      const other = screen.getByRole("button", { name: `Reorder ${TECH}` }).closest("li");
+      fireEvent.pointerDown(handle, { button: 0, clientY: 10, pointerId: 1 });
+      fireEvent.pointerMove(handle, { clientY: 10 + 20 * zoom, pointerId: 1 });
+      expect(dragged?.style.transform).toBe("translateY(20px)");
+      fireEvent.pointerMove(handle, { clientY: 10 + 30 * zoom, pointerId: 1 });
+      expect(dragged?.style.transform).toBe("translateY(30px)");
+      expect(other?.style.transform).toBe("translateY(-46px)");
+      // The drag stops at the last row.
+      fireEvent.pointerMove(handle, { clientY: 10 + 400 * zoom, pointerId: 1 });
+      expect(dragged?.style.transform).toBe("translateY(46px)");
+      fireEvent.pointerUp(handle, { clientY: 10 + 30 * zoom, pointerId: 1 });
+      await waitFor(() => {
+        expect(adminChannels(backend)[1]?.name).toBe(BEAUTY);
+      });
+    },
+  );
 
   it("shows the server's sentence when the new order is refused, and keeps the old order", async () => {
     const { user, refuse, backend } = await renderChannels();

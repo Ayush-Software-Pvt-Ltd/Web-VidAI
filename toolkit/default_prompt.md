@@ -19,6 +19,7 @@ When the host is doing something on the phone or tablet, show the tablet or phon
 Keep the tablet app in full view and do not zoom on the tablet.
 Highlight the parts which the host is talking about on the app.
 Put the host next to the phone or tablet in a circle, and make sure the full height of the host video takes the full height of the circle (no zoom).
+Use the synced screen layout for this: the recording is a b-roll with `sync`, `box` and `bg`, and the host is its `pip` circle (README.md, "Writing the edit", "Screen recordings with the host in a circle"); the project carries the layout, so you see it in `ve.py frames --project`.
 
 B-roll:
 There is a B-roll folder named BROLL_FOLDER in the MAIN_FOLDER.
@@ -34,7 +35,9 @@ If you think they do, stabilize them before using them as b-roll.
 
 Create B-rolls Programmatically:
 Create lots of full screen B-rolls with animations which can be used for various cuts in the video.
-These must be created programmatically, as motion graphics, each from a template with variables.
+These must be created programmatically, as motion graphics, each from a template with variables: use `ve.py graphic` with its templates (title, stat, list, quote, compare, image; `ve.py graphic --list`), and write a page by hand only when no template fits.
+Aim for at least one full-screen graphic or b-roll in every 20 to 30 seconds of the edit, spread over the whole video and not only at the start.
+Use a variety of the templates, and add keyword hits (pop-ups) on the key terms, numbers and product names while the host says them.
 They should have consistent animation and should never be static, whether it is just text or some kind of animation.
 
 It is good practice that at the start of every new sentence you show the host (A-roll) for a few seconds and then go to b-roll.
@@ -48,7 +51,7 @@ If there is a computer screen, phone screen or tablet screen recording A-roll fo
 There may or may not be a host A-roll video for it.
 Computer screen recording: show the host when the host is talking to the camera and the screen when he or she is doing something on the screen.
 Add extra text over it with a proper background to make it look clean.
-Phone or tablet screen recording: if a host video is also available, edit it like a computer screen video, but show the full phone or tablet screen recording and the host next to each other.
+Phone or tablet screen recording: if a host video is also available, edit it like a computer screen video, but show the full phone or tablet screen recording and the host next to each other, with the synced layout above.
 Zoom on the screen of the phone or tablet only to emphasize and mark specific sections of the screen.
 Show the host in the left or right corner in a good looking circular area.
 If a host video is not present, simply show the recording screen and add programmatically created text on top of it.
@@ -89,7 +92,7 @@ Never start heavy programs (speech recognition, graphics renders, ffmpeg runs) i
 Use all hyperframes skills for b-roll generation and other things, as required.
 
 The Result (the HyperFrames project):
-After `ve.py build`, run `ve.py hf "<MAIN_FOLDER>"`.
+After `ve.py plan`, run `ve.py hf "<MAIN_FOLDER>"`; `ve.py gfx`, `ve.py broll` and `ve.py build` are not needed.
 It writes the project into PROJECT_FOLDER (`<video>/output/<video folder name>.hf`).
 This project is what the user opens on a timeline, changes by hand and renders later; you never render it.
 You may change its files, but keep to these rules.
@@ -99,8 +102,11 @@ You may change its files, but keep to these rules.
 - Each motion graphic is its own file `compositions/<id>.html`, built from a template with variables, and `edit.json` records the template and the variables.
 - `index.html` holds no animation; all motion lives in the compositions.
 - Hand changes to `index.html` are limited to clip attributes (start, length, track, volume and so on).
-`ve.py hf` cannot carry over the background and picture-in-picture of a synced b-roll layout, a graphic resumed part-way, and the final loudness levelling.
+`ve.py hf` carries the synced layouts (box, rounded corners, background, host circle) and the backgrounds of full-screen graphics; a full-screen graphic needs an opaque background, or CHECK_COMMAND fails.
+It cannot carry over a graphic resumed part-way and the final loudness levelling.
 Each such case is printed as a warning; read every warning and plan around it (for example keep a graphic short instead of resuming it).
+Then look at what the user will see: `ve.py frames "<MAIN_FOLDER>" --project` renders still frames of the project with a contact sheet and WARN lines.
+Open the sheet and single frames, and fix your own edit (the timeline, a graphic, a layout) and run `ve.py plan` and `ve.py hf` again until the frames show graphics, hits and layouts where you meant them, with no host showing through a graphic.
 Run CHECK_COMMAND, fix every error it reports, and run it again until it passes.
 Only then write `[OUTPUT COMPLETED]`.
 
@@ -151,9 +157,10 @@ Also save any more information you think the user should know in this file, such
 Add the total time you took from the start.
 
 Feel free to use up to 10 helpers (as and when required) for light work such as specs, graphics authoring, fact checks and thumbnails; heavy programs still run one at a time.
-The priority is to finish as soon as possible.
+Parallel work is welcome, but a good edit counts more than a quick one.
 
 Read the MEMORY.md file in the TOOLKIT_FOLDER and include it in your prompt; it has learnings from past video edits.
+Read the section "Writing the edit" of README.md in the TOOLKIT_FOLDER too; it is the contract of `timeline.py`, the graphic templates and the layouts.
 
 My Availability:
 I am not available to answer any of your questions, so make your best guess and proceed ahead.

@@ -1,0 +1,13 @@
+{
+  "summary": "Product photo or icon with a caption; the photo drifts slowly (Ken Burns) inside a card or full-bleed",
+  "duration": 5,
+  "variables": [
+    {"id": "caption", "type": "text", "required": true, "max": 120, "default": "Product name", "help": "main line; shrinks to fit"},
+    {"id": "image", "type": "image", "default": "", "help": "photo file (png, jpg, webp), absolute or relative to the video folder; copied into the graphic"},
+    {"id": "icon", "type": "icon", "default": "star", "help": "used when there is no image: one of check star bolt heart play shield phone gift target clock globe rupee cart, or one short symbol or emoji"},
+    {"id": "kicker", "type": "text", "max": 50, "default": "", "help": "small line above the caption"},
+    {"id": "subtitle", "type": "text", "max": 160, "default": "", "help": "line under the caption"},
+    {"id": "mode", "type": "enum", "choices": ["card", "full"], "default": "card", "help": "card: photo in a frame beside the text; full: photo fills the screen under a shade"},
+    {"id": "fit", "type": "enum", "choices": ["cover", "contain"], "default": "cover", "help": "cover crops the photo to its frame; contain shows all of it"}
+  ]
+}

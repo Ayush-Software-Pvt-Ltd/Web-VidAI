@@ -512,6 +512,8 @@ case "$SCENARIO" in
     done
     RID=$(grep -m 1 '"control_request"' "$IN" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
     out '{"type":"control_response","response":{"subtype":"success","request_id":"'"$RID"'","response":{"still_queued":[]}}}'
+    # The step that was cut short ends with an error result holding what it had printed.
+    out '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"t1","type":"tool_result","content":"[1/124]    8.19-  10.87 Hello there\n[2/124]   10.87-  12.40 and welcome","is_error":true}]},"parent_tool_use_id":null}'
     out '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]},"parent_tool_use_id":null}'
     out '{"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":1,"terminal_reason":"aborted_streaming","errors":["[ede_diagnostic] result_type=user"],"total_cost_usd":0.1}'
     wait_eof

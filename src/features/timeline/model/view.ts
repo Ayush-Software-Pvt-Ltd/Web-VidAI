@@ -64,6 +64,23 @@ export function clampScroll(
   return Math.min(max, Math.max(0, scroll));
 }
 
+/**
+ * The x in layout px (what `View` and every drawn position use) of a pointer at `clientX`, for a
+ * viewport whose box on screen is `rect` and whose layout width is `layoutWidth`. The app's text
+ * size is a CSS `zoom` on <html>: `clientX` and `getBoundingClientRect` count in screen px, the
+ * zoom times the layout px that `ResizeObserver` and the styles use, so the offset into the box is
+ * scaled back by the ratio of the two widths (1 without zoom, and in any browser that reports
+ * layout px).
+ */
+export function pointerX(
+  clientX: number,
+  rect: { left: number; width: number },
+  layoutWidth: number,
+) {
+  const scale = rect.width > 0 && layoutWidth > 0 ? layoutWidth / rect.width : 1;
+  return (clientX - rect.left) * scale;
+}
+
 /** The frame (a fraction) under pixel `x` of the viewport. */
 export function frameAtX(view: View, x: number): number {
   return (x + view.scroll) / view.pxPerFrame;

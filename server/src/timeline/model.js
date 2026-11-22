@@ -29,6 +29,18 @@ function trackName(index) {
   return TRACK_NAMES[index] ?? `Sound ${index - FIRST_SOUND_TRACK + 1}`;
 }
 
+/**
+ * Where a track sits in the wire's list, which is the screen's order from top to bottom, as in Premiere
+ * Pro: the picture tracks stack upward, so the one drawn on top (its `z-index` is its track number, the
+ * end fade on track 4) comes first and the A-roll (track 0) is the lowest picture; the sound tracks
+ * follow, the first sound track right below the pictures.
+ * @param {number} index A track number.
+ * @returns {number} A key that sorts the tracks in that order.
+ */
+function displayRank(index) {
+  return index >= FIRST_SOUND_TRACK ? index : -index;
+}
+
 /** @param {string} src @returns {string} The last path segment. */
 function baseName(src) {
   return src.slice(src.lastIndexOf("/") + 1);
@@ -77,7 +89,7 @@ export function toTimeline(parsed, facts, extras) {
   }
   /** @type {TimelineTrack[]} */
   const out = [...tracks.entries()]
-    .sort((a, b) => a[0] - b[0])
+    .sort((a, b) => displayRank(a[0]) - displayRank(b[0]))
     .map(([index, clips]) => ({
       index,
       name: trackName(index),

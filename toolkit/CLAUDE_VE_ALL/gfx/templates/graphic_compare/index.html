@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en" data-resolution="@RES@" data-composition-variables='@DECLARED@'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=@W@, height=@H@" />
+    <script src="shared/js/gsap.min.js"></script>
+    <style>
+/*@KIT_CSS*/
+      #root .safe { align-items: stretch; }
+      #root .cols { position: relative; flex: none; }
+      #root .panel { position: absolute; overflow: hidden; }
+      #root .head { display: flex; align-items: center; justify-content: center; font-weight: 800; line-height: 1.25; text-align: center; }
+      #root .pts { display: flex; flex-direction: column; justify-content: center; }
+      #root .pt { display: flex; align-items: center; }
+      #root .dot { flex: none; border-radius: 50%; }
+      #root .ptx { font-weight: 700; line-height: 1.26; overflow-wrap: normal; text-align: left; }
+      #root .vs { position: absolute; display: flex; align-items: center; justify-content: center; font-weight: 800; border-radius: 50%; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="@DURATION@" data-width="@W@" data-height="@H@">
+      <div id="safe" class="safe">
+        <div id="title" class="title"></div>
+        <div id="cols" class="cols"></div>
+      </div>
+    </div>
+    <script>
+/*@KIT_JS*/
+      const D = @DURATION@;
+      const DEF = @DEFAULTS@;
+      const v = K.vars(DEF);
+      K.ready(v).then(function () {
+        const root = document.getElementById("root");
+        const tl = gsap.timeline({ paused: true });
+        const S = K.setup(root, v);
+        K.bg(root, tl, D, S, 5);
+        const safe = document.getElementById("safe");
+        const box = K.place(safe, S);
+        const u = S.u;
+        const title = document.getElementById("title"), cols = document.getElementById("cols");
+        const hasT = !!v.title.trim();
+        K.txt(title, v.title); title.style.color = S.text; title.style.textAlign = "center";
+        title.style.display = hasT ? "block" : "none";
+        let used = 0;
+        if (hasT) { K.fit(title, box.w, box.h * 0.14, (S.port ? 76 : 82) * u, 32 * u); K.wrapMode(title); title.style.marginBottom = 28 * u + "px"; used = title.offsetHeight + 28 * u; }
+        const gap = Math.round((S.port ? 124 : 132) * u);
+        const chFull = Math.round(box.h - used);
+        cols.style.width = box.w + "px";
+        const pw = S.port ? box.w : Math.round((box.w - gap) / 2);
+        const phFull = S.port ? Math.round((chFull - gap) / 2) : chFull;
+        const hh = Math.round(Math.min(phFull * 0.22, 120 * u));
+        const pad = Math.round(34 * u);
+        const sides = [
+          { label: v.a_label, items: K.list(v.a_items).slice(0, 5), color: S.accent, x: 0, y: 0 },
+          { label: v.b_label, items: K.list(v.b_items).slice(0, 5), color: S.accent2, x: S.port ? 0 : pw + gap, y: 0 },
+        ];
+        const nmax = Math.max(sides[0].items.length, sides[1].items.length);
+        // a panel never stretches past what its rows need: few short points stay compact and centred
+        const ph = Math.round(Math.min(phFull, hh + pad + nmax * (S.port ? 168 : 158) * u));
+        const ch = S.port ? 2 * ph + gap : ph;
+        cols.style.height = ch + "px";
+        sides[1].y = S.port ? ph + gap : 0;
+        const ptH = (ph - hh - pad) / nmax;
+        const dotS = Math.round(Math.min(26 * u, ptH * 0.3));
+        const tw = pw - 2 * pad - dotS - 22 * u - 12 * u;
+        let size = 1e9;
+        sides.forEach(function (s) {
+          const p = K.el("div", "panel", cols);
+          p.style.left = s.x + "px"; p.style.top = s.y + "px"; p.style.width = pw + "px"; p.style.height = ph + "px";
+          p.style.borderRadius = 30 * u + "px"; p.style.background = S.faint; p.style.border = 3 * u + "px solid " + K.rgba(s.color, 0.55);
+          const h = K.el("div", "head", p);
+          h.style.height = hh + "px"; h.style.background = s.color; h.style.color = K.on(s.color); h.style.padding = "0 " + pad + "px";
+          const ht = K.el("div", "", h); K.txt(ht, s.label); ht.style.fontWeight = "800"; ht.style.textAlign = "center";
+          K.fit(ht, pw - 2 * pad, hh - 14 * u, 62 * u, 24 * u);
+          const pts = K.el("div", "pts", p);
+          pts.style.height = ph - hh - 6 * u + "px"; pts.style.padding = "0 " + pad + "px";
+          s.panel = p; s.rows = []; s.texts = [];
+          s.items.forEach(function (t, i) {
+            const r = K.el("div", "pt", pts);
+            r.style.height = ptH + "px";
+            const d = K.el("div", "dot", r);
+            d.style.width = d.style.height = dotS + "px"; d.style.background = s.color; d.style.marginRight = 22 * u + "px";
+            const x = K.el("div", "ptx", r);
+            K.txt(x, t); x.style.color = S.text;
+            if (i < s.items.length - 1) r.style.borderBottom = Math.max(2, 2 * u) + "px solid " + K.rgba(S.text, 0.14);
+            size = Math.min(size, K.fit(x, tw, ptH - 10 * u, (S.port ? 54 : 58) * u, 22 * u));
+            s.rows.push(r); s.texts.push(x);
+          });
+        });
+        sides.forEach(function (s) { s.texts.forEach(function (x) { K.fit(x, tw, ptH - 10 * u, size, size); K.wrapMode(x); }); });
+        const vsS = Math.round(gap - 34 * u);
+        const vs = K.el("div", "vs", cols);
+        vs.textContent = "VS"; vs.style.width = vs.style.height = vsS + "px"; vs.style.fontSize = vsS * 0.4 + "px";
+        vs.style.background = S.bg1; vs.style.color = S.text; vs.style.border = 6 * u + "px solid " + S.text;
+        vs.style.left = Math.round(S.port ? box.w / 2 - vsS / 2 : pw + gap / 2 - vsS / 2) + "px";
+        vs.style.top = Math.round(S.port ? ph + gap / 2 - vsS / 2 : ch / 2 - vsS / 2) + "px";
+        const vr = K.ring(cols, vsS + 24 * u, S.accent, 6 * u, 0.25, "rgba(0,0,0,0)");
+        vr.svg.style.position = "absolute"; vr.svg.style.left = parseFloat(vs.style.left) - 12 * u + "px"; vr.svg.style.top = parseFloat(vs.style.top) - 12 * u + "px";
+        tl.fromTo(title, { y: -30 * u, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power4.out" }, 0.04);
+        const ax = S.port ? 0 : -220 * u, ay = S.port ? -160 * u : 0;
+        tl.fromTo(sides[0].panel, { x: ax, y: ay, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.85, ease: "power4.out" }, 0.1);
+        tl.fromTo(sides[1].panel, { x: -ax, y: -ay, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.85, ease: "power4.out" }, 0.22);
+        tl.fromTo([vs, vr.svg], { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "back.out(2)" }, 0.6);
+        tl.fromTo(vr.svg, { rotation: 0 }, { rotation: 45 * D, duration: D, ease: "none", immediateRender: false }, 0);
+        sides.forEach(function (s, k) {
+          tl.fromTo(s.rows, { x: (k ? 70 : -70) * u, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: "power4.out", stagger: 0.16 }, 0.7 + k * 0.1);
+        });
+        K.drift(tl, safe, D, S, { scale: 1.025, y: -10 });
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>

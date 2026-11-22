@@ -25,6 +25,12 @@ export interface PlayerFrameProps {
   duration: number;
   /** The project's revision: a change reloads the player and keeps the playhead. */
   revision: number;
+  /**
+   * How many preview copies of the video are finished (SPEC section 11): a new one reloads the
+   * player, because a file the player already opened keeps playing from the original, which a
+   * browser may play without sound (a sound codec it cannot decode).
+   */
+  copiesDone: number;
   previewUrl: string | null;
   playback: PlaybackStore;
   /** Filled with the bridge while the player exists; the playback store drives it through this. */
@@ -57,6 +63,7 @@ export function PlayerFrame({
   fps,
   duration,
   revision,
+  copiesDone,
   previewUrl,
   playback,
   bridgeRef,
@@ -211,11 +218,16 @@ export function PlayerFrame({
     load(bridge, previewUrl, () => handleFailure(bridge));
   }, [bridge, previewUrl, load, handleFailure]);
 
-  // The project changed (an edit, undo, a job): show it, at the same frame.
-  const shownRevision = useRef(revision);
+  // The project changed (an edit, undo, a job) or a preview copy came ready: show it at the same frame.
+  const shown = useRef({ revision, copiesDone });
   useEffect(() => {
-    if (shownRevision.current === revision) return;
-    shownRevision.current = revision;
+    const before = shown.current;
+    if (before.revision === revision && copiesDone <= before.copiesDone) {
+      // A smaller count is a new video or a cleanup of copies: nothing to show again.
+      shown.current = { revision, copiesDone };
+      return;
+    }
+    shown.current = { revision, copiesDone };
     if (!bridge || loadedUrl.current === null) return;
     pendingSeek.current = playback.getState().frame;
     readyRef.current = false;
@@ -224,7 +236,7 @@ export function PlayerFrame({
     bridge.reload();
     stopTimer();
     timer.current = setTimeout(() => handleFailure(bridge), live.current.readyTimeoutMs);
-  }, [revision, bridge, playback, stopTimer, handleFailure]);
+  }, [revision, copiesDone, bridge, playback, stopTimer, handleFailure]);
 
   useEffect(() => {
     bridge?.setVolume(volume);

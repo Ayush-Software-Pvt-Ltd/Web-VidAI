@@ -67,14 +67,18 @@ describe("hand edits by keys and buttons", () => {
     expect(test.calls("editTimeline")[0]).toMatchObject({
       op: { type: "split", clipId: "a-2", frame: 400 },
     });
-    const right = timelineOf(test).tracks[0]?.clips.find((c) => c.start === 400);
+    const right = timelineOf(test)
+      .tracks.find((t) => t.index === 0)
+      ?.clips.find((c) => c.start === 400);
     expect(right).toBeDefined();
     select(right?.id ?? "", at(450));
     test.bridge.emit({ type: "frame", frame: 500 });
     keys("b", { metaKey: true });
     await waitFor(() => expect(test.calls("editTimeline")).toHaveLength(2));
     expect(test.calls("editTimeline")[1]).toMatchObject({ op: { type: "split", frame: 500 } });
-    const rest = timelineOf(test).tracks[0]?.clips.find((c) => c.start === 500);
+    const rest = timelineOf(test)
+      .tracks.find((t) => t.index === 0)
+      ?.clips.find((c) => c.start === 500);
     select(rest?.id ?? "", at(550));
     test.bridge.emit({ type: "frame", frame: 600 });
     fireEvent.click(screen.getByRole("button", { name: "Split at playhead" }));
@@ -126,6 +130,33 @@ describe("hand edits by dragging", () => {
     });
     expect(findClip(timelineOf(test), "b-2")?.duration).toBe(70);
     expect(screen.queryByTestId("drag-preview")).not.toBeInTheDocument();
+  });
+
+  it("trims to the frame under the pointer under a page zoom (the text size)", async () => {
+    const zoom = 1.4;
+    const left = 40;
+    const test = await renderTimeline(LONG, {
+      scenarios: ["default", "timeline"],
+      zoom,
+      measure: {
+        area: { width: 800, height: 450 },
+        tracks: { width: 600, height: 240, left },
+        body: { width: 1400, height: 800 },
+      },
+    });
+    await openReady(test);
+    const screenX = (frame: number) => (left + at(frame)) * zoom;
+    const edge = clipElement("b-2").querySelector('[data-part="end"]') as HTMLElement;
+    const revision = revisionOf(test);
+    fireEvent.pointerDown(edge, { button: 0, clientX: screenX(420) - 2 });
+    fireEvent.pointerMove(window, { clientX: screenX(400) });
+    fireEvent.pointerUp(window, { clientX: screenX(400) });
+    await waitFor(() => expect(test.calls("editTimeline")).toHaveLength(1));
+    expect(test.calls("editTimeline")[0]).toEqual({
+      videoId: LONG,
+      revision,
+      op: { type: "trim", clipId: "b-2", edge: "end", frame: 400 },
+    });
   });
 
   it("moves a clip by its body and snaps its edge to a neighbour, with a snap line", async () => {

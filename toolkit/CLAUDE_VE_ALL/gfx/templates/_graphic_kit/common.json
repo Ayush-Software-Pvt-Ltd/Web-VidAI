@@ -1,0 +1,9 @@
+[
+  {"id": "accent", "type": "color", "default": "#FFB400", "help": "highlight colour (bars, last word, badges)"},
+  {"id": "accent2", "type": "color", "default": "#38BDF8", "help": "second colour (glows, the B side of a comparison)"},
+  {"id": "bg1", "type": "color", "default": "#0B1020", "help": "background colour at one end of the gradient"},
+  {"id": "bg2", "type": "color", "default": "#1B2A5C", "help": "background colour at the other end"},
+  {"id": "text", "type": "color", "default": "#FFFFFF", "help": "text colour"},
+  {"id": "font", "type": "font", "default": "Mukta", "help": "font family; Mukta and Baloo 2 ship with the toolkit and cover Devanagari and Latin"},
+  {"id": "seed", "type": "int", "default": "1", "min": 1, "max": 999, "help": "changes the background's look (glow places, particles)"}
+]

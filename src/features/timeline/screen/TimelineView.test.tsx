@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { TIMELINE_VIDEOS } from "@/lib/mock/seed/timeline";
-import { LOCKED_REASON, fitZoom } from "../model";
+import { LOCKED_REASON, ROW_HEIGHT, fitZoom } from "../model";
 import { createPlayerBridge, type PlayerEvent } from "./playerBridge";
 import { clipElement, openReady, renderTimeline } from "./testSupport";
 
@@ -175,6 +175,25 @@ describe("the player", () => {
     ).toBeInTheDocument();
   });
 
+  it("reloads the preview when a preview copy comes ready, so it plays the copy and not the original", async () => {
+    const test = await renderTimeline(TIMELINE_VIDEOS.copies, {
+      scenarios: ["default", "timeline-copies"],
+    });
+    await openReady(test);
+    const copies = () => test.store.getState().timelines[TIMELINE_VIDEOS.copies]?.previewCopies;
+    expect(copies()?.running).toBe(true);
+    expect(test.bridge.count("reload")).toBe(0);
+    test.bridge.emit({ type: "frame", frame: 120 });
+    const total = copies()?.total ?? 0;
+    for (let i = 0; i < total; i++) await test.tick();
+    await waitFor(() => expect(copies()?.running).toBe(false));
+    // A file the player opened keeps playing from the original, which a browser may play without
+    // sound (an audio codec it cannot decode), so every finished copy reloads the player.
+    await waitFor(() => expect(test.bridge.count("reload")).toBe(total));
+    test.bridge.ready();
+    expect(test.bridge.seeks().at(-1)).toBe(120);
+  });
+
   it("reloads the preview after a change and puts the playhead back", async () => {
     const test = await renderTimeline(LONG, { scenarios: ["default", "timeline"] });
     await openReady(test);
@@ -282,6 +301,35 @@ describe("ruler, zoom and tracks", () => {
     );
   });
 
+  // The app's text size is a CSS `zoom` on <html> (1.15 by default, up to 1.54): the pointer and
+  // `getBoundingClientRect` count in screen px, layout (and so the clip widths) in CSS px.
+  it.each([1.15, 1.4, 1.54])(
+    "scrubs to the frame under the pointer under a page zoom of %s",
+    async (zoom) => {
+      const left = 40;
+      const test = await renderTimeline(LONG, {
+        scenarios: ["default", "timeline"],
+        zoom,
+        measure: {
+          area: { width: 800, height: 450 },
+          tracks: { width: 600, height: 240, left },
+          body: { width: 1400, height: 800 },
+        },
+      });
+      await openReady(test);
+      const ruler = screen.getByTestId("ruler");
+      const screenX = (layoutX: number) => (left + layoutX) * zoom;
+      fireEvent.pointerDown(ruler, { button: 0, clientX: screenX(100) });
+      expect(test.bridge.seeks().at(-1)).toBe(Math.round(100 / px));
+      fireEvent.pointerMove(ruler, { clientX: screenX(250) });
+      fireEvent.pointerUp(ruler, { clientX: screenX(300) });
+      expect(test.bridge.seeks().at(-1)).toBe(Math.round(300 / px));
+      // The playhead is drawn under the pointer (layout px, like the clips).
+      const head = screen.getByTestId("playhead");
+      expect(Number.parseFloat(head.style.left)).toBeCloseTo(Math.round(300 / px) * px, 3);
+    },
+  );
+
   it("draws every track with its clips, and a marker per change request that seeks on click", async () => {
     const test = await renderTimeline(TIMELINE_VIDEOS.notes, {
       scenarios: ["default", "timeline-notes"],
@@ -330,7 +378,7 @@ describe("ruler, zoom and tracks", () => {
       scenarios: ["default", "timeline"],
       prepare: (backend) => {
         const sim = backend.world.timelines[LONG];
-        const track = sim?.timeline.tracks[1];
+        const track = sim?.timeline.tracks.find((t) => t.index === 1);
         const sample = track?.clips[0];
         if (!track || !sample) throw new Error("no b-roll track");
         track.clips = Array.from({ length: 700 }, (_, i) => ({
@@ -384,6 +432,49 @@ describe("ruler, zoom and tracks", () => {
     fireEvent.pointerDown(screen.getByTestId("rows"), { button: 0, clientX: 590 });
     expect(document.querySelectorAll('[data-clip][aria-pressed="true"]')).toHaveLength(0);
     expect(test.bridge.seeks()).toEqual([]);
+  });
+
+  it("stacks the tracks like Premiere Pro: top layer first, the A-roll above the sound, headers in line with the lanes", async () => {
+    const test = await renderTimeline(LONG, { scenarios: ["default", "timeline"] });
+    await openReady(test);
+    const names = [
+      [4, "End fade"],
+      [3, "Keyword hits"],
+      [2, "Overlays"],
+      [1, "B-roll and graphics"],
+      [0, "A-roll"],
+      [10, "Sound 1"],
+      [11, "Sound 2"],
+    ] as const;
+    const headers = screen.getAllByTestId("track-header");
+    const lanes = screen.getAllByTestId("track-lane");
+    expect(headers.map((h) => [Number(h.dataset.track), h.textContent])).toEqual(
+      names.map((n) => [...n]),
+    );
+    expect(lanes.map((l) => Number(l.dataset.track))).toEqual(names.map(([index]) => index));
+    lanes.forEach((lane, i) => {
+      expect(lane.style.top).toBe(`${i * ROW_HEIGHT}px`);
+      expect(headers[i]?.style.height).toBe(`${ROW_HEIGHT}px`);
+    });
+    const laneOf = (id: string) =>
+      Number(clipElement(id).closest<HTMLElement>("[data-track]")?.dataset.track);
+    expect(laneOf("a-1")).toBe(0);
+    expect(laneOf("b-1")).toBe(1);
+    // ArrowUp goes to the layer above the A-roll (B-roll), ArrowDown to the sound below it.
+    clipElement("a-2").focus();
+    fireEvent.keyDown(clipElement("a-2"), { key: "ArrowUp" });
+    await waitFor(() =>
+      expect(document.querySelector('[data-clip][aria-pressed="true"]')).toHaveAttribute(
+        "data-kind",
+        "broll",
+      ),
+    );
+    fireEvent.keyDown(clipElement("a-2"), { key: "ArrowDown" });
+    await waitFor(() =>
+      expect(["music", "sfx"]).toContain(
+        document.querySelector('[data-clip][aria-pressed="true"]')?.getAttribute("data-kind"),
+      ),
+    );
   });
 
   it("opens the keyboard help", async () => {

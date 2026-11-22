@@ -6,7 +6,8 @@
 // scheme (so `http:`, `https:`, `file:`, `data:`, `blob:`, `javascript:` and Windows drives `C:` are
 // all refused), does not start with `/` or `//`, and has no `..` segment. A query string or fragment
 // is ignored for the path test; a value that is only a fragment (`#shape`, a reference inside the
-// document) is allowed. Links under `assets/media/` may point outside the project folder on disk;
+// document) is allowed. A `data:` URL loads nothing, so a composition file (not index.html) may hold
+// one (`allowData`). Links under `assets/media/` may point outside the project folder on disk;
 // that is checked when files are served, not here.
 
 import { nodeAttr, walkElements } from "./document.js";
@@ -15,12 +16,14 @@ import { nodeAttr, walkElements } from "./document.js";
 
 /**
  * @param {string} value
+ * @param {{ allowData?: boolean }} [options] `allowData`: a `data:` URL is fine (composition files).
  * @returns {string | null} Null when the reference is fine, else why it is not (a clause).
  */
-export function pathProblem(value) {
+export function pathProblem(value, { allowData = false } = {}) {
   const trimmed = value.trim();
   if (trimmed === "") return "is empty";
   if (trimmed.startsWith("#")) return null;
+  if (allowData && /^data:/i.test(trimmed)) return null;
   let current = trimmed;
   for (let round = 0; round < 4; round++) {
     // eslint-disable-next-line no-control-regex

@@ -105,6 +105,100 @@ def make_video(root, fps="30000/1001", landscape=True, motion="push"):
     return vdir
 
 
+def page(css="", body_attrs="", root_style="", root_css="", extra_head="", html_attrs=""):
+    return (f'<!doctype html><html lang="en"{html_attrs}><head>{extra_head}<style>\n{css}\n#root {{ position: relative; width: 1920px; '
+            f'height: 1080px; {root_css} }}\n</style></head><body{body_attrs}>'
+            f'<div id="root" data-composition-id="main" data-start="0" data-duration="2" data-width="1920" '
+            f'data-height="1080"{root_style}><h1 id="t">Hi</h1></div>'
+            '<script>const tl = gsap.timeline({ paused: true }); window.__timelines["main"] = tl;</script></body></html>')
+
+
+def root_rules(text, cid="g-1"):
+    """The text of every rule of the written composition that is about the graphic's root."""
+    return " ".join(m.group(1) for m in re.finditer(r"#" + cid + r"-root\s*\{([^}]*)\}", text))
+
+
+class GraphicBackgroundTest(common.Case):
+    """A graphic page's background (on html, body or the inline body style) stays on the graphic's root."""
+
+    def write(self, html, prefix="assets/gfx/g-1/"):
+        text, _ = hfproject.sub_composition(html, "g-1", {}, prefix, lambda *_: None)
+        return text
+
+    def test_a_background_on_html_and_body_is_kept_on_the_root(self):
+        text = self.write(page("html, body { margin: 0; width: 1920px; height: 1080px; background: #0b1020; overflow: hidden; }"))
+        rules = root_rules(text)
+        self.assertIn("background: #0b1020", rules)
+        self.assertNotIn("overflow: hidden; }\nhtml", text)
+        self.assertNotRegex(text, r"(?m)^\s*html\s*,\s*body")
+        self.assertNotIn("width: 1920px; height: 1080px; background", text)
+
+    def test_a_background_on_body_alone_is_kept(self):
+        rules = root_rules(self.write(page("body { margin: 0; background-color: #123456; }")))
+        self.assertIn("background-color: #123456", rules)
+
+    def test_a_background_on_html_alone_is_kept(self):
+        rules = root_rules(self.write(page("html { background: #abcdef; }")))
+        self.assertIn("background: #abcdef", rules)
+
+    def test_a_multiline_rule_and_a_later_body_rule_are_kept(self):
+        css = "html, body {\n  margin: 0;\n  background: #111111;\n}\nbody { background: #222222; }"
+        rules = root_rules(self.write(page(css)))
+        self.assertIn("#222222", rules)
+        self.assertNotIn("margin", rules)
+
+    def test_an_inline_body_style_is_kept(self):
+        for attrs in (' style="margin:0; background:#0b1020"', " style='background-color: #0b1020; margin: 0'"):
+            self.assertIn("#0b1020", root_rules(self.write(page(body_attrs=attrs))), attrs)
+
+    def test_an_inline_html_style_is_kept(self):
+        self.assertIn("#0b1020", root_rules(self.write(page(html_attrs=' style="background:#0b1020"'))))
+
+    def test_gradients_and_images_are_kept_and_their_files_follow_the_graphic(self):
+        grad = "linear-gradient(135deg, #0b1020 0%, #223 100%)"
+        self.assertIn(grad, root_rules(self.write(page(f"html, body {{ background: {grad}; }}"))))
+        rules = root_rules(self.write(page("body { background-image: url('bg.png'); background-size: cover; }")))
+        self.assertIn("url(assets/gfx/g-1/bg.png)", rules.replace("'", "").replace('"', ""))
+        self.assertIn("background-size: cover", rules)
+        inline = root_rules(self.write(page(body_attrs=' style="background: url(bg.png) center / cover"')))
+        self.assertIn("assets/gfx/g-1/bg.png", inline)
+
+    def test_the_roots_own_background_still_wins(self):
+        text = self.write(page("body { background: #000000; }", root_css="background: #ff0000;"))
+        self.assertLess(text.index("background: #000000"), text.index("background: #ff0000"))
+
+    def test_a_transparent_page_stays_transparent(self):
+        for css in ("html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; }",
+                    "html, body { background: rgba(0,0,0,0) }", "body { background: #fff } body { background: none }"):
+            text = self.write(page(css))
+            self.assertNotRegex(root_rules(text), r"#[0-9a-fA-F]{3}", css)
+            self.assertNotIn("background", root_rules(text), css)
+
+    def test_a_body_that_is_transparent_shows_the_html_background(self):
+        rules = root_rules(self.write(page("html { background: #0b1020 } body { background: transparent }")))
+        self.assertIn("#0b1020", rules)
+
+    def test_text_style_of_the_page_is_carried_too(self):
+        rules = root_rules(self.write(page("body { margin: 0; font-family: Arial; color: #fff; width: 5px; }")))
+        self.assertIn("font-family: Arial", rules)
+        self.assertIn("color: #fff", rules)
+        self.assertNotIn("width: 5px", rules)
+
+    def test_a_reference_outside_the_graphic_folder_is_handed_to_the_writer(self):
+        seen = []
+
+        def outside(ref):
+            seen.append(ref)
+            return "_outside/product_images/x.png"
+        html = page(css="#p { background: url('../product_images/x.png'); }").replace(
+            "<h1", '<img id="pic" src="../product_images/x.png"><h1')
+        text, _ = hfproject.sub_composition(html, "g-1", {}, "assets/gfx/g-1/", lambda *_: None, outside)
+        self.assertEqual(seen, ["../product_images/x.png", "../product_images/x.png"])
+        self.assertIn('src="assets/gfx/g-1/_outside/product_images/x.png"', text)
+        self.assertIn("url(assets/gfx/g-1/_outside/product_images/x.png)", text.replace("'", ""))
+        self.assertNotIn("..", text.replace("...", ""))
+
+
 class HfProjectTest(common.Case):
     def setUp(self):
         super().setUp()
@@ -155,7 +249,10 @@ class HfProjectTest(common.Case):
         self.assertFalse([w for w in self.log if "motion" in w])
         edit = json.loads((out / "edit.json").read_text(encoding="utf-8"))
         self.assertEqual(edit["toolkitVersion"], (KIT.parent / "VERSION").read_text(encoding="utf-8").strip())
-        self.assertEqual(sorted(g["id"] for g in edit["graphics"]), ["b-1", "fade-1", "h-1", "ov-1"])
+        self.assertEqual(sorted(g["id"] for g in edit["graphics"]), ["b-1", "b-2", "b-3", "fade-1", "h-1", "ov-1"])
+        # the synced b-roll in a box (b-2, b-3) is a layout host: black behind the box, no longer a plain clip over the A-roll
+        self.assertEqual({clips[i][1]["data-vidai-kind"] for i in ("b-2", "b-3")}, {"broll"})
+        self.assertIn("background: #000", (out / "compositions" / "b-2.html").read_text(encoding="utf-8"))
         self.assertEqual([g for g in edit["graphics"] if g["id"] == "h-1"][0]["variables"], {"text": "Free today"})
         self.assertTrue((out / "shared" / "js" / "gsap.min.js").is_file())
         self.assertFalse((out / "shared").is_symlink())
@@ -316,6 +413,75 @@ class HfProjectTest(common.Case):
         self.assertNotIn("gsap.min.js", ov)
 
     @common.unittest.skipUnless(common.have_ffmpeg(), "needs ffmpeg")
+    def test_a_file_beside_the_graphic_folder_is_copied_into_the_project(self):
+        vdir = make_video(self.tmp, fps="30", landscape=True)
+        src = vdir / "CLAUDE_VE" / "gfx_src"
+        (src / "product_images").mkdir()
+        (src / "product_images" / "x.png").write_bytes(b"png-bytes")
+        (src / "lower" / "local.png").write_bytes(b"local")
+        index = src / "lower" / "index.html"
+        text = index.read_text(encoding="utf-8")
+        text = text.replace("</style>", "#card { background-image: url('../product_images/x.png'); }\n</style>")
+        text = text.replace('<div id="card"></div>', '<div id="card"><img src="../product_images/x.png"><img src="local.png"></div>')
+        index.write_text(text, encoding="utf-8")
+        out = hfproject.export(vdir, log=self.log.append)
+        comp = (out / "compositions" / "ov-1.html").read_text(encoding="utf-8")
+        copied = re.findall(r'src="(assets/gfx/ov-1/[^"]*x\.png)"', comp)
+        self.assertEqual(len(copied), 1, comp)
+        self.assertNotIn("..", comp.replace("...", ""))
+        self.assertEqual((out / copied[0]).read_bytes(), b"png-bytes")
+        self.assertIn(copied[0], comp.split("<style>")[1].split("</style>")[0])
+        self.assertEqual((out / "assets" / "gfx" / "ov-1" / "local.png").read_bytes(), b"local")
+        self.assertEqual(hfproject.check_project(out), [])
+
+    @common.unittest.skipUnless(common.have_ffmpeg(), "needs ffmpeg")
+    def test_a_graphic_made_by_ve_graphic_records_its_template_and_variables(self):
+        vdir = make_video(self.tmp, fps="30", landscape=True)
+        folder = vdir / "CLAUDE_VE" / "gfx_src" / "lower"
+        record = {"template": "graphic_title", "name": "lower", "duration": 2.0, "width": 1920, "height": 1080,
+                  "variables": {"title": "Big idea", "kicker": "Today", "image": ""}}
+        (folder / "graphic.json").write_text(json.dumps(record), encoding="utf-8")
+        out = hfproject.export(vdir, log=self.log.append)
+        edit = json.loads((out / "edit.json").read_text(encoding="utf-8"))
+        entry = [g for g in edit["graphics"] if g["id"] == "ov-1"][0]
+        self.assertEqual(entry["template"], "graphic_title")
+        self.assertEqual(entry["variables"], record["variables"])
+        self.assertFalse((out / "assets" / "gfx" / "ov-1" / "graphic.json").exists())
+        self.assertEqual(hfproject.check_project(out), [])
+
+    @common.unittest.skipUnless(common.have_ffmpeg(), "needs ffmpeg")
+    def test_a_graphic_folder_without_graphic_json_keeps_its_name_as_template(self):
+        vdir = make_video(self.tmp, fps="30", landscape=True)
+        out = hfproject.export(vdir, log=self.log.append)
+        edit = json.loads((out / "edit.json").read_text(encoding="utf-8"))
+        entry = [g for g in edit["graphics"] if g["id"] == "ov-1"][0]
+        self.assertEqual((entry["template"], entry["variables"]), ("lower", {}))
+
+    def test_graphic_record_ignores_a_file_of_the_wrong_shape(self):
+        d = self.tmp / "g"
+        d.mkdir()
+        self.assertIsNone(hfproject.graphic_record(d))
+        for text in ("not json", "[]", '{"template": 3}', '{"variables": {}}'):
+            (d / "graphic.json").write_text(text, encoding="utf-8")
+            self.assertIsNone(hfproject.graphic_record(d), text)
+        (d / "graphic.json").write_text('{"template": "graphic_x", "variables": 5}', encoding="utf-8")
+        self.assertEqual(hfproject.graphic_record(d), {"template": "graphic_x", "variables": {}})
+
+    @common.unittest.skipUnless(common.have_ffmpeg(), "needs ffmpeg")
+    def test_a_file_outside_the_video_folder_is_not_copied(self):
+        vdir = make_video(self.tmp, fps="30", landscape=True)
+        (self.tmp / "secret.png").write_bytes(b"secret")
+        index = vdir / "CLAUDE_VE" / "gfx_src" / "lower" / "index.html"
+        text = index.read_text(encoding="utf-8").replace('<div id="card"></div>', '<div id="card"><img src="../../../../secret.png"></div>')
+        index.write_text(text, encoding="utf-8")
+        with self.assertRaises(hfproject.ExportError) as caught:
+            hfproject.export(vdir, log=self.log.append)
+        self.assertIn("Rule 10", str(caught.exception))
+        self.assertIn("secret.png", str(caught.exception))
+        self.assertFalse(list((vdir / "output").rglob("secret.png")))
+        self.assertTrue([w for w in self.log if "secret.png" in w])
+
+    @common.unittest.skipUnless(common.have_ffmpeg(), "needs ffmpeg")
     def test_writing_twice_gives_the_same_project_and_no_leftovers(self):
         vdir, out = self.export(fps="30", landscape=True)
         first = (out / "index.html").read_text(encoding="utf-8")
@@ -427,6 +593,79 @@ class CheckProjectTest(common.Case):
                 'data-vidai-label="G" style="z-index:1"></div>')
         problems = hfproject.check_project(self.project(self.video() + host))
         self.assertTrue(any(p.startswith("Rule 8") for p in problems), problems)
+
+
+    # -- the compositions folder (rule 10) and the full-screen graphics
+
+    GRAPHIC = ('<div id="g-1" class="clip" data-composition-id="g-1" data-composition-src="compositions/g-1.html" '
+               'data-start="1" data-duration="2" data-track-index="1" data-vidai-kind="%s" '
+               'data-vidai-label="G" style="z-index:1"></div>')
+
+    def composition(self, inner, css="", kind="graphic", attrs="", root_css=""):
+        host = self.GRAPHIC % kind
+        if kind == "overlay":
+            host = host.replace('data-track-index="1"', 'data-track-index="2"').replace("z-index:1", "z-index:2")
+        out = self.project(self.video() + host)
+        (out / "compositions").mkdir()
+        text = ("<!doctype html><html><head></head><body><template>"
+                f"<style>#g-1-root {{ position: absolute; inset: 0; overflow: hidden; {root_css} }}\n{css}</style>"
+                f'<div id="g-1-root" data-composition-id="g-1" data-width="1920" data-height="1080"{attrs}>{inner}</div>'
+                "<script>window.__timelines = window.__timelines || {};</script></template></body></html>")
+        (out / "compositions" / "g-1.html").write_text(text, encoding="utf-8")
+        return out
+
+    def test_a_full_screen_graphic_with_a_background_passes(self):
+        self.assertEqual(hfproject.check_project(self.composition("<h1>Hi</h1>", root_css="background: #0b1020;")), [])
+        self.assertEqual(hfproject.check_project(
+            self.composition("<h1>Hi</h1>", root_css="background: linear-gradient(#000, #223);")), [])
+        self.assertEqual(hfproject.check_project(self.composition("<h1>Hi</h1>", attrs=' style="background-color:#000"')), [])
+        full = '<div id="g-1-bg"><h1>Hi</h1></div>'
+        for css in ("#g-1-bg { position: absolute; inset: 0; background: #0b1020; }",
+                    "#g-1-bg { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: #0b1020; }",
+                    "#g-1-bg { width: 100%; height: 100%; background-image: url(assets/media/v.mp4); }",
+                    "#g-1-bg { width: 1920px; height: 1080px; background: #0b1020; }"):
+            self.assertEqual(hfproject.check_project(self.composition(full, css)), [], css)
+
+    def test_a_full_screen_graphic_without_a_background_is_an_error(self):
+        full = '<div id="g-1-bg"><h1>Hi</h1></div>'
+        cases = {
+            "nothing": self.composition("<h1>Hi</h1>"),
+            "transparent": self.composition("<h1>Hi</h1>", root_css="background: transparent;"),
+            "alpha zero": self.composition("<h1>Hi</h1>", root_css="background: rgba(0,0,0,0);"),
+            "small child": self.composition(full, "#g-1-bg { width: 300px; height: 100px; background: #000; }"),
+            "child without paint": self.composition(full, "#g-1-bg { position: absolute; inset: 0; }"),
+        }
+        for name, out in cases.items():
+            problems = hfproject.check_project(out)
+            self.assertEqual(len(problems), 1, (name, problems))
+            self.assertTrue(problems[0].startswith("Rule 12") and "g-1" in problems[0] and "background" in problems[0], problems)
+
+    def test_an_overlay_may_be_transparent(self):
+        self.assertEqual(hfproject.check_project(self.composition("<h1>Hi</h1>", kind="overlay")), [])
+
+    def test_the_compositions_are_scanned_for_paths_that_leave_the_project(self):
+        refs = {
+            "dotdot": '<img src="../x.png">',
+            "deep dotdot": '<img src="assets/../../x.png">',
+            "backslash": '<img src="assets\\gfx\\x.png">',
+            "drive": '<img src="C:/pics/x.png">',
+            "drive backslash": '<img src="C:\\pics\\x.png">',
+            "file url": '<img src="file:///Users/me/x.png">',
+            "absolute": '<img src="/Users/me/x.png">',
+            "network": '<img src="https://x.test/x.png">',
+            "css url": '<div style="background:url(../x.png)"></div>',
+            "css rule": '<style>#a { background: url("C:\\x.png"); }</style>',
+            "missing": '<img src="assets/gfx/g-1/nope.png">',
+        }
+        for name, inner in refs.items():
+            out = self.composition(inner, root_css="background: #000;")
+            problems = hfproject.check_project(out)
+            self.assertTrue(any(p.startswith("Rule 10") and "compositions/g-1.html" in p for p in problems), (name, problems))
+
+    def test_good_references_in_a_composition_pass(self):
+        out = self.composition('<img src="assets/media/v.mp4"><img src="data:image/png;base64,AAAA"><svg><use href="#a"/></svg>',
+                               "#a { fill: url(#grad); background: url('assets/media/v.mp4'); }", root_css="background: #000;")
+        self.assertEqual(hfproject.check_project(out), [])
 
 
 class HelpersTest(common.Case):

@@ -79,6 +79,14 @@ export function trackName(index: number): string {
   return TRACK_NAMES[index] ?? `Sound ${index - 9}`;
 }
 
+/** Sorts track numbers as the server lists them (model.js): 4, 3, 2, 1, 0 (top layer first), then 10, 11 and up. */
+export const byDisplayOrder = (a: number, b: number): number =>
+  (a >= 10 ? a : -a) - (b >= 10 ? b : -b);
+
+/** The end of the A-roll (track 0) in frames, wherever that track sits in the list. */
+export const arollEnd = (tracks: TimelineTrack[]): number =>
+  Math.max(0, ...(tracks.find((t) => t.index === 0)?.clips ?? []).map((x) => x.start + x.duration));
+
 // ---- ripple (server/src/timeline/ripple.js) ----
 
 export const startAfterRemoval = (pos: number, cut: number, length: number): number =>
@@ -422,7 +430,7 @@ export function applyOp(timeline: Timeline, rawOp: unknown, errors: MockErrors):
         .map((w) => w.clip),
     }))
     .filter((t) => t.index < 10 || t.clips.length > 0);
-  const duration = Math.max(0, ...(tracks[0]?.clips ?? []).map((x) => x.start + x.duration));
+  const duration = arollEnd(tracks);
   return { tracks, duration, label: `${verb} ${kindNoun(c.kind)}` };
 }
 

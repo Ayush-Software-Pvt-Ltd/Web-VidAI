@@ -14,6 +14,7 @@ import { returnFocus } from "@/components/ui/focusReturn";
 import { Row, useAction } from "@/features/settings";
 import { useApi, useAppState, useAppStoreApi } from "@/lib/appEnv";
 import type { ApiModel, ApiOption } from "@/lib/types";
+import { toLayoutPx } from "@/lib/zoom";
 import { ModelListPopup } from "./ModelListPopup";
 import { roomBelow } from "./modelListPlacement";
 import { fetchProblem } from "./model";
@@ -90,7 +91,7 @@ export function ApiModelField({
         if (rowRef.current) {
           // Scrolls the field up first, so the list opens below it and covers nothing above.
           setMaxHeight(roomBelow(rowRef.current));
-          setWidth(rowRef.current.getBoundingClientRect().width);
+          setWidth(toLayoutPx(rowRef.current.getBoundingClientRect().width, rowRef.current));
         }
         setOpen(true);
       } else {

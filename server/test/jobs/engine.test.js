@@ -132,6 +132,18 @@ describe("engine with the fake Claude Code", () => {
     assert.equal(all[1]?.sid, paused.sessionId);
   });
 
+  it("a pause that cuts a running step reads as stopped, not as an error", async (t) => {
+    const w = engineWorld(t, edit("slow"));
+    const first = w.run();
+    await waitFor(() => w.texts().includes("Bash: Long step"), "the long step");
+    first.pause();
+    assert.equal((await first.done).state, "paused");
+    const cut = w.entries.find((e) => e.kind === "toolResult");
+    assert.equal(cut?.text, "Stopped by the pause");
+    assert.match(cut?.detail ?? "", /^\[1\/124\] {4}8\.19- {2}10\.87 Hello there\n\[2\/124\]/);
+    assert.ok(w.texts().every((x) => !x.startsWith("Error")));
+  });
+
   it("stop ends the whole process tree", async (t) => {
     const w = engineWorld(t, edit("tree"));
     const handle = w.run();
@@ -387,5 +399,44 @@ describe("engine with the fake OpenCode 2", () => {
     assert.ok(w.outputFiles().some((f) => f.endsWith(".fcpxml")));
     assert.equal(fs.existsSync(jobDir), false, "the job folder is removed");
     assert.deepEqual(w.registry.entries(), []);
+  });
+
+  it("a pause that cuts a running step reads as stopped, not as an error", async (t) => {
+    const w = engineWorld(t, { FAKE_SCENARIO: "hold" });
+    const jobDir = path.join(w.root, "data", "opencode", "job-1");
+    const handle = w.run({
+      job: {
+        id: "job-1",
+        kind: "edit",
+        videoId: "video-1",
+        videoDir: w.video,
+        sessionId: null,
+        setup: "opencodeGo",
+      },
+      agent: {
+        harness: "opencode2",
+        command: FAKE_OPENCODE,
+        cwd: w.editing,
+        env: { PATH: process.env["PATH"], FAKE_STATE: w.state, FAKE_SCENARIO: "hold" },
+        model: "glm-5.3",
+        effort: null,
+        jobDir,
+        option: "opencodeGo",
+        key: "sk-test-0123456789abcdef-not-a-real-key",
+        timings: { startTimeoutMs: 20_000 },
+      },
+    });
+    await waitFor(() => w.has("started.Video A"), "the held command");
+    handle.pause();
+    assert.equal((await handle.done).state, "paused");
+    const results = w.entries.filter((e) => e.kind === "toolResult");
+    const cut = results.at(-1);
+    assert.equal(cut?.text, "Stopped by the pause");
+    assert.match(cut?.detail ?? "", /\[1\/124\] {4}8\.19- {2}10\.87 Hello there/);
+    assert.match(cut?.detail ?? "", /Tool execution interrupted/);
+    assert.ok(
+      w.texts().every((x) => !x.startsWith("Error")),
+      w.texts().join("|"),
+    );
   });
 });

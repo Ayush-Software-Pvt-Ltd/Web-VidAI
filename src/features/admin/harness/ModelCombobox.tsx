@@ -13,6 +13,7 @@ import { fieldBase } from "@/components/ui/Input";
 import { cn } from "@/lib/cn";
 import { useAppState } from "@/lib/appEnv";
 import type { ApiModel, ApiOption } from "@/lib/types";
+import { toLayoutPx } from "@/lib/zoom";
 import { ModelListPopup } from "./ModelListPopup";
 import { roomBelow } from "./modelListPlacement";
 
@@ -71,7 +72,9 @@ export function ModelCombobox({
           if (next && triggerRef.current) {
             // Scrolls the field up first, so the list opens below it and covers nothing above.
             setMaxHeight(roomBelow(triggerRef.current));
-            setTriggerWidth(triggerRef.current.getBoundingClientRect().width);
+            setTriggerWidth(
+              toLayoutPx(triggerRef.current.getBoundingClientRect().width, triggerRef.current),
+            );
           }
         }}
       >

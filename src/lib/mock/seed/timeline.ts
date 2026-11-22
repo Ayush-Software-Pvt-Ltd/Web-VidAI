@@ -11,6 +11,8 @@ import {
   NOTE_STOPPED,
   NO_COPIES,
   applyOp,
+  arollEnd,
+  byDisplayOrder,
   saveRevision,
   trackName,
   type TimelineSim,
@@ -83,15 +85,12 @@ function project(
   size: { width: number; height: number },
 ): Pick<Timeline, "fps" | "width" | "height" | "duration" | "tracks"> {
   const indexes = new Set([0, 1, 2, 3, 4, ...clips.map((x) => x.track)]);
-  const tracks = [...indexes]
-    .sort((a, b) => a - b)
-    .map((index) => ({
-      index,
-      name: trackName(index),
-      clips: clips.filter((x) => x.track === index).sort((a, b) => a.start - b.start),
-    }));
-  const duration = Math.max(0, ...(tracks[0]?.clips ?? []).map((x) => x.start + x.duration));
-  return { fps: FPS, ...size, duration, tracks };
+  const tracks = [...indexes].sort(byDisplayOrder).map((index) => ({
+    index,
+    name: trackName(index),
+    clips: clips.filter((x) => x.track === index).sort((a, b) => a.start - b.start),
+  }));
+  return { fps: FPS, ...size, duration: arollEnd(tracks), tracks };
 }
 
 /** Four A-roll clips from two sources, B-roll (one with motion), graphics, an overlay, a hit, sound. */

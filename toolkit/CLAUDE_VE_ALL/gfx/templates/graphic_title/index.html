@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" data-resolution="@RES@" data-composition-variables='@DECLARED@'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=@W@, height=@H@" />
+    <script src="shared/js/gsap.min.js"></script>
+    <style>
+/*@KIT_CSS*/
+      #root .safe { align-items: stretch; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="@DURATION@" data-width="@W@" data-height="@H@">
+      <div id="safe" class="safe">
+        <div id="kicker" class="kicker"></div>
+        <div id="title" class="title"></div>
+        <div id="bar" class="bar"></div>
+        <div id="sub" class="sub"></div>
+      </div>
+    </div>
+    <script>
+/*@KIT_JS*/
+      const D = @DURATION@;
+      const DEF = @DEFAULTS@;
+      const v = K.vars(DEF);
+      K.ready(v).then(function () {
+        const root = document.getElementById("root");
+        const tl = gsap.timeline({ paused: true });
+        const S = K.setup(root, v);
+        K.bg(root, tl, D, S, 1);
+        const safe = document.getElementById("safe");
+        const box = K.place(safe, S);
+        const kicker = document.getElementById("kicker"), title = document.getElementById("title");
+        const bar = document.getElementById("bar"), sub = document.getElementById("sub");
+        const u = S.u, ta = S.center ? "center" : "left";
+        [kicker, title, sub].forEach(function (e) { e.style.textAlign = ta; });
+        const ox = S.center ? "50% 50%" : "0% 50%";
+        const hasK = !!v.kicker.trim(), hasS = !!v.subtitle.trim();
+        K.txt(kicker, v.kicker);
+        K.txt(sub, v.subtitle);
+        kicker.style.color = S.accent;
+        sub.style.color = S.muted;
+        title.style.color = S.text;
+        kicker.style.display = hasK ? "block" : "none";
+        sub.style.display = hasS ? "block" : "none";
+        if (hasK) { K.fit(kicker, box.w, 110 * u, 46 * u, 24 * u); kicker.style.marginBottom = 26 * u + "px"; }
+        bar.style.width = 150 * u + "px"; bar.style.height = 10 * u + "px";
+        bar.style.background = S.accent;
+        bar.style.margin = 40 * u + "px " + (S.center ? "auto" : "0") + " " + 36 * u + "px";
+        const ws = K.words(title, v.title, true, S.accent);
+        K.fit(title, box.w, box.h * 0.5, (S.port ? 168 : 206) * u, 38 * u);
+        K.wrapMode(title);
+        if (hasS) { K.fit(sub, box.w * 0.92, box.h * 0.2, (S.port ? 56 : 62) * u, 24 * u); K.wrapMode(sub); }
+        else bar.style.marginBottom = "0";
+        if (hasS && S.center) sub.style.alignSelf = "center";
+        tl.fromTo(kicker, { x: -50 * u, opacity: 0 }, { x: 0, opacity: 1, duration: 0.55, ease: "power4.out" }, 0.04);
+        tl.fromTo(ws, { y: 55 * u, opacity: 0, rotation: 3 }, { y: 0, opacity: 1, rotation: 0, duration: 0.75, ease: "power4.out", stagger: 0.09 }, 0.12);
+        tl.fromTo(bar, { scaleX: 0, transformOrigin: ox }, { scaleX: 1, duration: 0.7, ease: "power4.out" }, 0.5);
+        tl.fromTo(bar, { scaleX: 1 }, { scaleX: 2.2, duration: D - 1.2, ease: "sine.inOut", immediateRender: false }, 1.2);
+        tl.fromTo(sub, { y: 36 * u, opacity: 0 }, { y: 0, opacity: 1, duration: 0.65, ease: "power4.out" }, 0.62);
+        K.drift(tl, safe, D, S, { scale: 1.03, x: S.center ? 0 : -16, y: -10 });
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>

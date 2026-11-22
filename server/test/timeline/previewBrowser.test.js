@@ -38,6 +38,8 @@ async function launchChromium() {
 const CLIPS = 12;
 const CUT = 0.5;
 const FPS = 25;
+/** How long a browser condition may take on a busy machine; the test itself needs about 2 seconds. */
+const SETTLE_MS = 30_000;
 
 /** A 6 second clip, 99 kB: a key frame every second, sound on. */
 /** @param {string} file */
@@ -171,7 +173,7 @@ function listen(text) {
   );
 }
 
-test("the preview in Chromium", { skip, timeout: 60_000 }, async (t) => {
+test("the preview in Chromium", { skip, timeout: 120_000 }, async (t) => {
   const project = makePreviewProject("vidai-preview-browser-");
   const other = /** @type {{ hits: string[], origin: string, close(): Promise<void> }} */ (
     await listen("other")
@@ -273,7 +275,7 @@ test("the preview in Chromium", { skip, timeout: 60_000 }, async (t) => {
         );
       },
       { before, until },
-      { timeout: 15_000 },
+      { timeout: SETTLE_MS },
     );
     return /** @type {any} */ (await handle.jsonValue());
   };
@@ -295,7 +297,7 @@ test("the preview in Chromium", { skip, timeout: 60_000 }, async (t) => {
         return ["ready", "timeline", "state", "assets-ready"].every((type) => types.has(type));
       },
       undefined,
-      { timeout: 20_000 },
+      { timeout: SETTLE_MS },
     );
 
     await t.test("1. the player element loads the project into the sandboxed frame", async () => {
@@ -402,6 +404,23 @@ test("the preview in Chromium", { skip, timeout: 60_000 }, async (t) => {
     await t.test("4. lazy media mode", async () => {
       const base = `/p/${token}/assets/media/aroll.mp4`;
       const frame = frameOf();
+      // The runtime moves clips between "preload none" and "auto" a little after the playhead moves
+      // (test 2 ended with a seek to 0), so wait for it to settle instead of reading the page once.
+      await frame.waitForFunction(
+        (clips) => {
+          const { document } = /** @type {any} */ (globalThis);
+          const preloads = [...document.querySelectorAll("video")].map(
+            (/** @type {any} */ v) => v.preload,
+          );
+          return (
+            preloads.length === clips &&
+            preloads.filter((v) => v === "auto").length <= 3 &&
+            preloads.filter((v) => v === "none").length >= clips / 2
+          );
+        },
+        CLIPS,
+        { timeout: SETTLE_MS },
+      );
       const inside = await frame.evaluate(() => {
         const { name, document } = /** @type {any} */ (globalThis);
         return {
@@ -421,10 +440,11 @@ test("the preview in Chromium", { skip, timeout: 60_000 }, async (t) => {
         "only clips near the playhead preload",
       );
       assert.ok(inside.preloads.filter((v) => v === "none").length >= CLIPS / 2, "the others wait");
-      assert.ok(
-        responses.filter((r) => r.url === base).length <= 4,
-        "few media requests for twelve clips",
-      );
+      // The browser may open a new range request for a clip when the playhead moves or the machine
+      // is slow (one to three were seen when idle), so the count is bounded by what the control below
+      // measures without the player element: every clip, at least CLIPS / 2.
+      const lazyRequests = responses.filter((r) => r.url === base).length;
+      assert.ok(lazyRequests < CLIPS / 2, `few media requests for twelve clips (${lazyRequests})`);
 
       // Control: the same project as a page of its own is not in the player's frame, so the runtime
       // loads every clip at once (with several hundred cuts: gigabytes of memory).
@@ -444,7 +464,7 @@ test("the preview in Chromium", { skip, timeout: 60_000 }, async (t) => {
           );
         },
         CLIPS,
-        { timeout: 15_000 },
+        { timeout: SETTLE_MS },
       );
       assert.equal(await tab.evaluate(() => /** @type {any} */ (globalThis).name), "");
       assert.ok(
@@ -467,7 +487,7 @@ test("the preview in Chromium", { skip, timeout: 60_000 }, async (t) => {
             .slice(before)
             .some((m) => m.type === "state" && m.isPlaying && m.currentTime > 1.2),
         before,
-        { timeout: 15_000 },
+        { timeout: SETTLE_MS },
       );
       await page.evaluate(() => /** @type {any} */ (globalThis).__player.pause());
       await page.waitForFunction(

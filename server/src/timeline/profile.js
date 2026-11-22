@@ -46,8 +46,10 @@ import { describeClip, nodeAttr, parseHtml, parseProject, walkElements } from ".
 import { collectReferences, pathProblem } from "./profilePaths.js";
 import { validateEditJson } from "./profileEditJson.js";
 import { compositionFileProblem } from "./profileComposition.js";
+import { arollSources, innerOfHost } from "./editInner.js";
 import { motionFrames, motionOfHost } from "./editMotion.js";
-import { listHtmlFiles, readInside } from "./profileDisk.js";
+import { listHtmlFiles, readInside, referenceExists } from "./profileDisk.js";
+import { hidesTheVideo } from "./profileOpaque.js";
 import { isRootScript } from "./rootScript.js";
 import {
   MAX_DECIMALS,
@@ -55,6 +57,7 @@ import {
   framesToSeconds,
   framesToSecondsText,
   sameFps,
+  sourceLengthFrames,
 } from "./frames.js";
 
 export { validateEditJson } from "./profileEditJson.js";
@@ -125,18 +128,7 @@ export function kindNoun(kind) {
   return Object.hasOwn(nouns, kind) ? nouns[/** @type {keyof typeof nouns} */ (kind)] : "clip";
 }
 
-/**
- * The length of a source in project frames (fractional when the rates differ).
- * @param {SourceFact} source
- * @param {Fps} projectFps
- * @returns {number}
- */
-export function sourceLengthFrames(source, projectFps) {
-  return (
-    Number(BigInt(source.frames) * BigInt(projectFps.num) * BigInt(source.fps.den)) /
-    Number(BigInt(projectFps.den) * BigInt(source.fps.num))
-  );
-}
+export { sourceLengthFrames };
 
 /**
  * Declarations of a `style` attribute as a map of lower-case property to value (the last one wins).
@@ -184,7 +176,7 @@ function secs(frames, fps) {
 const HOST_ID = /^[A-Za-z0-9_-]+$/;
 
 /**
- * Checks `index.html` against rules 1 to 10 (rule 11 cannot be checked here). Pure: it reads nothing
+ * Checks `index.html` against rules 1 to 10 and 12 (rule 11 cannot be checked here). Pure: it reads nothing
  * from disk, so a motion graphic's file is checked by `checkProject`.
  * @param {ParsedProject} parsed
  * @param {EditFacts | null} facts What `edit.json` says; null skips the checks that need it.
@@ -192,7 +184,7 @@ const HOST_ID = /^[A-Za-z0-9_-]+$/;
  */
 export function checkDocument(parsed, facts) {
   /** @type {ProjectViolation[][]} */
-  const byRule = Array.from({ length: 12 }, () => []);
+  const byRule = Array.from({ length: 13 }, () => []);
   /** @param {number} rule @param {string | null} elementId @param {string} message */
   const add = (rule, elementId, message) => void byRule[rule]?.push({ rule, elementId, message });
 
@@ -571,6 +563,33 @@ export function checkDocument(parsed, facts) {
     }
   }
 
+  // ---- Rule 7 for the media inside any other host's file (a synced B-roll layout: screen and host
+  // circle): the in-point plus the host's length stays inside the source (editInner.js says which count; a piece of a medium that follows the A-roll counts for the part it plays).
+  if (fps && facts?.compositions) {
+    const sources = arollSources(parsed.clips);
+    for (const clip of parsed.clips) {
+      if (!clip.isHost || clip.id === null || clip.duration === null) continue;
+      if (motionOfHost(facts, clip.id)) continue;
+      const inner = innerOfHost(facts, clip.id, sources);
+      if (!inner) continue;
+      const who = named(clip);
+      const file = `compositions/${clip.id}.html`;
+      for (const m of inner.media) {
+        // A piece of a medium that follows the A-roll plays only part of the host.
+        const used = m.sync ? Math.min(m.duration, clip.duration - m.start) : clip.duration;
+        const out = m.mediaStart + used * m.rate;
+        if (out > m.sourceLength + MEDIA_TOLERANCE) {
+          const source = facts.sourcesByPath.get(m.src);
+          add(
+            7,
+            clip.id,
+            `${who} plays ${source?.name ?? m.src} from ${secs(m.mediaStart, fps)} to ${secs(out, fps)} (see ${file}), but the file is only ${secs(m.sourceLength, fps)} long.`,
+          );
+        }
+      }
+    }
+  }
+
   // ---- Rule 9: scripts and references between clips
   let rootScripts = 0;
   for (const script of parsed.scripts) {
@@ -641,6 +660,20 @@ export function checkDocument(parsed, facts) {
       ref.elementId || null,
       `${who} refers to "${ref.value}" in its ${ref.where}, which ${problem}; every file reference must be a relative path inside the project.`,
     );
+  }
+
+  // ---- Rule 12: a full-screen graphic hides the video under it
+  if (root?.width && root.height && facts?.compositions) {
+    for (const clip of parsed.clips) {
+      if (!clip.isHost || clip.id === null || clip.kind !== "graphic") continue;
+      const text = facts.compositions.get(clip.id);
+      if (text === undefined || hidesTheVideo(text, clip.id, root.width, root.height)) continue;
+      add(
+        12,
+        clip.id,
+        `The full-screen graphic "${clip.id}" has no opaque background over the whole frame, so the video shows through it; give its page a background color or image.`,
+      );
+    }
   }
 
   // Rule 11 (the agent never renders a video file of the edit) is not a property of the project's
@@ -764,15 +797,42 @@ export async function loadProject(projectDir) {
       });
   }
 
+  // Rule 10, files that are not there: index.html's references (a host's file is rule 8's) ...
+  for (const ref of collectReferences(parsed.tree)) {
+    if (ref.where === "data-composition-src" || !namesAFile(ref.value, false)) continue;
+    if (await referenceExists(projectReal, ref.value)) continue;
+    const clip = ref.elementId ? parsed.clips.find((c) => c.id === ref.elementId) : undefined;
+    const who = clip
+      ? describeClip(clip)
+      : ref.elementId
+        ? `The <${ref.tag}> element "${ref.elementId}"`
+        : `A <${ref.tag}> element`;
+    violations.push({
+      rule: 10,
+      elementId: ref.elementId || null,
+      message: `${who} refers to "${ref.value}" in its ${ref.where}, which is not in the project; every file reference must name a file of the project.`,
+    });
+  }
+
+  // ... and every composition file's references, wherever they lead.
   for (const file of await listHtmlFiles(projectReal, "compositions")) {
     const read = await readInside(projectReal, file);
     if ("problem" in read) continue;
     for (const ref of collectReferences(parseHtml(read.text))) {
-      const problem = pathProblem(ref.value);
-      if (problem === null) continue;
       const who = ref.elementId
         ? `the <${ref.tag}> element "${ref.elementId}"`
         : `a <${ref.tag}> element`;
+      const problem = pathProblem(ref.value, { allowData: true });
+      if (problem === null) {
+        if (!namesAFile(ref.value, true) || (await referenceExists(projectReal, ref.value)))
+          continue;
+        violations.push({
+          rule: 10,
+          elementId: null,
+          message: `In ${file}, ${who} refers to "${ref.value}" in its ${ref.where}, which is not in the project; every file reference must name a file of the project.`,
+        });
+        continue;
+      }
       violations.push({
         rule: 10,
         elementId: null,
@@ -785,8 +845,18 @@ export async function loadProject(projectDir) {
 }
 
 /**
+ * @param {string} value A reference that passed `pathProblem`.
+ * @param {boolean} allowData Whether a `data:` URL is a value (composition files) and not a file.
+ * @returns {boolean} Whether it names a file of the project (not a fragment or an inline value).
+ */
+function namesAFile(value, allowData) {
+  const v = value.trim();
+  return v !== "" && !v.startsWith("#") && !(allowData && /^data:/i.test(v));
+}
+
+/**
  * @param {string} projectDir
- * @returns {Promise<ProjectViolation[]>} Every way the project at `projectDir` breaks rules 1 to 10.
+ * @returns {Promise<ProjectViolation[]>} Every way the project at `projectDir` breaks rules 1 to 12.
  */
 export async function checkProject(projectDir) {
   return (await loadProject(projectDir)).violations;

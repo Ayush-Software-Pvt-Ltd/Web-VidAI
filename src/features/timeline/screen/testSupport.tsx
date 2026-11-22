@@ -7,6 +7,7 @@ import { act, screen } from "@testing-library/react";
 import { vi } from "vitest";
 import { Toaster } from "@/components/ui";
 import { recordedApp, type RecordedApp, type RecordedOptions } from "@/features/jobs/recordedApp";
+import { onTestCleanup } from "@/test/cleanup";
 import { TimelineView } from "../TimelineView";
 import type { PlayerBridge, PlayerEvent } from "./playerBridge";
 import { PlayerEnvContext, type PlayerEnv } from "./playerEnv";
@@ -72,29 +73,60 @@ export class FakeBridge implements PlayerBridge {
   }
 }
 
-/** The sizes the page measures: the player area and the tracks viewport (jsdom has no layout). */
+/** A measured element: its layout size in CSS px and where its left edge is (layout px). */
+interface MeasuredSize {
+  width: number;
+  height: number;
+  left?: number;
+}
+
+/**
+ * The sizes the page measures: the player area and the tracks viewport (jsdom has no layout).
+ * `zoom` is a CSS `zoom` on <html> (the app's text size): like Chromium it makes
+ * `getBoundingClientRect` (and so every `clientX`) count in screen px, `zoom` times the layout px
+ * that a `ResizeObserver` reports.
+ */
 export function mockMeasure(
-  sizes: Record<string, { width: number; height: number }> = {
+  sizes: Record<string, MeasuredSize> = {
     area: { width: 800, height: 450 },
     tracks: { width: 600, height: 240 },
     body: { width: 1400, height: 800 },
   },
+  zoom = 1,
 ): void {
+  const sizeOf = (element: Element): MeasuredSize =>
+    sizes[(element as HTMLElement).dataset.measure ?? ""] ?? { width: 0, height: 0 };
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
   ) {
-    const size = sizes[this.dataset.measure ?? ""] ?? { width: 0, height: 0 };
+    const size = sizeOf(this);
+    const left = (size.left ?? 0) * zoom;
+    const width = size.width * zoom;
+    const height = size.height * zoom;
     return {
-      x: 0,
+      x: left,
       y: 0,
-      left: 0,
+      left,
       top: 0,
-      right: size.width,
-      bottom: size.height,
-      ...size,
+      right: left + width,
+      bottom: height,
+      width,
+      height,
       toJSON: () => ({}),
     };
   });
+  class Observer {
+    constructor(private readonly callback: ResizeObserverCallback) {}
+    observe(target: Element) {
+      const { width, height } = sizeOf(target);
+      const entry = { target, contentRect: { width, height } } as unknown as ResizeObserverEntry;
+      this.callback([entry], this);
+    }
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal("ResizeObserver", Observer);
+  onTestCleanup(() => vi.unstubAllGlobals());
 }
 
 export interface TimelineTestOptions extends RecordedOptions {
@@ -103,6 +135,8 @@ export interface TimelineTestOptions extends RecordedOptions {
   rates?: boolean;
   /** The sizes the page measures (see `mockMeasure`); `body` decides side by side or stacked. */
   measure?: Parameters<typeof mockMeasure>[0];
+  /** A CSS `zoom` on the page (see `mockMeasure`). */
+  zoom?: number;
 }
 
 export interface TimelineTest extends RecordedApp {
@@ -114,9 +148,9 @@ export interface TimelineTest extends RecordedApp {
 
 export async function renderTimeline(
   videoId: string,
-  { env, rates = false, measure, ...options }: TimelineTestOptions = {},
+  { env, rates = false, measure, zoom, ...options }: TimelineTestOptions = {},
 ): Promise<TimelineTest> {
-  mockMeasure(measure);
+  mockMeasure(measure, zoom);
   const app = await recordedApp(options);
   const bridges: FakeBridge[] = [];
   const playerEnv: PlayerEnv = {

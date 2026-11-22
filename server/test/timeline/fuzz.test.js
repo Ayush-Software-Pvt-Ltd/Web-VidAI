@@ -88,7 +88,9 @@ function randomOp(random, t) {
 }
 
 test("a few thousand random operations: only invalidInput, the profile holds, ids unique, no A-roll gap", () => {
-  const started = performance.now();
+  // CPU time, not wall-clock time: the suite runs beside other test files and other programs, and a busy
+  // machine stretches the wall-clock time of the same work several times over.
+  const started = process.cpuUsage();
   const stats = { accepted: 0, refused: 0 };
   /** @type {Record<string, number>} */
   const byType = { delete: 0, trim: 0, split: 0, move: 0 };
@@ -145,12 +147,13 @@ test("a few thousand random operations: only invalidInput, the profile holds, id
       assert.match(result.label, /^(Delete|Trim|Split|Move) /);
     }
   }
-  const elapsed = performance.now() - started;
+  const used = process.cpuUsage(started);
+  const elapsed = (used.user + used.system) / 1000;
   assert.ok(stats.accepted + stats.refused >= 2500, JSON.stringify(stats));
   assert.ok(stats.accepted > 600, `enough accepted operations: ${JSON.stringify(stats)}`);
   for (const [type, n] of Object.entries(byType)) assert.ok(n > 50, `${type} accepted ${n} times`);
   assert.ok(
-    elapsed < 2000,
-    `took ${Math.round(elapsed)} ms for ${stats.accepted + stats.refused} operations`,
+    elapsed < 4000,
+    `used ${Math.round(elapsed)} ms of CPU for ${stats.accepted + stats.refused} operations`,
   );
 });

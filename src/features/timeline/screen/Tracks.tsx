@@ -28,6 +28,7 @@ import {
   lastFrame,
   noteFrame,
   noteStatus,
+  pointerX,
   rulerTicks,
   snapCandidates,
   snapFrame,
@@ -66,7 +67,8 @@ interface Drag {
   clip: TimelineClip;
   part: ClipPart;
   row: number;
-  startClientX: number;
+  /** Where the pointer went down, in layout px of the viewport. */
+  startX: number;
   fromRaw: number;
   fromFrame: number;
   moved: boolean;
@@ -145,16 +147,20 @@ export function Tracks({
     () => rulerTicks(view, timeline.fps, timeline.duration, width),
     [view, timeline.fps, timeline.duration, width],
   );
-  const latest = useRef({ timeline, view, gate, onEdit });
+  const latest = useRef({ timeline, view, gate, onEdit, width });
   useLayoutEffect(() => {
-    latest.current = { timeline, view, gate, onEdit };
+    latest.current = { timeline, view, gate, onEdit, width };
   });
 
   const setNode = (next: HTMLDivElement | null) => {
     node.current = next;
     viewportRef(next);
   };
-  const localX = (clientX: number) => clientX - (node.current?.getBoundingClientRect().left ?? 0);
+  // The pointer in layout px of the viewport; the page may be zoomed (see `pointerX`).
+  const localX = (clientX: number) => {
+    const rect = node.current?.getBoundingClientRect();
+    return rect ? pointerX(clientX, rect, latest.current.width) : clientX;
+  };
   const maxFrame = lastFrame(timeline.duration);
 
   // Ctrl or Cmd with the wheel zooms around the pointer (a pinch arrives the same way); the wheel
@@ -166,7 +172,10 @@ export function Tracks({
       event.preventDefault();
       if (event.ctrlKey || event.metaKey) {
         const steps = Math.max(-1, Math.min(1, -event.deltaY / 100));
-        control.zoom(steps, event.clientX - element.getBoundingClientRect().left);
+        control.zoom(
+          steps,
+          pointerX(event.clientX, element.getBoundingClientRect(), latest.current.width),
+        );
       } else {
         control.scrollBy(event.deltaX + event.deltaY);
       }
@@ -236,9 +245,10 @@ export function Tracks({
       const d = dragRef.current;
       if (!d) return;
       const { timeline: t, view: v, gate: g } = latest.current;
-      const moved = d.moved || Math.abs(event.clientX - d.startClientX) >= DRAG_START_PX;
+      const x = localX(event.clientX);
+      const moved = d.moved || Math.abs(x - d.startX) >= DRAG_START_PX;
       if (!moved) return;
-      const raw = frameAtX(v, localX(event.clientX));
+      const raw = frameAtX(v, x);
       const candidates = snapCandidates(t, playback.getState().frame, d.clip.id);
       let toFrame = Math.round(raw);
       let snap: SnapCandidate | null = null;
@@ -294,12 +304,13 @@ export function Tracks({
       setHint(allow.reason);
       return;
     }
-    const fromRaw = frameAtX(view, localX(event.clientX));
+    const startX = localX(event.clientX);
+    const fromRaw = frameAtX(view, startX);
     update({
       clip,
       part,
       row: laid.row,
-      startClientX: event.clientX,
+      startX,
       fromRaw,
       fromFrame: Math.round(fromRaw),
       moved: false,
@@ -356,10 +367,13 @@ export function Tracks({
         {timeline.tracks.map((track) => (
           <div
             key={track.index}
-            className="flex items-center truncate border-b border-border px-2 text-xs text-fg-muted"
+            data-testid="track-header"
+            data-track={track.index}
+            className="flex items-center border-b border-border px-2 text-xs text-fg-muted"
             style={{ height: ROW_HEIGHT }}
+            title={track.name}
           >
-            {track.name}
+            <span className="min-w-0 truncate">{track.name}</span>
           </div>
         ))}
       </div>
@@ -427,6 +441,8 @@ export function Tracks({
           {layout.tracks.map((row) => (
             <div
               key={row.track.index}
+              data-testid="track-lane"
+              data-track={row.track.index}
               className="absolute right-0 left-0 border-b border-border"
               style={{ top: row.y, height: ROW_HEIGHT }}
             >

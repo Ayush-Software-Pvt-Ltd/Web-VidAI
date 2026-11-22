@@ -93,7 +93,7 @@ describe("mock timeline area: openTimeline", () => {
     expect(timeline.canUndo).toBe(true);
     expect(timeline.canRedo).toBe(false);
     expect(timeline.notes).toEqual([]);
-    expect(timeline.tracks.map((t) => t.index)).toEqual([0, 1, 2, 3, 4, 10, 11]);
+    expect(timeline.tracks.map((t) => t.index)).toEqual([4, 3, 2, 1, 0, 10, 11]);
     expect(timeline.duration).toBe(1480);
     const kinds = new Set(timeline.tracks.flatMap((t) => t.clips.map((c) => c.kind)));
     expect([...kinds].sort()).toEqual(

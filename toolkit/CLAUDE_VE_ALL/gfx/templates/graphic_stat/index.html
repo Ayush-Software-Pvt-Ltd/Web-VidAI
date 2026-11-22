@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en" data-resolution="@RES@" data-composition-variables='@DECLARED@'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=@W@, height=@H@" />
+    <script src="shared/js/gsap.min.js"></script>
+    <style>
+/*@KIT_CSS*/
+      #root .safe { align-items: center; text-align: center; }
+      #root .value { font-weight: 800; line-height: 1.12; white-space: nowrap; letter-spacing: -0.01em; }
+      #root .vwrap { position: relative; display: flex; align-items: center; justify-content: center; flex: none; }
+      #root .vwrap svg { position: absolute; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="@DURATION@" data-width="@W@" data-height="@H@">
+      <div id="safe" class="safe">
+        <div id="kicker" class="kicker"></div>
+        <div id="vwrap" class="vwrap"><div id="value" class="value"></div></div>
+        <div id="bar" class="bar"></div>
+        <div id="label" class="title"></div>
+        <div id="note" class="sub"></div>
+      </div>
+    </div>
+    <script>
+/*@KIT_JS*/
+      const D = @DURATION@;
+      const DEF = @DEFAULTS@;
+      const v = K.vars(DEF);
+      K.ready(v).then(function () {
+        const root = document.getElementById("root");
+        const tl = gsap.timeline({ paused: true });
+        const S = K.setup(root, v);
+        K.bg(root, tl, D, S, 2);
+        const safe = document.getElementById("safe");
+        const box = K.place(safe, S);
+        const u = S.u;
+        const kicker = document.getElementById("kicker"), vwrap = document.getElementById("vwrap");
+        const value = document.getElementById("value"), bar = document.getElementById("bar");
+        const label = document.getElementById("label"), note = document.getElementById("note");
+        const hasK = !!v.kicker.trim(), hasN = !!v.note.trim();
+        K.txt(kicker, v.kicker); kicker.style.color = S.accent;
+        kicker.style.display = hasK ? "block" : "none";
+        if (hasK) { K.fit(kicker, box.w, 110 * u, 46 * u, 24 * u); kicker.style.marginBottom = 18 * u + "px"; }
+        const cnt = v.count !== "off" ? K.counter(v.value) : null;
+        value.textContent = v.value;
+        value.style.color = S.text;
+        const vh = box.h * 0.36;
+        const vs = K.fit(value, box.w * 0.86, vh, (S.port ? 330 : 400) * u, 70 * u);
+        vwrap.style.width = box.w + "px";
+        vwrap.style.height = Math.round(Math.min(vh, vs * 1.3)) + "px";
+        bar.style.width = 150 * u + "px"; bar.style.height = 10 * u + "px"; bar.style.background = S.accent;
+        bar.style.margin = 30 * u + "px 0 " + 34 * u + "px";
+        K.txt(label, v.label); label.style.color = S.text; label.style.textAlign = "center";
+        K.fit(label, box.w, box.h * 0.22, (S.port ? 76 : 84) * u, 28 * u); K.wrapMode(label);
+        K.txt(note, v.note); note.style.color = S.muted; note.style.textAlign = "center";
+        note.style.display = hasN ? "block" : "none";
+        if (hasN) { K.fit(note, box.w * 0.9, box.h * 0.1, 52 * u, 26 * u); K.wrapMode(note); note.style.marginTop = 18 * u + "px"; }
+        // The ring is a backdrop: wide enough that its stroke passes outside every line of text.
+        const shown = [kicker, vwrap, bar, label, note].filter(function (e) { return e.style.display !== "none"; });
+        const hh = (shown[shown.length - 1].offsetTop + shown[shown.length - 1].offsetHeight - shown[0].offsetTop) / 2;
+        const hw = Math.max(K.lineWidth(value), K.lineWidth(label), hasN ? K.lineWidth(note) : 0, hasK ? K.lineWidth(kicker) : 0) / 2;
+        const R = Math.round(Math.max(Math.min(S.sw * 0.9, S.sh * 0.9), 2 * (Math.hypot(hw, hh) + 70 * u)));
+        const rg = K.ring(root, R, K.rgba(S.accent, 0.5), 8 * u, 0.22, K.rgba(S.text, 0.07));
+        rg.svg.style.position = "absolute";
+        rg.svg.style.left = Math.round(S.x + (S.sw - R) / 2) + "px";
+        rg.svg.style.top = Math.round(S.y + (S.sh - R) / 2) + "px";
+        rg.svg.setAttribute("data-layout-allow-overflow", "");
+        root.insertBefore(rg.svg, safe);
+        tl.fromTo(kicker, { y: -30 * u, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, ease: "power4.out" }, 0.04);
+        tl.fromTo(value, { scale: 0.7, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "back.out(1.5)" }, 0.1);
+        tl.fromTo(rg.svg, { scale: 0.85, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, ease: "power4.out" }, 0.1);
+        tl.fromTo(rg.svg, { rotation: -90 }, { rotation: -90 + 36 * D, duration: D, ease: "none", immediateRender: false }, 0);
+        if (cnt) {
+          const o = { n: 0 };
+          value.textContent = cnt.fmt(0);
+          tl.to(o, { n: cnt.target, duration: Math.min(2.2, D * 0.45), ease: "power3.out",
+            onUpdate: function () { value.textContent = cnt.fmt(o.n); } }, 0.25);
+        }
+        tl.fromTo(bar, { scaleX: 0 }, { scaleX: 1, duration: 0.7, ease: "power4.out" }, 0.55);
+        tl.fromTo(bar, { scaleX: 1 }, { scaleX: 2.4, duration: D - 1.25, ease: "sine.inOut", immediateRender: false }, 1.25);
+        tl.fromTo(label, { y: 40 * u, opacity: 0 }, { y: 0, opacity: 1, duration: 0.65, ease: "power4.out" }, 0.7);
+        tl.fromTo(note, { y: 24 * u, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power4.out" }, 0.95);
+        K.drift(tl, safe, D, S, { scale: 1.035, y: -8 });
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>

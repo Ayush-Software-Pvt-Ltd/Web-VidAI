@@ -1,0 +1,11 @@
+{
+  "summary": "Big number that counts up, with a label (value may carry a prefix or suffix: Rs 12,500+ or 98.5%)",
+  "duration": 5,
+  "variables": [
+    {"id": "value", "type": "text", "required": true, "max": 24, "default": "12,500", "help": "the number as it ends, for example 98.5% or 1,00,000 or 4.8x; the first number in it counts up"},
+    {"id": "label", "type": "text", "required": true, "max": 120, "default": "Happy customers", "help": "what the number is; shrinks to fit"},
+    {"id": "kicker", "type": "text", "max": 50, "default": "", "help": "small line above the number"},
+    {"id": "note", "type": "text", "max": 120, "default": "", "help": "small line under the label (source, period)"},
+    {"id": "count", "type": "enum", "choices": ["on", "off"], "default": "on", "help": "count up from zero or show the number at once"}
+  ]
+}

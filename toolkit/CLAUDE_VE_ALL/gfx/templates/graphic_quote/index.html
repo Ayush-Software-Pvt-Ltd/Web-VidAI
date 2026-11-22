@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en" data-resolution="@RES@" data-composition-variables='@DECLARED@'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=@W@, height=@H@" />
+    <script src="shared/js/gsap.min.js"></script>
+    <style>
+/*@KIT_CSS*/
+      #root .safe { align-items: stretch; }
+      #root .qtext { font-weight: 700; line-height: 1.3; overflow-wrap: normal; }
+      #root .qmark { flex: none; }
+      #root .who { display: flex; align-items: center; flex: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="@DURATION@" data-width="@W@" data-height="@H@">
+      <div id="safe" class="safe">
+        <div id="qmark" class="qmark"></div>
+        <div id="qtext" class="qtext"></div>
+        <div id="who" class="who">
+          <div id="rule" class="bar"></div>
+          <div id="by">
+            <div id="author" class="title"></div>
+            <div id="role" class="sub"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+/*@KIT_JS*/
+      const D = @DURATION@;
+      const DEF = @DEFAULTS@;
+      const v = K.vars(DEF);
+      K.ready(v).then(function () {
+        const root = document.getElementById("root");
+        const tl = gsap.timeline({ paused: true });
+        const S = K.setup(root, v);
+        K.bg(root, tl, D, S, 4);
+        const safe = document.getElementById("safe");
+        const box = K.place(safe, S);
+        const u = S.u;
+        const qmark = document.getElementById("qmark"), qtext = document.getElementById("qtext"), who = document.getElementById("who");
+        const rule = document.getElementById("rule"), author = document.getElementById("author"), role = document.getElementById("role");
+        const hasA = !!v.author.trim(), hasR = !!v.role.trim();
+        const ta = S.center ? "center" : "left";
+        const qs = Math.round((S.port ? 190 : 170) * u);
+        const q = K.svg(qmark, qs, qs * 28 / 27, "0 0 27 28");
+        q.setAttribute("fill", S.accent);
+        q.innerHTML = '<path d="M9.5 6C5.5 8 3 11.5 3 16v6h8v-8H7c0-2.5 1.2-4.5 3.5-6zM22.5 6C18.5 8 16 11.5 16 16v6h8v-8h-4c0-2.5 1.2-4.5 3.5-6z"/>';
+        qmark.style.height = qs * 28 / 27 + "px"; qmark.style.marginBottom = 14 * u + "px";
+        if (S.center) qmark.style.alignSelf = "center";
+        const reserve = (hasA || hasR) ? (hasA ? 90 * u : 0) + (hasR ? 56 * u : 0) + 56 * u + (S.center ? 32 * u : 0) : 0;
+        qtext.style.color = S.text; qtext.style.textAlign = ta;
+        const ws = K.words(qtext, v.quote, false, S.accent);
+        K.fit(qtext, box.w, box.h - qs * 28 / 27 - 14 * u - reserve - 20 * u, (S.port ? 118 : 124) * u, 30 * u);
+        K.wrapMode(qtext);
+        who.style.display = (hasA || hasR) ? "flex" : "none";
+        who.style.marginTop = 44 * u + "px";
+        who.style.flexDirection = S.center ? "column" : "row";
+        who.style.alignItems = S.center ? "center" : "center";
+        rule.style.width = 90 * u + "px"; rule.style.height = 8 * u + "px"; rule.style.background = S.accent;
+        if (S.center) rule.style.marginBottom = 24 * u + "px"; else rule.style.marginRight = 30 * u + "px";
+        K.txt(author, v.author); author.style.color = S.text; author.style.display = hasA ? "block" : "none";
+        K.txt(role, v.role); role.style.color = S.muted; role.style.display = hasR ? "block" : "none";
+        const aw = S.center ? box.w : box.w - 120 * u;
+        if (hasA) K.fit(author, aw, 100 * u, 60 * u, 28 * u);
+        if (hasR) K.fit(role, aw, 76 * u, 48 * u, 24 * u);
+        author.style.textAlign = S.center ? "center" : "left"; role.style.textAlign = author.style.textAlign;
+        const n = ws.length, step = Math.min(0.075, 1.5 / Math.max(1, n));
+        tl.fromTo(qmark, { scale: 0.2, rotation: -25, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: 0.7, ease: "back.out(1.8)" }, 0.04);
+        tl.fromTo(qmark, { y: 0 }, { y: -18 * u, duration: D - 0.5, ease: "sine.inOut", immediateRender: false }, 0.5);
+        tl.fromTo(ws, { y: 34 * u, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power4.out", stagger: step }, 0.3);
+        const end = 0.3 + n * step + 0.4;
+        tl.fromTo(rule, { scaleX: 0, transformOrigin: "0% 50%" }, { scaleX: 1, duration: 0.6, ease: "power4.out" }, end);
+        tl.fromTo([author, role], { x: -40 * u, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: "power4.out", stagger: 0.12 }, end + 0.1);
+        K.drift(tl, safe, D, S, { scale: 1.03, x: S.center ? 0 : -14 });
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>

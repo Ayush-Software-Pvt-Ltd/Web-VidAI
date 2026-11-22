@@ -171,6 +171,10 @@ export function toolDetail(name, input) {
 /**
  * @typedef {object} Describer
  * @property {(event: StreamEvent) => Described} describe
+ * @property {(reason: "pause" | "stop") => void} halting VidAI asked the agent to stop the
+ *   current step (the first reason counts). The tool calls that are still running then end with
+ *   an error result that is only the answer to this request: it reads "Stopped by the pause"
+ *   instead of "Error: ...", with the tool's output in `detail`.
  */
 
 /**
@@ -195,6 +199,12 @@ export function createDescriber({
   let initSeen = false;
   /** Background tasks and sub-agents by task id. @type {Map<string, { desc: string, agent: boolean }>} */
   const tasks = new Map();
+  /** Tool calls that have no result yet, by id. @type {Set<string>} */
+  const open = new Set();
+  /** @type {"pause" | "stop" | null} */
+  let halt = null;
+  /** Tool calls that were still running when VidAI asked the agent to stop. @type {Set<string>} */
+  const cut = new Set();
 
   /**
    * @param {AssistantEvent} message
@@ -220,6 +230,7 @@ export function createDescriber({
           }
         }
       } else if (block.type === "toolUse") {
+        if (halt === null) open.add(block.id);
         const line = toolLine(block.name, block.input, paths, scrub);
         out.entries.push(
           draft("tool", line, { detail: toolDetail(block.name, block.input), nested }),
@@ -240,16 +251,24 @@ export function createDescriber({
         const text = scrub(block.text);
         const shortened = paths.shorten(text);
         const first = firstLine(shortened);
-        const line = block.isError
-          ? first === ""
-            ? "Error"
-            : `Error: ${first}`
-          : first === ""
-            ? "(no output)"
-            : first;
+        open.delete(block.toolUseId);
+        // A step that VidAI itself cut short (the agent was asked to stop) is no failure.
+        const stopped = block.isError && cut.delete(block.toolUseId);
+        const line = stopped
+          ? halt === "stop"
+            ? "Stopped when the job was stopped"
+            : "Stopped by the pause"
+          : block.isError
+            ? first === ""
+              ? "Error"
+              : `Error: ${first}`
+            : first === ""
+              ? "(no output)"
+              : first;
         // The full text goes to `detail` whenever the line does not show all of it.
         const trimmed = text.trim();
         const showsAll =
+          !stopped &&
           trimmed.split(/\r?\n/).length <= 1 &&
           Array.from(trimmed).length <= LINE_CHARS &&
           shortened === text;
@@ -326,6 +345,12 @@ export function createDescriber({
   }
 
   return {
+    halting(reason) {
+      if (halt !== null) return;
+      halt = reason;
+      for (const id of open) cut.add(id);
+      open.clear();
+    },
     describe(event) {
       /** @type {Described} */
       const out = { entries: [], activity: null };

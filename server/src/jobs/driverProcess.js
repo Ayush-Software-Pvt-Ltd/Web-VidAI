@@ -319,6 +319,7 @@ async function pause(d, proc) {
     `Pausing: asking ${d.ctx.agent.harness === "opencode2" ? "OpenCode 2" : "Claude"} to stop the current step`,
   );
   d.ctx.limiter?.resumeAll();
+  proc.describer.halting("pause");
   try {
     proc.interrupting = proc.handle.interrupt();
   } catch {
@@ -350,6 +351,7 @@ async function pause(d, proc) {
 async function stop(d, proc) {
   d.status("Stopping");
   d.ctx.limiter?.resumeAll();
+  proc.describer.halting("stop");
   try {
     proc.interrupting = proc.handle.interrupt();
     const deadline = d.clock.now() + Math.min(d.timings.interruptTimeout, 2000);

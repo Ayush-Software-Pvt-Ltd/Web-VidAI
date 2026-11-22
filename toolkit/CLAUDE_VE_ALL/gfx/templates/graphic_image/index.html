@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" data-resolution="@RES@" data-composition-variables='@DECLARED@'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=@W@, height=@H@" />
+    <script src="shared/js/gsap.min.js"></script>
+    <style>
+/*@KIT_CSS*/
+      #root .safe { align-items: stretch; }
+      #root .layer { position: absolute; overflow: hidden; }
+      #root .layer img, #root .card img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+      #root .card { position: absolute; overflow: hidden; }
+      #root .badge { position: absolute; display: flex; align-items: center; justify-content: center; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="@DURATION@" data-width="@W@" data-height="@H@">
+      <div id="back" class="layer" data-layout-allow-overflow>
+        <img id="backimg" alt="" src="@IMAGE@" />
+      </div>
+      <div id="card" class="card">
+        <img id="photo" alt="" src="@IMAGE@" data-layout-allow-overflow />
+      </div>
+      <div id="shade" class="layer"></div>
+      <div id="safe" class="safe">
+        <div id="kicker" class="kicker"></div>
+        <div id="title" class="title"></div>
+        <div id="bar" class="bar"></div>
+        <div id="sub" class="sub"></div>
+      </div>
+    </div>
+    <script>
+/*@KIT_JS*/
+      const D = @DURATION@;
+      const DEF = @DEFAULTS@;
+      const v = K.vars(DEF);
+      K.ready(v).then(function () {
+        const root = document.getElementById("root");
+        const tl = gsap.timeline({ paused: true });
+        const S = K.setup(root, v);
+        K.bg(root, tl, D, S, 6);
+        const u = S.u;
+        const back = document.getElementById("back"), backimg = document.getElementById("backimg");
+        const card = document.getElementById("card"), photo = document.getElementById("photo"), shade = document.getElementById("shade");
+        const safe = document.getElementById("safe");
+        const kicker = document.getElementById("kicker"), title = document.getElementById("title");
+        const bar = document.getElementById("bar"), sub = document.getElementById("sub");
+        const hasImg = !!photo, full = v.mode === "full" && hasImg;
+        // the bg wrapper was inserted first; keep the picture layers above it
+        let tx, ty, tw, th, cx, cy, cw, ch;
+        if (full) { tx = S.x; tw = S.sw; th = Math.round(S.sh * (S.port ? 0.5 : 0.8)); ty = S.y + S.sh - th; cx = 0; cy = 0; cw = S.W; ch = S.H; if (!S.port) { ty = S.y + Math.round((S.sh - th) / 2); tw = Math.round(S.sw * 0.5); } }
+        else if (S.port) { cw = S.sw; ch = Math.round(S.sh * 0.56); cx = S.x; cy = S.y; tx = S.x; tw = S.sw; ty = cy + ch + 40 * u; th = S.y + S.sh - ty; }
+        else { cw = Math.round(S.sw * 0.5); ch = S.sh; cx = S.x; cy = S.y; tw = Math.round(S.sw * 0.43); tx = S.x + S.sw - tw; ty = S.y; th = S.sh; }
+        const box = K.place(safe, { x: tx, y: ty, sw: tw, sh: th }, 1);
+        const ta = (S.center && S.port && !full) || (S.port && full) ? "center" : "left";
+        [kicker, title, sub].forEach(function (e) { e.style.textAlign = ta; });
+        const hasK = !!v.kicker.trim(), hasS = !!v.subtitle.trim();
+        K.txt(kicker, v.kicker); K.txt(sub, v.subtitle);
+        kicker.style.color = S.accent; sub.style.color = S.muted; title.style.color = S.text;
+        kicker.style.display = hasK ? "block" : "none"; sub.style.display = hasS ? "block" : "none";
+        if (hasK) { K.fit(kicker, box.w, 100 * u, 40 * u, 22 * u); kicker.style.marginBottom = 20 * u + "px"; }
+        bar.style.width = 130 * u + "px"; bar.style.height = 10 * u + "px"; bar.style.background = S.accent;
+        bar.style.margin = 30 * u + "px " + (ta === "center" ? "auto" : "0") + " " + 28 * u + "px";
+        K.words(title, v.caption, false, S.accent);
+        K.fit(title, box.w, box.h * 0.5, (S.port ? 112 : 124) * u, 34 * u);
+        K.wrapMode(title);
+        if (hasS) { K.fit(sub, box.w, box.h * 0.22, 56 * u, 24 * u); K.wrapMode(sub); if (ta === "center") sub.style.alignSelf = "center"; } else { bar.style.marginBottom = "0"; }
+        // picture layers
+        const rad = 34 * u;
+        back.style.cssText += ";left:0;top:0;width:" + S.W + "px;height:" + S.H + "px;display:" + (hasImg ? "block" : "none");
+        card.style.left = cx + "px"; card.style.top = cy + "px"; card.style.width = cw + "px"; card.style.height = ch + "px";
+        if (!full) { card.style.borderRadius = rad + "px"; card.style.boxShadow = "0 " + 30 * u + "px " + 80 * u + "px " + K.rgba("#000000", 0.5) + ", 0 0 0 " + 3 * u + "px " + K.rgba(S.accent, 0.5); }
+        card.style.background = hasImg ? K.rgba("#000000", 0.25) : "transparent";
+        shade.style.cssText += ";left:0;top:0;width:" + S.W + "px;height:" + S.H + "px;display:" + (full ? "block" : "none");
+        if (full) shade.style.background = S.port
+          ? "linear-gradient(0deg," + K.rgba(S.bg1, 0.96) + " 0%," + K.rgba(S.bg1, 0.82) + " 38%," + K.rgba(S.bg1, 0) + " 70%)"
+          : "linear-gradient(90deg," + K.rgba(S.bg1, 0.94) + " 0%," + K.rgba(S.bg1, 0.78) + " 45%," + K.rgba(S.bg1, 0) + " 80%)";
+        if (hasImg) {
+          photo.style.objectFit = full ? "cover" : v.fit; backimg.style.objectFit = "cover";
+          backimg.style.filter = "blur(" + 46 * u + "px) brightness(0.45) saturate(1.3)";
+          back.style.opacity = full ? 0 : 1;
+          if (!full) card.style.background = K.rgba("#ffffff", v.fit === "contain" ? 0.06 : 0);
+        }
+        // the icon badge when there is no picture
+        let badge = null, ringObj = null;
+        if (!hasImg) {
+          const bs = Math.round(Math.min(cw, ch) * 0.62);
+          badge = K.el("div", "badge", root);
+          badge.style.width = badge.style.height = bs + "px";
+          badge.style.left = Math.round(cx + (cw - bs) / 2) + "px"; badge.style.top = Math.round(cy + (ch - bs) / 2) + "px";
+          badge.style.borderRadius = "50%";
+          badge.style.background = "linear-gradient(145deg," + K.rgba(S.accent, 0.28) + "," + K.rgba(S.accent2, 0.18) + ")";
+          badge.style.border = 4 * u + "px solid " + K.rgba(S.accent, 0.6);
+          const sym = String(v.icon || "star");
+          if (K.ICONS[sym]) K.icon(badge, sym, bs * 0.5, S.accent, 1.5);
+          else { const t = K.el("div", "", badge); t.textContent = sym; t.style.fontSize = bs * 0.42 + "px"; t.style.fontWeight = "800"; t.style.color = S.accent; t.style.lineHeight = "1.2"; }
+          ringObj = K.ring(root, bs + 56 * u, S.accent2, 8 * u, 0.22, K.rgba(S.text, 0.1));
+          ringObj.svg.style.position = "absolute"; ringObj.svg.style.left = parseFloat(badge.style.left) - 28 * u + "px"; ringObj.svg.style.top = parseFloat(badge.style.top) - 28 * u + "px";
+          root.insertBefore(badge, shade); root.insertBefore(ringObj.svg, badge);
+        }
+        tl.fromTo(kicker, { x: -50 * u, opacity: 0 }, { x: 0, opacity: 1, duration: 0.55, ease: "power4.out" }, 0.1);
+        tl.fromTo(title.children, { y: 50 * u, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, ease: "power4.out", stagger: 0.08 }, 0.2);
+        tl.fromTo(bar, { scaleX: 0, transformOrigin: ta === "center" ? "50% 50%" : "0% 50%" }, { scaleX: 1, duration: 0.7, ease: "power4.out" }, 0.55);
+        tl.fromTo(bar, { scaleX: 1 }, { scaleX: 2, duration: D - 1.25, ease: "sine.inOut", immediateRender: false }, 1.25);
+        tl.fromTo(sub, { y: 30 * u, opacity: 0 }, { y: 0, opacity: 1, duration: 0.65, ease: "power4.out" }, 0.7);
+        if (hasImg) {
+          tl.fromTo(card, { opacity: 0, scale: 0.92, x: full ? 0 : (S.port ? 0 : -80 * u), y: full ? 0 : (S.port ? -80 * u : 0) }, { opacity: 1, scale: 1, x: 0, y: 0, duration: 0.9, ease: "power4.out" }, 0);
+          tl.fromTo(photo, { scale: 1.07, x: -22 * u, y: 10 * u }, { scale: 1.26, x: 22 * u, y: -12 * u, duration: D, ease: "none" }, 0);
+          tl.fromTo(backimg, { scale: 1.2, x: 30 * u }, { scale: 1.32, x: -30 * u, duration: D, ease: "none" }, 0);
+          if (!full) tl.fromTo(card, { y: 0 }, { y: -12 * u, duration: D - 0.9, ease: "sine.inOut", immediateRender: false }, 0.9);
+        } else {
+          tl.fromTo([badge, ringObj.svg], { scale: 0.3, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.85, ease: "back.out(1.6)" }, 0);
+          tl.fromTo(ringObj.svg, { rotation: -90 }, { rotation: -90 + 40 * D, duration: D, ease: "none", immediateRender: false }, 0);
+          tl.fromTo(badge, { y: 0 }, { y: -16 * u, duration: D - 0.85, ease: "sine.inOut", immediateRender: false }, 0.85);
+        }
+        K.drift(tl, safe, D, S, { scale: 1.025 });
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>

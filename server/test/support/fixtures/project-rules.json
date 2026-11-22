@@ -1,0 +1,226 @@
+{
+  "about": "Compositions of a full-screen or overlay host g-1 with the profile rules each breaks; run by server/test/timeline/profileRules.test.js and toolkit/tests/test_project_rules.py. The project around it holds assets/media/v.mp4 and shared/js/gsap.min.js.",
+  "cases": [
+    {
+      "name": "a root background color",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><h1>Hi</h1></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": []
+    },
+    {
+      "name": "a root gradient",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: linear-gradient(#000, #223); }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><h1>Hi</h1></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": []
+    },
+    {
+      "name": "a root background in the style attribute",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\" style=\"background-color:#000\"><h1>Hi</h1></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": []
+    },
+    {
+      "name": "a child with inset 0",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n#g-1-bg { position: absolute; inset: 0; background: #0b1020; }</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><div id=\"g-1-bg\"><h1>Hi</h1></div></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": []
+    },
+    {
+      "name": "a child with all four sides 0",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n#g-1-bg { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: #0b1020; }</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><div id=\"g-1-bg\"><h1>Hi</h1></div></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": []
+    },
+    {
+      "name": "a child with 100 percent and a background image",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n#g-1-bg { width: 100%; height: 100%; background-image: url(assets/media/v.mp4); }</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><div id=\"g-1-bg\"><h1>Hi</h1></div></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": []
+    },
+    {
+      "name": "a child as large as the frame",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n#g-1-bg { width: 1920px; height: 1080px; background: #0b1020; }</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><div id=\"g-1-bg\"><h1>Hi</h1></div></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": []
+    },
+    {
+      "name": "a picture as the first child",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"assets/media/v.mp4\"><h1>Hi</h1></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": []
+    },
+    {
+      "name": "an overlay may be transparent",
+      "hostKind": "overlay",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><h1>Hi</h1></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": []
+    },
+    {
+      "name": "good references pass",
+      "hostKind": "overlay",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n#a { fill: url(#grad); background: url('assets/media/v.mp4'); }</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"assets/media/v.mp4\"><img src=\"data:image/png;base64,AAAA\"><svg><use href=\"#a\"/></svg></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": []
+    },
+    {
+      "name": "no background at all",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><h1>Hi</h1></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        12
+      ]
+    },
+    {
+      "name": "a transparent root background",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: transparent; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><h1>Hi</h1></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        12
+      ]
+    },
+    {
+      "name": "a root background with alpha 0",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: rgba(0,0,0,0); }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><h1>Hi</h1></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        12
+      ]
+    },
+    {
+      "name": "a small child with a background",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n#g-1-bg { width: 300px; height: 100px; background: #000; }</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><div id=\"g-1-bg\"><h1>Hi</h1></div></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        12
+      ]
+    },
+    {
+      "name": "a full-frame child without paint",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n#g-1-bg { position: absolute; inset: 0; }</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><div id=\"g-1-bg\"><h1>Hi</h1></div></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        12
+      ]
+    },
+    {
+      "name": "a parent folder",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"../x.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a parent folder after a folder",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"assets/../../x.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a backslash",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"assets\\gfx\\x.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a drive letter",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"C:/pics/x.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a drive letter with backslashes",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"C:\\pics\\x.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a file address",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"file:///Users/me/x.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "an absolute path",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"/Users/me/x.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a link to another host",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"//host.test/x.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a network address",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"https://x.test/x.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a CSS url leaving the project",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><div style=\"background:url(../x.png)\"></div></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a CSS rule with a drive letter",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><style>#a { background: url(\"C:\\x.png\"); }</style></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a CSS import from the network",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><style>@import \"https://x.test/a.css\";</style></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a file that is not in the project",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><img src=\"assets/gfx/g-1/nope.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a CSS url to a file that is not in the project",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><div style=\"background:url(assets/gfx/g-1/nope.png)\"></div></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10
+      ]
+    },
+    {
+      "name": "a bad reference and no background",
+      "hostKind": "graphic",
+      "composition": "<!doctype html><html><head></head><body><template><style>#g-1-root { position: absolute; inset: 0; overflow: hidden;  }\n</style><div id=\"g-1-root\" data-composition-id=\"g-1\" data-width=\"1920\" data-height=\"1080\"><h1>Hi</h1><img src=\"../x.png\"></div><script>window.__timelines = window.__timelines || {}; window.__timelines[\"g-1\"] = gsap.timeline({ paused: true });</script></template></body></html>",
+      "rules": [
+        10,
+        12
+      ]
+    }
+  ]
+}

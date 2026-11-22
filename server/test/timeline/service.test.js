@@ -156,7 +156,9 @@ test("a hand edit changes index.html, saves a revision, emits timeline-changed a
     assert.equal(t.canUndo, true);
     assert.equal(t.canRedo, false);
     assert.equal(
-      t.tracks[1].clips.some((/** @type {any} */ c) => c.id === "b-3"),
+      t.tracks
+        .find((/** @type {any} */ x) => x.index === 1)
+        .clips.some((/** @type {any} */ c) => c.id === "b-3"),
       false,
     );
     const after = readIndex(v.projectDir);
