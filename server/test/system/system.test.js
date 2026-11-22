@@ -120,6 +120,7 @@ test("the view has every part, with the shapes the page expects", async () => {
     "toolkit",
     "prepare",
     "programs",
+    "hardware",
     "cpu",
     "gpu",
     "counts",
@@ -155,6 +156,25 @@ test("the view has every part, with the shapes the page expects", async () => {
       completed: 2,
     },
   });
+});
+
+test("the hardware part is what the toolkit says, and 'not checked yet' without it or when it fails", async () => {
+  /** @type {import("../../../src/lib/wire/system.ts").SystemHardware} */
+  const answer = {
+    nvidia: "NVIDIA GeForce RTX 5060 Ti",
+    speech: { using: "gpu", summary: "GPU (CUDA)", problem: null },
+    video: { using: "gpu", summary: "h264_nvenc, decoding with cuda", problem: null },
+  };
+  assert.deepEqual((await build({ hardware: async () => answer }).view()).hardware, answer);
+  const unknown = (await build({}).view()).hardware;
+  assert.equal(unknown.speech.using, "unknown");
+  assert.equal(unknown.nvidia, null);
+  const failing = await build({
+    hardware: async () => {
+      throw new Error("boom");
+    },
+  }).view();
+  assert.equal(failing.hardware.video.using, "unknown");
 });
 
 test("programs are listed in a fixed order; one without a probe is 'not checked'; every field is present", async () => {

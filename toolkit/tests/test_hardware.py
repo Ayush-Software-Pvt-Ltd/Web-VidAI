@@ -143,6 +143,38 @@ class WindowsTest(common.Case):
         self.assertEqual(m.tried, ["h264_amf"])
 
 
+class ProbeTest(common.Case):
+    def test_the_trial_uses_the_pixel_format_and_profile_of_the_real_use(self):
+        self.assertEqual(resources._probe_args("hevc_nvenc"), ["-pix_fmt", "p010le", "-profile:v", "main10"])
+        self.assertEqual(resources._probe_args("hevc_videotoolbox")[1], "p010le")
+        self.assertEqual(resources._probe_args("h264_nvenc"), ["-pix_fmt", "yuv420p"])
+        self.assertEqual(resources._probe_args("h264_qsv"), ["-pix_fmt", "nv12"])
+        self.assertEqual(resources._probe_args("prores_videotoolbox"), ["-pix_fmt", "yuv422p10le"])
+
+    def test_the_failure_text_is_kept(self):
+        done = mock.Mock(returncode=1, stderr=b"[h264_nvenc @ 0x1] Driver does not support the required nvenc API version.\n")
+        with mock.patch.object(resources.subprocess, "run", return_value=done) as run:
+            self.assertFalse(resources._probe_encoder("hevc_nvenc"))
+        self.assertIn("p010le", run.call_args[0][0])
+        self.assertIn("Driver does not support", resources.probe_error("hevc_nvenc"))
+        with mock.patch.object(resources.subprocess, "run", return_value=mock.Mock(returncode=0, stderr=b"")):
+            self.assertTrue(resources._probe_encoder("hevc_nvenc"))
+        self.assertIsNone(resources.probe_error("hevc_nvenc"))
+
+    def test_describe_video_names_the_encoder_and_the_hardware_that_did_not_start(self):
+        Machine(self, "encoders-windows.txt", "hwaccels-windows.txt", {"h264_nvenc", "hevc_nvenc"})
+        d = resources.describe_video()
+        self.assertEqual((d["encoder"], d["hevc"], d["decoder"], d["hardware"]),
+                         ("h264_nvenc", "hevc_nvenc", "cuda", True))
+        self.assertEqual(d["failed"], [])
+        Machine(self, "encoders-windows.txt", "hwaccels-windows.txt", set())
+        with mock.patch.object(resources, "probe_error", return_value="Driver does not support the required nvenc API version"):
+            d = resources.describe_video()
+        self.assertEqual((d["encoder"], d["decoder"], d["hardware"]), ("libx264", "software", False))
+        self.assertIn({"encoder": "h264_nvenc", "error": "Driver does not support the required nvenc API version"},
+                      d["failed"])
+
+
 class NoFfmpegTest(common.Case):
     def test_without_ffmpeg_everything_is_software(self):
         self.env(VE_FFMPEG=str(self.tmp / "no such ffmpeg"))

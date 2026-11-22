@@ -5,6 +5,7 @@ the deliverables to <video folder>/output/.  Run it with the toolkit's own Pytho
 
   PY=<data dir>/toolkit/venv/bin/python        (Windows: <data dir>\\toolkit\\venv\\Scripts\\python.exe)
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py doctor                    check ffmpeg / hardware encoders / node / speech package
+  $PY <toolkit>/CLAUDE_VE_ALL/ve.py hardware                  speech device and video encoder as one JSON line (System page)
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py prep   <VIDEO>            recon the video folder, write project.json, extract audio
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py plan   <VIDEO>            timeline.py -> build/timeline.json (+ warnings, pacing)
   $PY <toolkit>/CLAUDE_VE_ALL/ve.py gfx    <VIDEO> [--res 1080 2160]   render the graphics the timeline uses
@@ -404,10 +405,16 @@ def cmd_doctor(a):
             print(f"encoder {kind:7s} {resources.video_encoder_name(kind)}")
         print(f"encoder {'audio':7s} {resources.audio_encoder_name()}")
         print("decoder  ", " ".join(resources.hwaccel_args()) or "software")
+        for f in resources.describe_video()["failed"]:
+            print(f"hardware {f['encoder']} is offered by ffmpeg but did not start: {f['error']}")
     which = asr.backend()
     try:
         __import__("mlx_whisper" if which == "mlx" else "faster_whisper")
-        print(f"speech   OK  {which}, device {asr.device()}")
+        info = asr.describe()
+        print(f"speech   OK  {which}, device {asr.device()}, {info['summary']}")
+        if info["problem"]:                       # an NVIDIA GPU that CUDA cannot use yet is not READY
+            print(f"speech   MISSING (cuda): {info['problem']}")
+            ok = False
     except Exception as e:
         print(f"speech   MISSING ({which}): {e}")
         ok = False
@@ -416,6 +423,14 @@ def cmd_doctor(a):
     print("toolkit", KIT)
     print("result:", "READY" if ok else "INCOMPLETE")
     return 0 if ok else 1
+
+
+def cmd_hardware(a):
+    """The speech device and the video encoding as one JSON line (the System page reads it)."""
+    speech = asr.describe()
+    video = resources.describe_video() if shutil.which(tools.ffmpeg()) else None
+    print(json.dumps({"speech": speech, "video": video}))
+    return 0
 
 
 def main():
@@ -436,11 +451,12 @@ def main():
     p = sub.add_parser("qa"); p.add_argument("main"); p.add_argument("--res", required=True); p.add_argument("--timeline")
     p = sub.add_parser("prep"); p.add_argument("main")
     sub.add_parser("doctor")
+    sub.add_parser("hardware")
     a = ap.parse_args()
-    sys.exit({"prep": cmd_prep, "plan": cmd_plan, "gfx": cmd_gfx, "broll": cmd_broll, "build": cmd_build,
+    sys.exit(asr.guarded(lambda: {"prep": cmd_prep, "plan": cmd_plan, "gfx": cmd_gfx, "broll": cmd_broll, "build": cmd_build,
      "fcp": cmd_fcp, "premiere": cmd_premiere, "hf": cmd_hf,
      "review": cmd_review, "import": cmd_import, "frames": cmd_frames, "audio": cmd_audio,
-     "qa": cmd_qa, "doctor": cmd_doctor}[a.cmd](a) or 0)
+     "qa": cmd_qa, "doctor": cmd_doctor, "hardware": cmd_hardware}[a.cmd](a) or 0))
 
 
 if __name__ == "__main__":

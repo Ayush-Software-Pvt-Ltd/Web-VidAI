@@ -3,12 +3,14 @@
 //
 //  1. python    finds a Python 3.10 to 3.13 (versions are read by running each candidate);
 //  2. venv      creates `<data dir>/toolkit/venv` and checks pip works in it;
-//  3. packages  upgrades pip and installs `CLAUDE_VE_ALL/requirements.txt`;
+//  3. packages  upgrades pip and installs `CLAUDE_VE_ALL/requirements.txt`, and on a computer with an
+//               NVIDIA GPU also `requirements-cuda.txt` (the CUDA libraries of speech recognition);
 //  4. ffmpeg    checks ffmpeg and ffprobe exist;
 //  5. doctor    runs the toolkit's own check (`ve.py doctor`);
 //  6. speech    downloads the speech model into the packages' own cache (the toolkit has no
 //               command for it, so a small program of this module does what `vekit/asr.py`
-//               does on first use, with the toolkit's own backend and model names);
+//               does on first use, with the toolkit's own backend and model names), then proves
+//               the speech device works (on an NVIDIA GPU the model is run once on CUDA);
 //  7. browser   the renderer's browser (injected `ensureBrowser`);
 //  8. render    the two second test render (injected `testRender`).
 //
@@ -17,8 +19,9 @@
 // `prepare.json` (`state.js`); a restart shows them, and a step that was running becomes failed.
 //
 // Whether the environment must be prepared again is derived, never stored as a flag, so a crash
-// cannot lose it: the environment's Python is missing, the packages were never installed, or the
-// hash of `requirements.txt` differs from the one recorded when they were installed.
+// cannot lose it: the environment's Python is missing, the packages were never installed, the
+// hash of `requirements.txt` differs from the one recorded when they were installed, or the
+// computer has an NVIDIA GPU and `requirements-cuda.txt` was never installed (or changed).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -37,6 +40,7 @@ import {
   venvArgs,
 } from "../platform/python.js";
 import { findFfmpeg, findFfprobe } from "../platform/tools.js";
+import { detectNvidia } from "../platform/nvidia.js";
 import { requirementsHash } from "./install.js";
 import { runProcess } from "./run.js";
 import { LOG_LINES, readPrepare, writePrepare } from "./state.js";
@@ -85,9 +89,15 @@ const SPEECH_SNIPPET = [
   "    from huggingface_hub import snapshot_download",
   "    where = snapshot_download(name)",
   "else:",
+  "    asr.register_cuda_libraries()",
   "    from faster_whisper.utils import download_model",
   "    where = download_model(name)",
   "print('VIDAI_MODEL', which, name, where)",
+  "try:",
+  "    print('VIDAI_SPEECH', asr.warm_up(sys.argv[2]))",
+  "except asr.SpeechDeviceError as error:",
+  "    print('VIDAI_SPEECH_FAILED', error)",
+  "    sys.exit(3)",
 ].join("\n");
 
 /**
@@ -109,6 +119,9 @@ const SPEECH_SNIPPET = [
  * @property {Partial<typeof DEFAULT_TIMEOUTS>} [timeouts]
  * @property {(file: string) => boolean} [exists]
  * @property {() => string | null} [requirementsHash] The hash of the installed `requirements.txt`.
+ * @property {() => string | null} [cudaRequirementsHash] The hash of `requirements-cuda.txt`.
+ * @property {() => Promise<import("../platform/nvidia.js").NvidiaFacts>} [nvidia] Whether this
+ *   computer has an NVIDIA GPU (default: asks `nvidia-smi`).
  *
  * @typedef {object} RunOptions
  * @property {PrepareStepId} [stopAfter] Stops after this step; the later ones stay pending
@@ -128,6 +141,11 @@ export function createPrepare(deps) {
   const ffprobeFinder = deps.findFfprobe ?? (() => findFfprobe(env));
   const exists = deps.exists ?? ((file) => fs.existsSync(file));
   const currentHash = deps.requirementsHash ?? (() => requirementsHash(paths.requirements));
+  const currentCudaHash =
+    deps.cudaRequirementsHash ?? (() => requirementsHash(paths.requirementsCuda));
+  const askNvidia = deps.nvidia ?? (() => detectNvidia({ platform, env }));
+  /** @type {import("../platform/nvidia.js").NvidiaFacts} */
+  let gpu = { present: false, name: null };
   const timeouts = { ...DEFAULT_TIMEOUTS, ...deps.timeouts };
   const speechModel = deps.speechModel ?? "large-v3";
   const changed = deps.onChange ?? (() => {});
@@ -194,7 +212,24 @@ export function createPrepare(deps) {
     if (hash !== record.requirementsHash) {
       return "The toolkit's Python packages changed since they were installed.";
     }
+    if (gpu.present) {
+      const cuda = currentCudaHash();
+      const card = gpu.name === null ? "the NVIDIA GPU" : gpu.name;
+      if (cuda === null) return "The toolkit's list of CUDA libraries is missing.";
+      if (cuda !== record.cudaRequirementsHash) {
+        return `The CUDA libraries for ${card} are not installed yet.`;
+      }
+    }
     return null;
+  }
+
+  /** Asks whether this computer has an NVIDIA GPU; a failed question means "none". */
+  async function refreshHardware() {
+    try {
+      gpu = await askNvidia();
+    } catch {
+      gpu = { present: false, name: null };
+    }
   }
 
   /** @returns {PrepareState} */
@@ -378,6 +413,7 @@ export function createPrepare(deps) {
     const hash = currentHash();
     // Half-installed packages must not count as installed.
     record.requirementsHash = null;
+    record.cudaRequirementsHash = null;
     save();
     const upgrade = await run(paths.python, PIP_UPGRADE_ARGS, { timeoutMs: timeouts.pip });
     if (upgrade.code !== 0) log.warn("toolkit: upgrading pip failed; going on with the old one.");
@@ -395,8 +431,30 @@ export function createPrepare(deps) {
         message: `Installing the Python packages ${why}. Is the internet reachable? The last lines of pip's output:\n${lastLines(install)}`,
       };
     }
+    if (gpu.present) {
+      // Speech recognition on the GPU needs cuBLAS and cuDNN, which nothing else installs.
+      const cudaHash = currentCudaHash();
+      if (!exists(paths.requirementsCuda) || cudaHash === null) {
+        return { ok: false, message: "The toolkit's requirements-cuda.txt is missing." };
+      }
+      const cuda = await run(paths.python, pipInstallArgs(paths.requirementsCuda), {
+        timeoutMs: timeouts.pip,
+      });
+      if (cuda.code !== 0) {
+        return {
+          ok: false,
+          message: `Installing the CUDA libraries for ${gpu.name ?? "the NVIDIA GPU"} failed, and speech recognition does not run on the CPU there. Is the internet reachable? The last lines of pip's output:\n${lastLines(cuda)}`,
+        };
+      }
+      record.cudaRequirementsHash = cudaHash;
+    }
     record.requirementsHash = hash;
-    return { ok: true, message: "Python packages installed." };
+    return {
+      ok: true,
+      message: gpu.present
+        ? "Python packages and the CUDA libraries installed."
+        : "Python packages installed.",
+    };
   }
 
   /** @returns {Promise<StepOutcome>} */
@@ -438,6 +496,10 @@ export function createPrepare(deps) {
     const result = await run(paths.python, ["-c", SPEECH_SNIPPET, paths.toolkitFolder, speechModel], {
       timeoutMs: timeouts.speech,
     });
+    const failed = result.tail.find((l) => l.startsWith("VIDAI_SPEECH_FAILED "));
+    if (failed !== undefined) {
+      return { ok: false, message: failed.slice("VIDAI_SPEECH_FAILED ".length) };
+    }
     if (result.code !== 0) {
       return {
         ok: false,
@@ -446,12 +508,13 @@ export function createPrepare(deps) {
     }
     const line = result.tail.find((l) => l.startsWith("VIDAI_MODEL "));
     const [, backend, name] = line === undefined ? [] : line.split(" ");
+    const device = result.tail.find((l) => l.startsWith("VIDAI_SPEECH "))?.slice("VIDAI_SPEECH ".length);
     return {
       ok: true,
       message:
-        backend && name
+        (backend && name
           ? `Speech model ${name} is ready (${backend}).`
-          : "The speech model is ready.",
+          : "The speech model is ready.") + (device ? ` Speech device: ${device}.` : ""),
     };
   }
 
@@ -561,6 +624,7 @@ export function createPrepare(deps) {
       if (running !== null) return running;
       // Started in a microtask so `running` is set before the first change is announced.
       running = Promise.resolve()
+        .then(() => refreshHardware())
         .then(() => execute(options))
         .catch((error) => {
           log.error("Prepare failed.", error);
@@ -571,6 +635,10 @@ export function createPrepare(deps) {
     },
     /** @returns {PrepareState} */
     view,
+    /** Asks again whether there is an NVIDIA GPU (done before every Prepare and at start). */
+    refreshHardware,
+    /** The NVIDIA GPU found by the last `refreshHardware`. */
+    nvidia: () => gpu,
     /** Whether edits may start (SPEC section 7). */
     prepared: () => view().editReady,
     /** Whether renders may start. */

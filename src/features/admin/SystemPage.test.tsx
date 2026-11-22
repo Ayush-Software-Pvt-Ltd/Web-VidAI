@@ -132,6 +132,35 @@ describe("The facts", () => {
   });
 });
 
+describe("Speech and video hardware", () => {
+  it("says the speech device and the video encoder are the CPU on a computer without an NVIDIA card", async () => {
+    await setup();
+    const group = region("Speech and video hardware");
+    expect(group.getByText("CPU (no NVIDIA GPU)")).toBeInTheDocument();
+    expect(group.getByText(/libx264 and libx265 \(software\)/)).toBeInTheDocument();
+    expect(group.getByText(/No NVIDIA graphics card was found/)).toBeInTheDocument();
+  });
+
+  it("shows the GPU and the encoder in use", async () => {
+    await setup(["system-gpu"]);
+    const group = region("Speech and video hardware");
+    expect(group.getByText("GPU (CUDA) (NVIDIA GeForce RTX 5060 Ti)")).toBeInTheDocument();
+    expect(group.getByText("h264_nvenc and hevc_nvenc, decoding with cuda")).toBeInTheDocument();
+    expect(group.getAllByText("GPU")).toHaveLength(2);
+    expect(group.getByText(/Graphics card: NVIDIA GeForce RTX 5060 Ti/)).toBeInTheDocument();
+  });
+
+  it("shows the problem and its fix when an NVIDIA card is not usable", async () => {
+    await setup(["system-gpu-problem"]);
+    const group = region("Speech and video hardware");
+    expect(group.getByText(/cublas64_12\.dll, cudnn64_9\.dll.*Press Prepare/)).toBeInTheDocument();
+    expect(
+      group.getByText(/could not start h264_nvenc: Driver does not support/),
+    ).toBeInTheDocument();
+    expect(group.getAllByText(/problem$/)).toHaveLength(2);
+  });
+});
+
 describe("Programs that are missing", () => {
   it("marks each one with the sentence the server gives, and the one no edit needs quietly", async () => {
     const { backend } = await setup(["system-problems"]);

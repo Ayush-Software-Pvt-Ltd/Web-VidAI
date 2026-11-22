@@ -339,8 +339,11 @@ A per-edit value above the total is stored as typed and never refused; a job get
 
 ### System page
 
-Shows, each with a state and a hint how to fix it: Claude Code (path, version, login), OpenCode 2 (path, version), ffmpeg and ffprobe (path, version, hardware encoders found), Python (path, version), toolkit environment, HyperFrames (version) and its browser, speech model, free disk space of the data directory, the addresses of the server, the certificate (names, end date, SHA-256 fingerprint).
+Shows, each with a state and a hint how to fix it: Claude Code (path, version, login), OpenCode 2 (path, version), ffmpeg and ffprobe (path, version, hardware encoders found), Python (path, version), toolkit environment, HyperFrames (version) and its browser, speech model, the speech device and video encoder in use (below), free disk space of the data directory, the addresses of the server, the certificate (names, end date, SHA-256 fingerprint).
 "Prepare" runs the toolkit preparation of section 7 and shows its log.
+A group "Speech and video hardware" shows, from `ve.py hardware` (the same logic as `ve.py doctor`), what speech recognition really runs on (`GPU (CUDA)`, `Apple GPU (MLX)` or `CPU`) and the video encoder and decoder actually chosen (for example `h264_nvenc and hevc_nvenc, decoding with cuda`, or `libx264 (software)`), and the NVIDIA graphics card when there is one.
+Each line has a `problem` sentence with its fix when an NVIDIA GPU is present but not used: speech names the missing CUDA libraries or the failure and says to press Prepare, video names why NVENC did not start (ffmpeg's last line) or that the ffmpeg build has no NVENC.
+The answer is asked at most once per Prepare and per 30 seconds; before the toolkit environment exists the lines say "Not checked yet."
 
 ## 6. Storage, channels and videos
 
@@ -443,15 +446,21 @@ On start the server compares `toolkit/VERSION` in the repository with the instal
 When they differ, `CLAUDE_VE_ALL` and `CLAUDE.md` are replaced by the shipped ones (the old folder is kept once as `CLAUDE_VE_ALL.previous`), `MEMORY.md` is created only when missing and never overwritten, and the Python environment is marked as needing preparation when `requirements.txt` changed.
 "Prepare" (System page, and automatically on the first start) creates `venv/`, installs the requirements, makes sure the HyperFrames browser is installed and the speech model is downloaded, and records each step's result; edits cannot start until it has succeeded (`notPrepared`).
 
-- The steps, in order: Python (3.10 to 3.13, found by running it; the Python that comes with macOS is not used), `venv/`, the packages, ffmpeg and ffprobe, the toolkit's own check (`ve.py doctor`), the speech model, the renderer's browser, the test render. A failed step stops the later ones; the results are kept in `toolkit/prepare.json` and shown after a restart.
+- The steps, in order: Python (3.10 to 3.13, found by running it; the Python that comes with macOS is not used), `venv/`, the packages, ffmpeg and ffprobe, the toolkit's own check (`ve.py doctor`), the speech model, the renderer's browser, the test render.
+- On a Windows or Linux computer with an NVIDIA GPU (the driver's `nvidia-smi` names one) the packages step also installs `requirements-cuda.txt`: `ctranslate2>=4.6`, `nvidia-cublas-cu12` and `nvidia-cudnn-cu12`, the CUDA 12 libraries `faster-whisper` needs on the GPU; a failed install fails the step, with a sentence that says speech does not run on the CPU there.
+- On such a computer the speech step also proves the device: the model is loaded on CUDA and run once on a second of silence (`vekit/asr.py`, `warm_up`), and a failure is the step's message, so edits cannot start until the GPU works. A failed step stops the later ones; the results are kept in `toolkit/prepare.json` and shown after a restart.
 - Edits can start when the toolkit is installed and the steps up to the speech model are done; Render Final also needs the browser and the test render.
-- Whether Prepare is needed is read from the disk: the environment's Python is missing, the packages were never installed, or `requirements.txt` differs from the one last installed. A toolkit upgrade with the same requirements keeps the environment.
+- Whether Prepare is needed is read from the disk: the environment's Python is missing, the packages were never installed, `requirements.txt` differs from the one last installed, or the computer has an NVIDIA GPU and `requirements-cuda.txt` was never installed (or differs from the installed one), so an existing install that lacks the CUDA libraries is repaired by the automatic Prepare at the next start, before any edit runs. A toolkit upgrade with the same requirements keeps the environment.
 - Prepare starts by itself at every server start while edits could not start otherwise; only one runs at a time, and edits cannot start while it runs.
 - A crash during an upgrade leaves a usable toolkit: the next start puts the old programs back or finishes the swap. `VERSION` is written last. A failed install is shown on the System page and never stops the server.
 - The copy never contains the toolkit's tests or Python cache folders.
 
 The toolkit is portable: it runs on Apple Silicon and Intel Macs and on Windows.
-Speech recognition uses `mlx-whisper` on Apple Silicon and `faster-whisper` elsewhere; hardware video encoders are chosen from what ffmpeg offers on the machine (VideoToolbox, NVENC, Quick Sync, AMF) with a software fallback.
+Speech recognition uses `mlx-whisper` on Apple Silicon and `faster-whisper` elsewhere, on CUDA whenever the computer has an NVIDIA GPU and on the CPU only when it has none.
+There is no quiet fallback to the CPU on an NVIDIA computer: `transcribe.py`, `windows.py` and `qa` stop with exit code 2 and one line on stderr that names what is missing (a CUDA library, no CUDA device, or the failure of the first run) and says the administrator presses Prepare.
+Before ctranslate2 loads, `vekit/asr.py` makes the folders `site-packages/nvidia/<library>/bin` (Windows, through `os.add_dll_directory` and PATH) or `.../lib` (Linux, the libraries are loaded with global symbols) findable, because the pip wheels keep their DLLs there.
+`VE_ASR_DEVICE` (`cpu` or `cuda`) is an administrator and test override that the editing agents must not set (`toolkit/CLAUDE.md`), `VE_ASR_BACKEND` likewise.
+`ve.py doctor` prints the speech device and exits non-zero when an NVIDIA GPU cannot be used for speech, and `ve.py hardware` prints the speech device and the video encoding as one JSON line for the System page; hardware video encoders are chosen from what ffmpeg offers on the machine (VideoToolbox, NVENC, Quick Sync, AMF) with a software fallback.
 The toolkit takes the video folder as an absolute path; nothing in it depends on where the toolkit lies.
 Each video's working files are in `<video>/CLAUDE_VE/`; everything there can be rebuilt, and nothing the project needs to play or render lies there (section 10).
 The toolkit obeys the resource limits of section 9 through `vekit/resources.py`.
@@ -831,7 +840,7 @@ No operating system offers a GPU percentage limit, so the share is turned into a
 A GPU task is one hardware video encode or decode, one speech recognition run, or one HyperFrames capture or render.
 `gpuSlotsTotal = max(1, round(8 * gpuTotalPercent / 100))` and `gpuSlotsPerEdit = min(gpuSlotsTotal, max(1, round(8 * gpuPerEditPercent / 100)))`.
 The toolkit and the render runner take a slot before a GPU task and give it back after; a job never holds more than `gpuSlotsPerEdit`.
-Work that runs in software only (a software encode, speech recognition on the CPU) takes no slot.
+Work that runs in software only (a software encode, speech recognition on a computer without an NVIDIA GPU) takes no slot; speech on an NVIDIA computer is always a GPU task.
 The slots are files, so that programs in any language can take part:
 
 - `<data dir>/locks/gpu/limits.json` is `{ "total": n, "perJob": n }`, rewritten by the server (write to a temporary name, then rename) whenever the settings change; a program reads it every time it wants a slot, and takes a missing or damaged file as one slot in all and one per job.
@@ -919,7 +928,7 @@ Renders always use the originals.
 
 - A file is also heavy when it is H.264 with 10 bits or not 4:2:0, is HDR (PQ or HLG), is interlaced, or is stored rotated; key frames are measured over the first 10 seconds, whose end counts as one.
 - The copy is 8-bit SDR 4:2:0 with the rotation applied and both sides even; HDR is tone-mapped when the installed ffmpeg can (`zscale` and `tonemap`), otherwise only converted.
-- The encoder is the computer's hardware H.264 encoder when one works (VideoToolbox on a Mac; NVENC, Quick Sync or AMF on Windows; each is tried once with two tiny frames; `VE_HW` forces one or none) and a GPU slot is free within 100 ms, otherwise libx264; a failed hardware attempt is repeated once in software. A copy counts against the CPU and GPU limits of section 9 like any other work.
+- The encoder is the computer's hardware H.264 encoder when one works (VideoToolbox on a Mac; NVENC, Quick Sync or AMF on Windows; each is tried once with a few tiny frames in the pixel format and profile it is used with, 8 bit for H.264 and 10 bit Main10 for HEVC, and ffmpeg's last error line is kept for the System page; `VE_HW` forces one or none) and a GPU slot is free within 100 ms, otherwise libx264; a failed hardware attempt is repeated once in software. A copy counts against the CPU and GPU limits of section 9 like any other work.
 - A copy is written as `.part` and renamed when complete; leftover `.part` files are deleted at start. A file whose copy failed is not tried again until the file changes or the server restarts.
 - `openTimeline` returns `previewCopies` (`{ total, done, running }`) and the event `preview-copies-changed` (`{ videoId, copies }`) brings each change to the owner.
 - A file used by several videos is copied once. Copies not used for the longest time are deleted when the cache passes its size limit (checked at start, daily, and at once when an admin lowers the limit `proxyCacheGb`, where 1 GB is 1024^3 bytes); removing or archiving a video cancels its waiting copies.

@@ -28,7 +28,7 @@ import {
   setupOpenaiApi,
   setupReady,
 } from "./seed/harness";
-import { makePrepareFail, makeSystemProblems } from "./seed/prepare";
+import { makeGpuProblem, makeGpuWorks, makePrepareFail, makeSystemProblems } from "./seed/prepare";
 import { addJob, seedJobs, type JobSpec } from "./seed/jobs";
 import { makeVideo, seedLibrary } from "./seed/library";
 import { seedQueue } from "./seed/queue";
@@ -308,6 +308,17 @@ export const SCENARIOS = {
     description: "Programs missing, Prepare needed.",
     owner: "system",
     system: makeSystemProblems,
+  },
+  "system-gpu-problem": {
+    description:
+      "An NVIDIA GPU that speech recognition (missing CUDA libraries) and ffmpeg (NVENC) cannot use yet.",
+    owner: "system",
+    system: makeGpuProblem,
+  },
+  "system-gpu": {
+    description: "An NVIDIA GPU used for speech recognition and video encoding.",
+    owner: "system",
+    system: makeGpuWorks,
   },
   "system-prepare-fails": {
     description:

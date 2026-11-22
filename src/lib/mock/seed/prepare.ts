@@ -235,6 +235,39 @@ export function makeSystemProblems(world: World): void {
   syncHarness(world);
 }
 
+/** Scenario `system-gpu-problem`: an NVIDIA GPU that speech recognition and ffmpeg cannot use yet. */
+export function makeGpuProblem(world: World): void {
+  const card = "NVIDIA GeForce RTX 5060 Ti";
+  world.system.hardware = {
+    nvidia: card,
+    speech: {
+      using: "gpu",
+      summary: `GPU (CUDA) (${card}), not usable yet`,
+      problem:
+        "these CUDA libraries were not found: cublas64_12.dll, cudnn64_9.dll. Press Prepare to install what is missing.",
+    },
+    video: {
+      using: "cpu",
+      summary: "libx264 and libx265 (software), decoding in software",
+      problem: `${card} is installed but ffmpeg could not start h264_nvenc: Driver does not support the required nvenc API version. Update the NVIDIA driver or use an ffmpeg build that matches it.`,
+    },
+  };
+}
+
+/** Scenario `system-gpu`: an NVIDIA GPU used for speech and video. */
+export function makeGpuWorks(world: World): void {
+  const card = "NVIDIA GeForce RTX 5060 Ti";
+  world.system.hardware = {
+    nvidia: card,
+    speech: { using: "gpu", summary: `GPU (CUDA) (${card})`, problem: null },
+    video: {
+      using: "gpu",
+      summary: "h264_nvenc and hevc_nvenc, decoding with cuda",
+      problem: null,
+    },
+  };
+}
+
 /** Scenario `system-prepare-fails`: Prepare is needed and it fails at the package install. */
 export function makePrepareFail(world: World): void {
   world.system.prepare = unpreparedState();

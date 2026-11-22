@@ -381,18 +381,39 @@ def hwaccels() -> set[str]:
         return _cache["hwaccels"]
 
 
+def _probe_args(name: str) -> list[str]:
+    """The encoder options of the trial: the pixel format and profile the encoder is used with
+    (`pix_fmt` and `video_encoder`), so an encoder that cannot do 10 bit HEVC is not chosen for it."""
+    if name.startswith("prores"):
+        return ["-pix_fmt", "yuv422p10le"]
+    if name.startswith("hevc") or name.startswith("libx265"):
+        return ["-pix_fmt", "p010le" if name != "libx265" else "yuv420p10le", "-profile:v", "main10"]
+    return ["-pix_fmt", "nv12" if name.endswith(("_videotoolbox", "_qsv")) else "yuv420p"]
+
+
 def _probe_encoder(name: str) -> bool:
-    """Whether this encoder really starts here: one tiny frame to the null muxer."""
-    pix = "yuv422p10le" if name.startswith("prores") else "nv12"
+    """Whether this encoder really starts here: a few tiny frames to the null muxer.
+    What ffmpeg said when it did not is kept for `probe_error`."""
+    key = ("probe-error", name)
     try:
         r = subprocess.run(
             [tools.ffmpeg(), "-hide_banner", "-v", "error", "-f", "lavfi", "-i",
-             "color=black:s=256x256:r=25:d=0.2", "-frames:v", "2", "-pix_fmt", pix, "-c:v", name,
+             "color=black:s=256x256:r=25:d=0.2", "-frames:v", "2", *_probe_args(name), "-c:v", name,
              "-f", "null", "-"],
             capture_output=True, stdin=subprocess.DEVNULL, timeout=60)
-        return r.returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False
+        text = (r.stderr or b"").decode("utf-8", "replace").strip()
+        error = None if r.returncode == 0 else (text.splitlines()[-1] if text else f"exit code {r.returncode}")
+    except (OSError, subprocess.SubprocessError) as e:
+        error = f"{type(e).__name__}: {e}"
+    with _cache_lock:
+        _cache[key] = error
+    return error is None
+
+
+def probe_error(name: str) -> str | None:
+    """The last line ffmpeg printed when the trial of this encoder failed, else None."""
+    with _cache_lock:
+        return _cache.get(("probe-error", name))
 
 
 def _forced() -> str:
@@ -482,6 +503,27 @@ def video_encoder(kind: str, *, profile: str | None = None, bitrate: str | None 
     if gop:
         args += ["-g", str(gop)]
     return args
+
+
+def describe_video() -> dict:
+    """The video encoding of this machine for `ve.py doctor` and the System page:
+    {"encoder": the h264 encoder, "hevc": the hevc encoder, "decoder": "cuda" | ... | "software",
+     "hardware": bool, "failed": [{"encoder", "error"}]} where `failed` lists the hardware encoders that
+    ffmpeg offers but that did not start here, with ffmpeg's last line."""
+    failed = []
+    if _forced() not in ("none", "software", "off"):
+        have = encoders()
+        for b in BACKENDS:
+            for kind in ("h264", "hevc"):
+                name = ENCODER_NAMES[kind].get(b)
+                if name and name in have and backend(kind) != b:
+                    err = probe_error(name)
+                    if err:
+                        failed.append({"encoder": name, "error": err})
+    args = hwaccel_args()
+    return {"encoder": video_encoder_name("h264"), "hevc": video_encoder_name("hevc"),
+            "decoder": args[1] if len(args) > 1 else "software",
+            "hardware": backend("h264") != "software", "failed": failed}
 
 
 def pix_fmt(kind: str) -> str:

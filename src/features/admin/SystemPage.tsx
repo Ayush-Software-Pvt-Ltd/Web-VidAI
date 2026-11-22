@@ -17,7 +17,9 @@ import type {
   PrepareStep,
   ProgramInfo,
   Setup,
+  SystemAcceleration,
   SystemGpuSlot,
+  SystemHardware,
   SystemView,
 } from "@/lib/types";
 import { Callout, Group, Row, SettingsPage, useAction } from "@/features/settings";
@@ -59,6 +61,7 @@ export function SystemPage() {
     <SettingsPage>
       <ServerGroup system={data} />
       <ProgramsGroup programs={data.programs} />
+      <HardwareGroup hardware={data.hardware} />
       <ToolkitGroup toolkit={data.toolkit} />
       <PrepareGroup prepare={data.prepare} installError={data.toolkit.installError} />
       <LimitsGroup cpu={data.cpu} gpu={data.gpu} />
@@ -120,6 +123,49 @@ function ServerGroup({ system }: { system: SystemView }) {
           {free ?? "The free space of its disk could not be read."}
         </p>
       </Row>
+    </Group>
+  );
+}
+
+/** One line of the hardware group: what runs on the GPU or the CPU, and what is wrong if it should not be the CPU. */
+function AccelerationRow({ label, line }: { label: string; line: SystemAcceleration }) {
+  const word = line.using === "gpu" ? "GPU" : line.using === "cpu" ? "CPU" : "Not checked";
+  return (
+    <Row
+      label={label}
+      description={
+        <>
+          <span>{line.summary}</span>
+          {line.problem && <span className="block text-danger">{line.problem}</span>}
+        </>
+      }
+      control={
+        line.using === "unknown" ? (
+          <Status ok={false} needed={false}>
+            {word}
+          </Status>
+        ) : (
+          <Status ok={line.problem === null}>
+            {line.problem === null ? word : `${word}, problem`}
+          </Status>
+        )
+      }
+    />
+  );
+}
+
+function HardwareGroup({ hardware }: { hardware: SystemHardware }) {
+  return (
+    <Group
+      title="Speech and video hardware"
+      description={
+        hardware.nvidia === null
+          ? "What speech recognition and video encoding really run on. No NVIDIA graphics card was found."
+          : `What speech recognition and video encoding really run on. Graphics card: ${hardware.nvidia}.`
+      }
+    >
+      <AccelerationRow label="Speech recognition" line={hardware.speech} />
+      <AccelerationRow label="Video encoding" line={hardware.video} />
     </Group>
   );
 }

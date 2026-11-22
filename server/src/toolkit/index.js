@@ -20,6 +20,9 @@ import { adminSystemFunctions } from "../rpc/adminSystem.js";
 import { createSystem } from "../system.js";
 import { installToolkit, readVersion } from "./install.js";
 import { publicPaths, shippedToolkitDir, toolkitPaths } from "./paths.js";
+import { pythonEnv } from "../platform/python.js";
+import { runProcess } from "./run.js";
+import { createHardwareProbe } from "./hardware.js";
 import { createPrepare } from "./prepare.js";
 import { createToolProbes } from "./probes.js";
 
@@ -101,6 +104,19 @@ export function createToolkitModule(deps) {
       : {}),
   });
 
+  const hardware = createHardwareProbe({
+    paths,
+    runner: deps.prepareOptions?.runner ?? runProcess,
+    env: () => pythonEnv(env, prepare.toolkitVars()),
+    clock,
+    nvidia: () => prepare.nvidia().name ?? (prepare.nvidia().present ? "NVIDIA GPU" : null),
+    generation: () => {
+      const state = prepare.view();
+      return `${state.finishedAt}:${state.running}`;
+    },
+    exists,
+  });
+
   /** @returns {string | null} */
   const installedVersion = () => readVersion(paths.versionFile);
 
@@ -129,6 +145,7 @@ export function createToolkitModule(deps) {
     limits: deps.limits,
     toolkit: toolkitInfo,
     prepare: () => prepare.view(),
+    hardware,
     ...deps.systemOptions,
   });
 
@@ -171,6 +188,7 @@ export function createToolkitModule(deps) {
         log.error("Installing the toolkit failed.", error);
       }
       usable = exists(paths.driver);
+      await prepare.refreshHardware();
       announce();
       if ((deps.autoPrepare ?? true) && usable && !prepare.prepared()) void prepare.run();
     },

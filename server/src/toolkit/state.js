@@ -22,6 +22,9 @@ import { STEPS } from "./steps.js";
  * @property {string[]} log The last lines printed (at most `LOG_LINES`).
  * @property {string | null} requirementsHash The hash of `requirements.txt` the packages were
  *   installed from at the last successful install; `null` before.
+ * @property {string | null} cudaRequirementsHash The hash of `requirements-cuda.txt` installed at
+ *   the last successful install on a computer with an NVIDIA GPU; `null` before, and on a
+ *   computer without one.
  * @property {number | null} startedAt
  * @property {number | null} finishedAt
  */
@@ -39,6 +42,7 @@ export function emptyPrepare() {
     steps: STEPS.map((step) => ({ id: step.id, state: "pending", message: null, at: null })),
     log: [],
     requirementsHash: null,
+    cudaRequirementsHash: null,
     startedAt: null,
     finishedAt: null,
   };
@@ -81,6 +85,7 @@ export function readPrepare(file) {
     fresh.log = raw.log.filter((line) => typeof line === "string").slice(-LOG_LINES);
   }
   if (typeof raw.requirementsHash === "string") fresh.requirementsHash = raw.requirementsHash;
+  if (typeof raw.cudaRequirementsHash === "string") fresh.cudaRequirementsHash = raw.cudaRequirementsHash;
   if (typeof raw.startedAt === "number") fresh.startedAt = raw.startedAt;
   if (typeof raw.finishedAt === "number") fresh.finishedAt = raw.finishedAt;
   return fresh;

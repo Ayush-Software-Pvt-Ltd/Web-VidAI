@@ -97,6 +97,15 @@ function emptySystem(now: number): SystemView {
     },
     prepare: emptyPrepare(),
     programs: [],
+    hardware: {
+      nvidia: null,
+      speech: { using: "cpu", summary: "CPU (no NVIDIA GPU)", problem: null },
+      video: {
+        using: "cpu",
+        summary: "libx264 and libx265 (software), decoding in software",
+        problem: null,
+      },
+    },
     cpu: { processors: 8, running: 0, budget: 8 },
     gpu: { total: 0, perJob: 0, slots: [] },
     counts: emptyCounts(),

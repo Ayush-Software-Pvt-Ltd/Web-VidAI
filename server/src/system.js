@@ -9,6 +9,14 @@ import nodeOs from "node:os";
 /** @typedef {import("../../src/lib/wire/system.ts").SystemView} SystemView */
 /** @typedef {import("../../src/lib/wire/system.ts").ProgramInfo} ProgramInfo */
 /** @typedef {import("../../src/lib/wire/system.ts").SystemCounts} SystemCounts */
+/** @typedef {import("../../src/lib/wire/system.ts").SystemHardware} SystemHardware */
+
+/** What the page shows while the speech device and video encoder cannot be asked. */
+export const HARDWARE_UNKNOWN = /** @type {SystemHardware} */ ({
+  nvidia: null,
+  speech: { using: "unknown", summary: "Not checked yet.", problem: null },
+  video: { using: "unknown", summary: "Not checked yet.", problem: null },
+});
 
 /**
  * What a probe tells about one program; missing fields mean `null`.
@@ -54,6 +62,8 @@ const JOB_STATES = /** @type {const} */ ([
  *   a program without one is listed as "not checked".
  * @property {{ cpuState(): { processors: number, running: number, budget: number },
  *   gpuState(): { total: number, perJob: number, slots: import("../../src/lib/wire/system.ts").SystemGpuSlot[] } }} limits
+ * @property {() => Promise<SystemHardware>} [hardware] The speech device and the video encoder
+ *   (`toolkit/hardware.js`); without it the page says "Not checked yet."
  * @property {() => import("../../src/lib/wire/system.ts").SystemToolkit} toolkit
  * @property {() => import("../../src/lib/wire/system.ts").PrepareState} prepare
  * @property {number} [startedAt] When the server started (default: when this was created).
@@ -165,13 +175,23 @@ export function createSystem(deps) {
     );
   }
 
+  /** @returns {Promise<SystemHardware>} */
+  async function hardwareView() {
+    if (!deps.hardware) return HARDWARE_UNKNOWN;
+    try {
+      return await deps.hardware();
+    } catch {
+      return HARDWARE_UNKNOWN;
+    }
+  }
+
   return {
     /**
      * The whole System page.
      * @returns {Promise<SystemView>}
      */
     async view() {
-      const list = await programs();
+      const [list, hardware] = await Promise.all([programs(), hardwareView()]);
       const gpu = deps.limits.gpuState();
       return {
         server: {
@@ -186,6 +206,7 @@ export function createSystem(deps) {
         toolkit: deps.toolkit(),
         prepare: deps.prepare(),
         programs: list,
+        hardware,
         cpu: deps.limits.cpuState(),
         gpu: { total: gpu.total, perJob: gpu.perJob, slots: gpu.slots },
         counts: counts(),

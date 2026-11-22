@@ -26,6 +26,9 @@
 - Write outside `CLAUDE_VE`, `output` and `info.txt` of the video folder.
 - Write into the toolkit, except to append a lesson to `MEMORY.md`.
 - Put animation in `index.html` or nest a clip inside another element.
+- Write your own transcription or ffmpeg scripts instead of the toolkit's commands.
+- Set `VE_*` environment variables; they belong to the administrator and the tests.
+- Work around a failing toolkit command: write its one-line error into `info.txt` and stop.
 
 ## Done
 - Write `[OUTPUT COMPLETED]` only after `CHECK_COMMAND` has passed.

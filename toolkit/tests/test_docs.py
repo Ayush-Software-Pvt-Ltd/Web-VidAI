@@ -37,7 +37,7 @@ class InstructionFiles(unittest.TestCase):
             self.assertIsNone(re.search(r"[.!?] [A-Z]", line), f"MEMORY.md line {n} has two sentences")
 
     def test_version(self):
-        self.assertEqual((TOOLKIT / "VERSION").read_text().strip(), "1.3.0")
+        self.assertEqual((TOOLKIT / "VERSION").read_text().strip(), "1.3.1")
 
 
 if __name__ == "__main__":

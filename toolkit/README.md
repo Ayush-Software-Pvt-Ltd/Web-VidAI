@@ -7,11 +7,12 @@ The toolkit is only ever read after that: nothing is written into it while it ru
 ## Layout
 
 - `CLAUDE_VE_ALL/` is the code and the shared material.
-  - `ve.py` is the driver (`doctor`, `prep`, `plan`, `gfx`, `broll`, `build`, `hf`, `review`, `fcp`, `premiere`, `import`, `frames`, `audio`, `qa`).
+  - `ve.py` is the driver (`doctor`, `prep`, `plan`, `gfx`, `broll`, `build`, `hf`, `review`, `fcp`, `premiere`, `import`, `frames`, `audio`, `qa`, `hardware`).
   - `transcribe.py`, `windows.py`, `words.py`, `timing.py`, `sheet.py` and `thumbs.py` are small helper programs.
   - `vekit/` is the library: `paths.py` (folder layout), `resources.py` (CPU budget, GPU slots, hardware choice), `asr.py` (speech recognition), `tools.py` (ffmpeg and friends), and the editing code (`plan.py`, `model.py`, `render.py`, `broll.py`, `gfx.py`, `fcpxml.py`, `premiere.py`, `hfproject.py`, `qa.py`).
   - `gfx/_shared/` is the one copy of the design kits and fonts, `gfx/templates/` the graphics templates, `sfx/` the sound effects.
   - `requirements.txt` lists the Python packages, with platform markers for the speech package.
+  - `requirements-cuda.txt` lists the CUDA 12 libraries (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12`, a recent `ctranslate2`) that the server installs only on a Windows or Linux computer with an NVIDIA GPU.
 - `MEMORY.md`, `CLAUDE.md` and `default_prompt.md` are the editing agents' standing instructions and are not code.
 - `VERSION` is the toolkit version the server compares with the installed copy.
 - `tests/` holds the unit and end-to-end tests (see below).
@@ -99,7 +100,9 @@ Without them the programs use the whole machine and take no GPU slot, which is h
 - `VE_FFMPEG`, `VE_FFPROBE`, `VE_NPX` and `VE_NODE` name the programs.
 - `VE_HYPERFRAMES` is the HyperFrames command-line script (a `.mjs` or `.js` file) that is run with Node instead of `npx -y hyperframes@<pinned version>`.
   The server sets it to its own pinned copy so that nothing is downloaded while a job runs.
-- `VE_ASR_BACKEND` (`mlx` or `faster`), `VE_ASR_DEVICE` (`cpu` or `cuda`) and `VE_FONT` override the speech backend, its device and the label font.
+- `VE_ASR_BACKEND` (`mlx` or `faster`), `VE_ASR_DEVICE` (`cpu` or `cuda`) and `VE_FONT` override the speech backend, its device and the label font; they are for the administrator and the tests, never for the editing agent.
+- On a computer with an NVIDIA GPU speech runs on CUDA and never falls back to the CPU; when CUDA cannot be used, `transcribe.py`, `windows.py` and `qa` print one line and exit with code 2.
+- `ve.py doctor` shows the speech device and the video encoder, and `ve.py hardware` prints both as one JSON line for the System page of the server.
 
 ## Tests
 

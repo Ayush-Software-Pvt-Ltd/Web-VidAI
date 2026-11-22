@@ -37,6 +37,8 @@ export function toolkitPaths(dataDir, platform = process.platform) {
     /** The environment's Python (`venv/bin/python`, `venv\Scripts\python.exe`). */
     python: venvPython(venvDir, platform),
     requirements: path.join(toolkitFolder, "requirements.txt"),
+    /** The CUDA libraries, installed only on a computer with an NVIDIA GPU. */
+    requirementsCuda: path.join(toolkitFolder, "requirements-cuda.txt"),
     driver: path.join(toolkitFolder, "ve.py"),
     /** The recorded steps of Prepare. */
     prepareFile: path.join(root, "prepare.json"),

@@ -627,3 +627,174 @@ test("with the stand-in Python: a failing pip leaves the log lines in the messag
     t.cleanup();
   }
 });
+
+/** @param {ReturnType<typeof setup>} t */
+function addCudaFile(t) {
+  fs.writeFileSync(t.paths.requirementsCuda, "nvidia-cublas-cu12>=12\nnvidia-cudnn-cu12>=9,<10\n");
+}
+
+const RTX = { present: true, name: "NVIDIA GeForce RTX 5060 Ti" };
+
+test("an NVIDIA GPU makes Prepare install the CUDA libraries after the packages", async () => {
+  const t = setup();
+  try {
+    addCudaFile(t);
+    /** @type {RunRequest[]} */
+    const calls = [];
+    const { prepare } = makePrepare(t, {
+      runner: pretendRunner({ calls }),
+      nvidia: async () => RTX,
+    });
+    const state = await prepare.run();
+    assert.ok(state.steps.every((s) => s.state === "done"), JSON.stringify(state.steps));
+    const installs = calls
+      .map((c) => (c.args ?? []).join(" "))
+      .filter((text) => text.includes("pip install") && text.includes(" -r "));
+    assert.equal(installs.length, 2);
+    assert.match(installs[0] ?? "", /requirements\.txt$/);
+    assert.match(installs[1] ?? "", /requirements-cuda\.txt$/);
+    assert.match(state.steps[2]?.message ?? "", /CUDA libraries installed/);
+    assert.equal(state.needsPrepare, false);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("without an NVIDIA GPU the CUDA libraries are not installed and nothing asks for them", async () => {
+  const t = setup();
+  try {
+    addCudaFile(t);
+    /** @type {RunRequest[]} */
+    const calls = [];
+    const { prepare } = makePrepare(t, {
+      runner: pretendRunner({ calls }),
+      nvidia: async () => ({ present: false, name: null }),
+    });
+    const state = await prepare.run();
+    assert.equal(
+      calls.filter((c) => (c.args ?? []).join(" ").includes("requirements-cuda.txt")).length,
+      0,
+    );
+    assert.equal(state.needsPrepare, false);
+    assert.equal(state.steps[2]?.message, "Python packages installed.");
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("an installed toolkit that lacks the CUDA libraries needs preparing on an NVIDIA machine, then does not", async () => {
+  const t = setup();
+  try {
+    addCudaFile(t);
+    const first = makePrepare(t, { nvidia: async () => ({ present: false, name: null }) });
+    await first.prepare.run();
+    assert.equal(first.prepare.prepared(), true);
+    // The same environment, now seen on a computer with an NVIDIA GPU (or after the GPU was added).
+    const second = makePrepare(t, { nvidia: async () => RTX });
+    second.venvExists.value = true;
+    await second.prepare.refreshHardware();
+    const view = second.prepare.view();
+    assert.equal(view.needsPrepare, true);
+    assert.match(view.reason ?? "", /CUDA libraries for NVIDIA GeForce RTX 5060 Ti are not installed/);
+    assert.equal(second.prepare.prepared(), false);
+    await second.prepare.run();
+    assert.equal(second.prepare.prepared(), true);
+    assert.equal(second.prepare.view().reason, null);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a failed CUDA install fails the packages step and says the CPU is not used", async () => {
+  const t = setup();
+  try {
+    addCudaFile(t);
+    const inner = pretendRunner();
+    /** @type {import("../../src/toolkit/run.js").Runner} */
+    const runner = async (request) => {
+      if ((request.args ?? []).join(" ").includes("requirements-cuda.txt")) {
+        return {
+          started: true,
+          code: 1,
+          timedOut: false,
+          aborted: false,
+          tail: ["ERROR: No matching distribution found for nvidia-cudnn-cu12"],
+          error: null,
+        };
+      }
+      return inner(request);
+    };
+    const { prepare } = makePrepare(t, { runner, nvidia: async () => RTX });
+    const state = await prepare.run();
+    const step = state.steps[2];
+    assert.equal(step?.state, "failed");
+    assert.match(step?.message ?? "", /CUDA libraries for NVIDIA GeForce RTX 5060 Ti failed/);
+    assert.match(step?.message ?? "", /does not run on the CPU/);
+    assert.match(step?.message ?? "", /nvidia-cudnn-cu12/);
+    assert.equal(prepare.prepared(), false);
+    assert.equal(state.steps[4]?.state, "pending");
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a speech device that does not work fails the speech step with the toolkit's one line", async () => {
+  const t = setup();
+  try {
+    addCudaFile(t);
+    const inner = pretendRunner();
+    const line =
+      "speech: the NVIDIA GPU cannot be used for speech recognition (library cublas64_12.dll is missing or too old). The CPU is not used instead.";
+    /** @type {import("../../src/toolkit/run.js").Runner} */
+    const runner = async (request) => {
+      if ((request.args ?? []).join(" ").includes("snapshot_download")) {
+        return {
+          started: true,
+          code: 3,
+          timedOut: false,
+          aborted: false,
+          tail: ["VIDAI_MODEL faster large-v3 /c", `VIDAI_SPEECH_FAILED ${line}`],
+          error: null,
+        };
+      }
+      return inner(request);
+    };
+    const { prepare } = makePrepare(t, { runner, nvidia: async () => RTX });
+    const state = await prepare.run();
+    const speech = state.steps.find((s) => s.id === "speech");
+    assert.equal(speech?.state, "failed");
+    assert.equal(speech?.message, line);
+    assert.equal(prepare.prepared(), false);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("the speech device that was proven is part of the speech step's message", async () => {
+  const t = setup();
+  try {
+    const inner = pretendRunner();
+    /** @type {import("../../src/toolkit/run.js").Runner} */
+    const runner = async (request) => {
+      if ((request.args ?? []).join(" ").includes("snapshot_download")) {
+        return {
+          started: true,
+          code: 0,
+          timedOut: false,
+          aborted: false,
+          tail: ["VIDAI_MODEL faster large-v3 /c", "VIDAI_SPEECH GPU (CUDA) (NVIDIA GeForce RTX 5060 Ti)"],
+          error: null,
+        };
+      }
+      return inner(request);
+    };
+    const { prepare } = makePrepare(t, { runner });
+    const state = await prepare.run();
+    assert.match(
+      state.steps.find((s) => s.id === "speech")?.message ?? "",
+      /Speech model large-v3 is ready \(faster\)\. Speech device: GPU \(CUDA\) \(NVIDIA GeForce RTX 5060 Ti\)\./,
+    );
+  } finally {
+    t.cleanup();
+  }
+});

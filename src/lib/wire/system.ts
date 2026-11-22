@@ -94,6 +94,24 @@ export interface SystemCounts {
   jobs: Record<JobState, number>;
 }
 
+/** What speech recognition or video encoding runs on, and what is wrong when it should use the GPU. */
+export interface SystemAcceleration {
+  /** `unknown` while it cannot be asked (the toolkit environment is not prepared). */
+  using: "gpu" | "cpu" | "unknown";
+  /** "GPU (CUDA) (NVIDIA GeForce RTX 5060 Ti)", "CPU (no NVIDIA GPU)", "h264_nvenc and hevc_nvenc, decoding with cuda". */
+  summary: string;
+  /** A sentence: an NVIDIA GPU is there but is not used or not usable, and how to fix it; `null` when fine. */
+  problem: string | null;
+}
+
+/** The speech device and the video encoder actually chosen (`ve.py hardware`, SPEC section 5). */
+export interface SystemHardware {
+  /** The NVIDIA GPU of this computer; `null` when there is none. */
+  nvidia: string | null;
+  speech: SystemAcceleration;
+  video: SystemAcceleration;
+}
+
 /** The answer of `adminGetSystem`. */
 export interface SystemView {
   server: {
@@ -115,6 +133,7 @@ export interface SystemView {
   toolkit: SystemToolkit;
   prepare: PrepareState;
   programs: ProgramInfo[];
+  hardware: SystemHardware;
   cpu: { processors: number; running: number; budget: number };
   gpu: { total: number; perJob: number; slots: SystemGpuSlot[] };
   counts: SystemCounts;

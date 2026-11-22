@@ -1,0 +1,7 @@
+# CUDA 12 libraries for the NVIDIA GPU (speech recognition with faster-whisper).
+# The server installs this file, after requirements.txt, only on a Windows or Linux computer that has an NVIDIA GPU
+# (SPEC section 7); vekit/asr.py makes their folders findable.  Wheels exist for win_amd64 and linux x86_64 / aarch64.
+# ctranslate2 4.9.1 is the first release built with the Blackwell (RTX 50) GPU targets.
+ctranslate2>=4.9.1
+nvidia-cublas-cu12>=12.1
+nvidia-cudnn-cu12>=9.1,<10
