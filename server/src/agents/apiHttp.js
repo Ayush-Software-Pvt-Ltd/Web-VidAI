@@ -1,5 +1,4 @@
-// VidAI's own requests to a service (SPEC-desktop section 7a, "Options, addresses and protocols";
-// src-tauri/src/opencode/http.rs):
+// VidAI's own requests to a service (docs/SPEC.md section 5, "Harness, program and model"):
 //
 //   option          model list                         test
 //   opencodeGo      GET <address>/v1/models, bearer    POST <address>/v1/messages, bearer
@@ -13,7 +12,7 @@
 // every sentence is built from the status and fixed words.
 //
 // `fetch` is injected (Node's built-in one by default). It has no separate connect timeout, so
-// the limits below are for the whole request (the desktop app had 5 seconds to connect).
+// the limits below are for the whole request .
 
 import { AppError, invalidInput } from "../errors.js";
 import { failureText, objectOf, serviceForBaseUrl, subjectOf } from "./apiHttpFailure.js";

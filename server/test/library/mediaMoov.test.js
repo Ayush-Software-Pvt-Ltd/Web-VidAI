@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { readIsoBmffSize } from "../../src/library/mediaMoov.js";
 import { MEDIA_FIXTURES, tempFolder, write } from "./support.js";
 
-// Synthetic boxes, ported from the helpers of `media.rs`.
+// Synthetic boxes.
 
 const IDENTITY = [0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000];
 const ROT90 = [0, 0x10000, 0, -0x10000, 0, 0, 0, 0, 0x40000000];

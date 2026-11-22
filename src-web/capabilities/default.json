@@ -1,7 +1,0 @@
-{
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "What the browser may ask the server to do besides the commands of VidAI itself (which need no entry here): opening and revealing paths, and notifications. No core:* permissions: the page has no window and its events come over /api/events. No dialog permissions: the file pickers are a page of the UI, fed by /api/fs.",
-  "windows": ["main"],
-  "permissions": ["opener:default", "notification:default"]
-}

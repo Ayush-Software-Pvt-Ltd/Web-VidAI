@@ -1,4 +1,4 @@
-// Port of the unit tests of src-tauri/src/jobs/keepgoing.rs.
+// The decision of a keeper (docs/SPEC.md section 8, "Keeping a job going").
 
 import assert from "node:assert/strict";
 import test from "node:test";

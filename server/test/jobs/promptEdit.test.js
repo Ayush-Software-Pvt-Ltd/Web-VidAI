@@ -1,4 +1,4 @@
-// Port of the unit tests of src-tauri/src/jobs/prompt.rs that still apply (order of parts, blank
+// The first message (order of parts, blank
 // lines, trimming, product links, notes, styles, slots, refusals, per-program differences), for
 // the new header and project paragraph (docs/SPEC.md section 8, "Prompt").
 

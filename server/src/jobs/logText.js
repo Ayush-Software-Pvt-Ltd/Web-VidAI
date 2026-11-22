@@ -1,4 +1,4 @@
-// Text helpers of the job log and the error sentences (src-tauri/src/jobs/log.rs).
+// Text helpers of the job log and the error sentences.
 
 /** Longest one-line summary (tool lines, last activity). */
 export const LINE_CHARS = 160;

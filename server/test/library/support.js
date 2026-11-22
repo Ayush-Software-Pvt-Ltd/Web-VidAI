@@ -9,7 +9,7 @@ import { createWorld } from "../storage/support.js";
 
 export { rejectsCode } from "../storage/support.js";
 
-/** The media fixtures copied from the Rust tests. */
+/** The media fixtures used by the library tests. */
 export const MEDIA_FIXTURES = path.join(import.meta.dirname, "../support/fixtures/media");
 
 /** Makes a temporary folder (real path) and returns it with its cleanup. */

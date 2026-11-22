@@ -1,5 +1,5 @@
 // The scheduling rules of the three queues as one pure function (docs/SPEC.md section 8, "The edit
-// queue" and "The timeline queue and the render queue"; ported from `queue.rs::schedule`). No
+// queue" and "The timeline queue and the render queue"). No
 // clock, no database: the caller passes everything in and applies the answer, so every rule is
 // a table test.
 
@@ -105,7 +105,7 @@ export function lineOrder(queue, waiting) {
  * fresh job is held back the fresh jobs behind it stay behind it. The timeline and render
  * queues are plain first-in first-out with their own slots.
  *
- * "No job holds a slot" opens the delay like in the desktop app: with nothing running there is
+ * "No job holds a slot" opens the delay: with nothing running there is
  * nothing to spare the CPU for, so a job that finishes lets the next launch start at once.
  *
  * @param {object} input

@@ -1,4 +1,4 @@
-// The process registry (docs/SPEC.md section 6, "Leftover processes"): what a crashed server left
+// The process registry (docs/SPEC.md section 8, "Recovery"): what a crashed server left
 // behind is ended at the next start, and only what is still the same process.
 
 import assert from "node:assert/strict";

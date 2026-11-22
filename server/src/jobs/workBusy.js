@@ -1,4 +1,4 @@
-// "Busy workers" (docs/SPEC-desktop.md section 6, "Waiting for its own commands"): a model that
+// "Busy workers" (docs/SPEC.md section 8, "Keeping a job going"): a model that
 // starts a long command in the background of a shell (a local transcription, a render) ends its
 // turn to wait, and the agent does not track such a process as a task. The server reads the CPU
 // time of the job's process tree every few seconds, the model host itself left out: when some
@@ -33,7 +33,7 @@ export const BUSY_CPU_SHARE = 0.1;
 export const BUSY_HOLD_MS = 90_000;
 /** The model that waits for its busy commands is reminded at most this often. */
 export const WAIT_MESSAGE_EVERY_MS = 300_000;
-/** How often the driver should refresh the tree (`tree_refresh` of the Rust `Timings`). */
+/** How often the driver should refresh the tree. */
 export const REFRESH_MS = 5000;
 
 /**
@@ -61,7 +61,7 @@ export const REFRESH_MS = 5000;
  *   seconds of the pids so far (`treeCpuSeconds` or `cpuByPid` of `platform/process.js`). With
  *   a total, growth is the difference to the previous total (a process that ended lowers it,
  *   which never counts as growth); with one number per pid only the pids seen in both samples
- *   count, as the Rust did.
+ *   count.
  * @param {boolean} options.supported Whether CPU time can be read on this system at all.
  * @param {number} [options.cpuShare] Default `BUSY_CPU_SHARE`.
  * @param {number} [options.holdMs] Default `BUSY_HOLD_MS`.

@@ -1,5 +1,5 @@
-// Evidence from the output folder (docs/SPEC-desktop.md section 6 "Progress", evidence 2, and
-// docs/SPEC.md section 10): the project folder `<video>/output/<video folder name>.hf/` with its
+// Evidence from the output folder (docs/SPEC.md section 8, "Progress", evidence 2, and
+// section 10): the project folder `<video>/output/<video folder name>.hf/` with its
 // `index.html`, the thumbnails and `meta.txt`, written after the job started. Files that were
 // there, unchanged, when the run started never count, so a file the previous job wrote a moment
 // before this one started is not this job's work.

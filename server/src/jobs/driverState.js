@@ -1,4 +1,4 @@
-// What the pieces of one job's driver share (the fields of `Driver` in `driver.rs`): the
+// What the pieces of one job's driver share : the
 // resolved settings of the job, the queue, the requests of the manager, the log and the
 // published progress. Plain data and small helpers; the decisions are in `driverProcess.js`,
 // `driverObserve.js` and `driver.js`.
@@ -14,7 +14,7 @@ import { cpuByPid, endTree, listTree } from "../platform/process.js";
 /** @typedef {import("./logDescribe.js").Draft} Draft */
 
 /**
- * The times of the driver, in milliseconds (`Timings` of the old `manager.rs`).
+ * The times of the driver, in milliseconds.
  * @typedef {object} DriverTimings
  * @property {number} settle Quiet this long, with nothing pending: the model is idle.
  * @property {number} interruptTimeout How long a pause waits for the model to go idle.
@@ -96,7 +96,7 @@ export function createDriverState(ctx) {
 
     /**
      * Whether the driver may still send a message of its own: not after a pause or a stop was
-     * requested (the `Halt` of `driver.rs`; synchronous because the driver is one thread).
+     * requested (synchronous because the driver is one thread).
      * @returns {boolean}
      */
     halted: () => state.request !== null,

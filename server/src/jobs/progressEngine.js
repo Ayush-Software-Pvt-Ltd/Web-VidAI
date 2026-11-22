@@ -1,5 +1,4 @@
-// The progress engine of one agent job (docs/SPEC.md section 8 "Progress", carried over from
-// docs/SPEC-desktop.md section 6 and src-tauri/src/jobs/progress.rs).
+// The progress engine of one agent job (docs/SPEC.md section 8 "Progress").
 //
 // A job of each kind has a model (`progressModels.js`): a weighted checklist of milestones. The
 // percent is the sum of the weights of the finished milestones plus an estimate from active time

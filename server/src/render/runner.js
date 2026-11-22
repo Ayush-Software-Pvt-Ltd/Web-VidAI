@@ -1,4 +1,4 @@
-// The render runner (docs/SPEC.md section 12, "Render Final"): turns a project into an MP4 on the
+// The render runner (docs/SPEC.md section 12): turns a project into an MP4 on the
 // server with one `hyperframes render`, without an agent, and levels the sound.
 //
 //   const runner = createRenderRunner(deps);

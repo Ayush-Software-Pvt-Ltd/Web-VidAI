@@ -1,7 +1,5 @@
 // `ClaudeInfo`: the models, effort levels and defaults of the server's Claude Code, read from the
-// `initialize` and `get_settings` control requests (docs/SPEC-desktop.md section 6, "Models,
-// effort and usage limits"; ported from src-tauri/src/claude/info.rs and the selection rules of
-// src-tauri/src/claude/mod.rs).
+// `initialize` and `get_settings` control requests (docs/SPEC.md section 5, "Usage limits").
 //
 // Refresh policy (see `service.js`): at startup, on demand, and at most once a day otherwise.
 // Every fetch uses a fresh short-lived helper process, so the list reflects the current settings.
@@ -184,7 +182,7 @@ export function sameModels(a, b) {
  */
 
 /**
- * Applies the selection rules (docs/SPEC-desktop.md section 6) against the known model list: a
+ * Applies the selection rules (docs/SPEC.md section 5, "Usage limits") against the known model list: a
  * model that is not in the list falls back to `null` (Claude Code's default), and an effort the
  * chosen model does not support is reset to `null`. Without a fetched list (`info` is `null` or
  * has no models) the selection is kept as given, only blank strings become `null`.

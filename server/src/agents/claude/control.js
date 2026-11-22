@@ -1,5 +1,5 @@
 // A Claude Code process in stream-json mode used only for control requests (`initialize`,
-// `get_settings`, `get_usage`); ported from src-tauri/src/claude/control.rs. It never receives a
+// `get_settings`, `get_usage`). It never receives a
 // user message, so it never makes a model call.
 //
 // The process runs without MCP servers, hooks or session persistence, in a working folder inside

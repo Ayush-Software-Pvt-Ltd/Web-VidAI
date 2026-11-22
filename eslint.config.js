@@ -13,8 +13,6 @@ export default tseslint.config(
   {
     ignores: [
       "dist",
-      "src-tauri",
-      "src-web",
       "artifacts",
       "node_modules",
       // The video editing toolkit (Python, templates) and recorded test data are not app code.

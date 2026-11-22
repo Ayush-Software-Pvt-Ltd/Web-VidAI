@@ -1,5 +1,5 @@
-// What selecting an API option and launching a job on it need to know (SPEC-desktop section 7a;
-// src-tauri/src/opencode/mod.rs `ApiSetup` and `job_env`). Pure functions of plain values.
+// What selecting an API option and launching a job on it need to know (docs/SPEC.md section 5,
+// "Harness, program and model"). Pure functions of plain values.
 
 import { invalidInput } from "../errors.js";
 import { NO_KEY_TOKEN, SETUP_INFO, keyRequired, noModelText, setupOfOption } from "./setups.js";

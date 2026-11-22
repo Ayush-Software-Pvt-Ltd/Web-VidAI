@@ -1,5 +1,5 @@
-// The requests VidAI makes to a service, against a local stand-in provider (ported from the tests
-// of src-tauri/src/opencode/http.rs).
+// The requests VidAI makes to a service, against a local stand-in provider (docs/SPEC.md section 5, "Harness,
+// program and model").
 
 import assert from "node:assert/strict";
 import { describe, it, after } from "node:test";

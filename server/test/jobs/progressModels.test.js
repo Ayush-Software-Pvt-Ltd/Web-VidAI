@@ -1,5 +1,4 @@
-// The models, markers and pacing of the progress engine (ports of the model, marker and history
-// unit tests of src-tauri/src/jobs/progress.rs).
+// The models, markers and pacing of the progress engine (docs/SPEC.md section 8, "Progress").
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -41,9 +40,8 @@ test("the edit weights add up to 99 and the cumulative values are the owner's an
   assert.deepEqual(cumulative, [3, 15, 30, 64, 74, 83, 91, 96, 99]);
 });
 
-test("the re-edit and timeline edit weights stay as in the desktop app: 95, never above 99", () => {
-  // The brief assumed these add up to 99; the Rust model has no mechanism for it. A finished
-  // re-edit shows 95 "Finishing up" until it completes.
+test("the re-edit and timeline edit weights are 95, never above 99", () => {
+  // A finished re-edit shows 95 "Finishing up" until it completes.
   assert.deepEqual(
     modelOf("reEdit").steps.map((s) => s.weight),
     [65, 30],

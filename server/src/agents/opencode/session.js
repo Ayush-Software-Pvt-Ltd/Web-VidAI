@@ -1,4 +1,4 @@
-// Starts one job's OpenCode 2 session (docs/SPEC.md section 5, "The OpenCode 2 program"): the
+// Starts one job's OpenCode 2 session (docs/SPEC.md section 8, "Driving OpenCode 2"): the
 // OpenCode counterpart of `startSession` in `claude/session.js`. What it returns is an
 // `AgentProcess` of the job engine, and what it reports is the same `SessionEvent` stream (`line`
 // events in the Claude Code vocabulary, then `exited` once), so the engine does not know which

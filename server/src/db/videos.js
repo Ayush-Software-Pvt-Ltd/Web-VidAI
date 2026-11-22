@@ -39,7 +39,7 @@ export function emptyInputs() {
 }
 
 /**
- * Reads stored inputs leniently, like the Rust store: a damaged field or a slot that does not
+ * Reads stored inputs leniently: a damaged field or a slot that does not
  * exist falls back to the default instead of failing the whole library.
  * @param {unknown} raw
  * @returns {VideoInputs}

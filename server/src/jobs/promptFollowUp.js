@@ -5,7 +5,7 @@
 // A resumed session already has the header of its first message, so these refer to its names
 // (PROJECT_FOLDER, CHECK_COMMAND). When the session is gone, `newSession` carries the input of
 // the first message: the new session then gets the full instructions, the paragraph about the
-// earlier work, and the follow-up (docs/SPEC-desktop.md section 6, "Prompt composition").
+// earlier work, and the follow-up (docs/SPEC.md section 8, "Prompt").
 
 import { markerInstructions } from "./progressMarkers.js";
 import { composeEdit } from "./promptEdit.js";

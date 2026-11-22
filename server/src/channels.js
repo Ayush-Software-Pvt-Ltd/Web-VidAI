@@ -1,6 +1,6 @@
 // Channel rules (docs/SPEC.md section 6, "Channels" and "Videos"): create (a new folder or an
 // existing directory), update, remove, reorder, export and import, the default prompt and new video
-// folders. Names, slots and the default prompt are carried over from docs/SPEC-desktop.md section 4.
+// folders.
 //
 // Directory rules: a channel directory is a directory inside a storage folder, not a storage folder
 // itself (nor a personal folder), not the data directory or anything around or inside it except
@@ -29,8 +29,7 @@ const MAX_IMPORTED_CHANNELS = 100;
 const TAKEN_MESSAGE = "This folder already belongs to a channel.";
 const VIDEO_TYPES = ["auto", "long", "short"];
 const DOCUMENT_FORMAT = "vidai-channels";
-/** The desktop app's settings file, accepted so a team can bring its prompts along. */
-const DESKTOP_FORMAT = "vidai-settings";
+const NEWEST_DOCUMENT_VERSION = 1;
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -434,7 +433,7 @@ export function createChannelsService({
     },
 
     /**
-     * Applies a document made by `exportDocument` (or the desktop app's settings file): a channel of
+     * Applies a document made by `exportDocument`: a channel of
      * the same name (without regard to letter case) gets the video type, prompts and styles; the
      * others are made with a new folder in the personal folder. Everything is checked first.
      * @param {{ id: string }} user
@@ -528,11 +527,9 @@ function pick({ videoType, long, short }) {
  */
 export function parseDocument(document) {
   if (!isRecord(document)) throw invalidInput("This is not a VidAI channels file.");
-  const desktop = document.format === DESKTOP_FORMAT;
-  if (document.format !== DOCUMENT_FORMAT && !desktop) {
+  if (document.format !== DOCUMENT_FORMAT) {
     throw invalidInput("This is not a VidAI channels file.");
   }
-  const newest = desktop ? 2 : 1;
   if (
     typeof document.version !== "number" ||
     !Number.isInteger(document.version) ||
@@ -540,7 +537,7 @@ export function parseDocument(document) {
   ) {
     throw invalidInput("This channels file has no valid version.");
   }
-  if (document.version > newest) {
+  if (document.version > NEWEST_DOCUMENT_VERSION) {
     throw invalidInput("This file was made by a newer version of VidAI.");
   }
   if (!Array.isArray(document.channels)) throw invalidInput("This channels file has no channels.");
@@ -550,13 +547,7 @@ export function parseDocument(document) {
   const seen = new Set();
   return document.channels.map((raw, index) => {
     if (!isRecord(raw)) throw invalidInput(`Channel ${index + 1} of the file is not valid.`);
-    // The desktop file names a channel by its folder; that name may be longer than a channel name allows.
-    const text = desktop && typeof raw.folderName === "string" ? raw.folderName.trim() : raw.name;
-    const name = cleanChannelName(
-      desktop && typeof text === "string"
-        ? [...text].slice(0, MAX_CHANNEL_NAME_CHARS).join("")
-        : text,
-    );
+    const name = cleanChannelName(raw.name);
     if (seen.has(name.toLowerCase())) {
       throw invalidInput(`The file has the channel "${name}" twice.`);
     }

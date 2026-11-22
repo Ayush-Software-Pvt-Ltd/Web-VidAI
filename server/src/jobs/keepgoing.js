@@ -1,5 +1,4 @@
-// Keeping a job going (docs/SPEC-desktop.md section 6, "Keeping a job going"; carried over by
-// docs/SPEC.md section 8).
+// Keeping a job going (docs/SPEC.md section 8, "Keeping a job going").
 //
 // Some models end a turn with a sentence that announces the next step, without doing it. A turn
 // that ends before the job's work is done is not a failure: the server tells the model to go on,
@@ -30,7 +29,7 @@ export const COMPLETION_MARKER = "[OUTPUT COMPLETED]";
  * @returns {boolean}
  */
 export function hasCompletionMarker(text) {
-  // ASCII-only upper-casing, as the Rust: the marker is ASCII and `toUpperCase` would also fold
+  // ASCII-only upper-casing: the marker is ASCII and `toUpperCase` would also fold
   // characters such as the dotless i.
   return asciiUpper(text).includes(COMPLETION_MARKER);
 }
@@ -44,7 +43,7 @@ function asciiUpper(text) {
 }
 
 /**
- * The thresholds of a keeper (SPEC-desktop section 6 gives the reasoning).
+ * The thresholds of a keeper (docs/SPEC.md section 8, "Keeping a job going", gives the reasoning).
  * @typedef {object} Limits
  * @property {number} idleTurns Stuck after this many idle moments in a row whose turns made no
  *   tool call at all.

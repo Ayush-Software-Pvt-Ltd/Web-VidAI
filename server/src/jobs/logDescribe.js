@@ -1,4 +1,4 @@
-// Turning the stream of an agent into job log entries (src-tauri/src/jobs/log.rs, `Describer`).
+// Turning the stream of an agent into job log entries (docs/SPEC.md section 8, "The job log").
 //
 // Tool calls become one line ("Bash: Render graphics at 1080", using the tool's description when
 // there is one) with the full input in `detail`, sub-agent output is marked `nested`, and

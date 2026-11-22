@@ -1,5 +1,5 @@
-// Checking and normalizing the address an admin types for an API option (SPEC-desktop section 7a,
-// "Addresses"; src-tauri/src/opencode/mod.rs `normalize_base_url`).
+// Checking and normalizing the address an admin types for an API option (docs/SPEC.md section 5,
+// "Harness, program and model").
 
 import { invalidInput } from "../errors.js";
 import { defaultBaseUrl, protocolOf } from "./setups.js";

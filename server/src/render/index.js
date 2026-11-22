@@ -2,7 +2,7 @@
 // function and the helpers Prepare calls. `createRenderModule(deps)` is plugged into the
 // composition root like the timeline module.
 //
-// Wiring notes for `app.js` (see the report of this module for the full list):
+// How the composition root (`engine.js`) wires it:
 //   const render = createRenderModule({ dataDir, clock, log, limits: limits.api, registry, sink,
 //     library: library.api, timeline: timeline.api, activeJob: jobs.api.activeJobOf,
 //     enqueue: queues.enqueue });

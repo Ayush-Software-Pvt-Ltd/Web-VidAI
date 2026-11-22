@@ -17,7 +17,7 @@
 @custom-variant topbar-max-1100 (&:where([data-topbar~="max-1100"] *));
 
 /*
- * VidAI design tokens (SPEC section 9): a calm, dense, professional desktop utility.
+ * VidAI design tokens (SPEC section 9): a calm, dense, professional tool.
  * Every colour is a CSS variable so light and dark mode switch in one place. The scheme follows
  * the system (`prefers-color-scheme`); `data-theme="light" | "dark"` on <html> forces one (used
  * by the primitives gallery and screenshots).
@@ -319,7 +319,7 @@
 
   body {
     overflow: hidden;
-    /* A desktop app: text is not selectable unless a component opts in (`select-text`). */
+    /* An application, not a document: text is not selectable unless a component opts in (`select-text`). */
     user-select: none;
     -webkit-user-select: none;
     cursor: default;
@@ -442,7 +442,7 @@
 }
 
 /*
- * Web version only (`--page-zoom` is set on <html> by `applyPageZoom`, src/app/appearance.ts):
+ * In the browser (`--page-zoom` is set on <html> by `applyPageZoom`, src/app/appearance.ts):
  * CSS `zoom` scales a popup's offset a second time, so a menu would open away from its button.
  * The positioning wrapper therefore undoes the zoom (its offset is then in screen pixels, as
  * measured) and the popup inside takes it again for its own size. Nothing changes in the app.
@@ -455,9 +455,9 @@ html[style*="--page-zoom"] [data-radix-popper-content-wrapper] > * {
 }
 
 /*
- * Web version only (`data-web-page` and `--page-min-*` are set on <html> by `applyWebPageFloor`,
- * src/app/appearance.ts): a browser window can be any size, so the layout never gets less than the
- * desktop window's smallest size (`MIN_LAYOUT_SIZE`, in zoomed px) and the page scrolls both ways
+ * In the browser (`data-web-page` and `--page-min-*` are set on <html> by `applyWebPageFloor`,
+ * src/app/appearance.ts): a browser window can be any size, so the layout never gets less than
+ * the smallest size it is designed for (`MIN_LAYOUT_SIZE`, in zoomed px) and the page scrolls both ways
  * below it. The body no longer clips, so the scrolling reaches the viewport; the page background
  * (`html`) fills the area the scrolling reveals. Dialogs, sheets, toasts and menus are fixed to the
  * visible window and are not part of the scrolled page.

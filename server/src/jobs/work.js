@@ -1,4 +1,4 @@
-// Evidence of work (docs/SPEC-desktop.md section 6, "Keeping a job going" and "Progress").
+// Evidence of work (docs/SPEC.md section 8, "Keeping a job going" and "Progress").
 //
 // Two kinds, each in its own file; this one is the entry point for both:
 // - `workBusy.js`: whether the model's own commands keep the computer busy (the "busy workers"

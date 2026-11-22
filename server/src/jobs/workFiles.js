@@ -1,5 +1,5 @@
-// Evidence in the working folder of a video (docs/SPEC-desktop.md section 6, "Progress",
-// evidence 2; src-tauri/src/jobs/work.rs).
+// Evidence in the working folder of a video (docs/SPEC.md section 8, "Progress",
+// evidence 2).
 //
 // A model may never write its progress markers while it works (the OpenCode models of the owner's
 // real edits wrote all of them in their last message), and a model without sub-agents gives the

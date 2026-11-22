@@ -1,5 +1,4 @@
-// The readiness decision, over its whole domain and the shared table (ported from the tests of
-// src-tauri/src/readiness.rs).
+// The readiness decision, over its whole domain and the shared table (docs/SPEC.md section 5, "Readiness").
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

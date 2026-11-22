@@ -1,10 +1,9 @@
 #!/bin/sh
-# A fake Claude Code for the job engine integration tests (tests/jobs_engine.rs) and the
-# end-to-end runs of the real app (scripts/e2e.mjs).
+# A fake Claude Code for the job engine integration tests (server/test/jobs/engine.test.js).
 #
 # It speaks the stream-json protocol of `claude -p --input-format stream-json
 # --output-format stream-json` closely enough for the job manager, following the recordings in
-# tests/fixtures/claude-stream/. FAKE_STATE is a directory where every call records its
+# server/test/support/fixtures/claude-stream/. FAKE_STATE is a directory where every call records its
 # arguments, environment (the OpenCode variables) and stdin, and where tests leave
 # signals (release files).
 # The working directory is the Editing Folder, as with the real Claude Code.

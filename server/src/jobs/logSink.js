@@ -1,4 +1,4 @@
-// Delivery of job log entries (src-tauri/src/jobs/log.rs, `LogSink`).
+// Delivery of job log entries (docs/SPEC.md section 8, "The job log").
 //
 // The sink assigns increasing `seq` numbers, scrubs every registered secret (an API key), cuts
 // `text` and `detail` to `MAX_LOG_DETAIL_CHARS` (after scrubbing, so a cut can never leave half

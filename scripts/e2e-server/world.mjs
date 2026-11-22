@@ -73,9 +73,16 @@ export function rendererStatus() {
   if (!fs.existsSync(cli)) return { ok: false, note: "the hyperframes package is not installed" };
   if (!hasProgram("ffmpeg")) return { ok: false, note: "ffmpeg is not installed" };
   const found = spawnSync(cli, ["browser", "path"], { encoding: "utf8", timeout: 60_000 });
-  const line = String(found.stdout ?? "").trim().split(/\r?\n/u).at(-1) ?? "";
+  const line =
+    String(found.stdout ?? "")
+      .trim()
+      .split(/\r?\n/u)
+      .at(-1) ?? "";
   if (found.status !== 0 || line === "" || !fs.existsSync(line)) {
-    return { ok: false, note: "the renderer's browser is not installed (hyperframes browser ensure)" };
+    return {
+      ok: false,
+      note: "the renderer's browser is not installed (hyperframes browser ensure)",
+    };
   }
   return { ok: true, note: line };
 }
@@ -213,24 +220,27 @@ export async function startServer(world, { verbose = false } = {}) {
 /** @param {string} base @returns {Promise<boolean>} */
 function answers(base) {
   return new Promise((resolve) => {
-    import("node:https").then(({ default: https }) => {
-      const request = https.get(
-        base,
-        { rejectUnauthorized: false, timeout: 2000 },
-        (response) => {
-          response.resume();
-          resolve(true);
-        },
-      );
-      request.on("error", () => {
+    import("node:https").then(
+      ({ default: https }) => {
+        const request = https.get(
+          base,
+          { rejectUnauthorized: false, timeout: 2000 },
+          (response) => {
+            response.resume();
+            resolve(true);
+          },
+        );
+        request.on("error", () => {
+          resolve(false);
+        });
+        request.on("timeout", () => {
+          request.destroy();
+          resolve(false);
+        });
+      },
+      () => {
         resolve(false);
-      });
-      request.on("timeout", () => {
-        request.destroy();
-        resolve(false);
-      });
-    }, () => {
-      resolve(false);
-    });
+      },
+    );
   });
 }

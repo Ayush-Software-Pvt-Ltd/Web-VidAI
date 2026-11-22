@@ -1,6 +1,6 @@
 // What new edits need on this server: the ONE decision (docs/SPEC.md section 5, "Harness, program
-// and model"; docs/SPEC-desktop.md section 6, "Readiness of a launch", with its table), used by
-// Start Editing, the status line and the System page. Ported from src-tauri/src/readiness.rs;
+// and model"; docs/SPEC.md section 5, "Readiness", with its table), used by
+// Start Editing, the status line and the System page.
 // `server/test/support/fixtures/readiness-table.json` is run by the server tests and by the UI
 // tests (`src/lib/readiness.ts`), so they cannot disagree.
 //

@@ -1,6 +1,5 @@
-// What an error answer of a service means, as one readable sentence (SPEC-desktop section 7a,
-// "Test and errors"; src-tauri/src/opencode/http.rs `failure_text_for`). Used by Test, the model
-// list, the quota and the job errors of every API option.
+// What an error answer of a service means, as one readable sentence
+// (docs/SPEC.md section 5, "Harness, program and model"). Used by Test, the model list, the quota and the job errors of every API option.
 //
 // An `opencode.ai` address keeps the OpenCode wording; any other address uses generic texts that
 // call the service "the service". Where a sentence says what to do, the wording depends on who

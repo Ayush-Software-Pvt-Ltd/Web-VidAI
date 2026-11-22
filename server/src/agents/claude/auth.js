@@ -1,5 +1,4 @@
-// Claude Code login state (docs/SPEC.md section 5, "Finding and checking Claude Code"; ported
-// from src-tauri/src/claude/auth.rs).
+// Claude Code login state (docs/SPEC.md section 5, "Harness, program and model").
 //
 // Runs `claude auth status`, which prints JSON containing `loggedIn`. On the server this is the
 // login of the OS user that runs the server (SPEC section 5).

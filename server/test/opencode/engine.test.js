@@ -1,4 +1,4 @@
-// The session part of `src-tauri/tests/opencode2_engine.rs`, against the fake OpenCode 2: what the
+// The session of the OpenCode 2 driver, against the fake OpenCode 2: what the
 // server is started with, the model and effort of the messages, early ends, pause and continue,
 // background work, the tool tree, permissions and questions, limits and crashes.
 //

@@ -1,5 +1,5 @@
-// What a job's OpenCode server is started with (ported from the tests of `launch2.rs`), and the
-// parts of that no test of the Rust side had: the folder of the job's own files, and the
+// What a job's OpenCode server is started with (the command line, the environment and the
+// configuration), and the folder of the job's own files, and the
 // guarantee that a key is only ever in the environment of the server.
 
 import assert from "node:assert/strict";

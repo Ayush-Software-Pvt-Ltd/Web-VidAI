@@ -1,5 +1,5 @@
-// Addresses, keys, job environment and the selection rules (docs/SPEC-desktop.md section 7a;
-// ported from the tests of src-tauri/src/opencode/mod.rs).
+// Addresses, keys, job environment and the selection rules (docs/SPEC.md section 5,
+// "Harness, program and model").
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";

@@ -43,8 +43,6 @@ export default defineConfig({
     // carries every call to the server.
     port: 1420,
     strictPort: true,
-    // The desktop sources are not part of the page.
-    watch: { ignored: ["**/src-tauri/**"] },
     proxy: {
       "^/api/": toServer(),
       "^/p/": toServer(),

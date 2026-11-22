@@ -1,7 +1,7 @@
 #!/usr/bin/env -S python3 -I
 """A fake OpenCode 2 program for the tests of the OpenCode driver (server/test/opencode/).
 
-Copied from the desktop app's tests/support/fake-opencode2.py and adapted: the call record also
+The call record also
 lists the files of OPENCODE_CONFIG_DIR and says HOME (config_dir_files=, HOME=), and FAKE_OPENCODE_HANG
 makes the requests whose path contains one of its comma separated words never answer.
 

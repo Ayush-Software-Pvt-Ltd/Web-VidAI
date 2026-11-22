@@ -11,12 +11,6 @@ The contract is `docs/SPEC.md`: read its table of contents and only the section 
 If code and SPEC disagree, fix one of them in the same change.
 Never use the em dash character anywhere in the repository; ESLint and the SPEC forbid it, use a plain dash instead.
 
-## Transition (delete this section once `src-tauri/` and `src-web/` are removed)
-
-- `src-tauri/`, `src-web/`, `docs/SPEC-desktop.md`, `.github/` and the old scripts (`scripts/e2e*`, `scripts/bundle*`, `scripts/web*`) belong to the old desktop and single-user apps.
-- They are read-only references, never described as current: do not edit, build or test them, and never run `cargo`, `npm run tauri`, `e2e`, `e2e:web`, `bundle:*`, `web*`, `rust:*` or `gen:types`.
-- The `check` script no longer calls cargo.
-
 ## Commands
 
 Requires Node.js 22.13+, ffmpeg and ffprobe, Python 3.10+; run `npm install` first.

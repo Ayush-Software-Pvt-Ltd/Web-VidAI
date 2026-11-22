@@ -1,5 +1,5 @@
-// The HTTP client of one OpenCode 2 server (docs/SPEC.md section 5, "The OpenCode 2 program";
-// ported from `Http` in `server2.rs`): every request goes to 127.0.0.1 with HTTP basic auth (user
+// The HTTP client of one OpenCode 2 server (docs/SPEC.md section 8, "Driving OpenCode 2";
+// "Driving OpenCode 2" in section 8): every request goes to 127.0.0.1 with HTTP basic auth (user
 // `opencode`, the per-run password), the directory of the job in `x-opencode-directory`, a time
 // limit, and no redirect.
 //

@@ -1,5 +1,5 @@
-// What a video has produced (docs/SPEC.md section 6, "Videos"). New in the server; the desktop
-// app looked for Final Cut Pro and Premiere Pro files instead.
+// What a video has produced (docs/SPEC.md section 6, "Videos"). The server looks for the
+// HyperFrames project of the edit.
 //
 //   <video>/output/<video folder name>.hf/index.html   the project (at most one)
 //   <video>/output/*.mp4 | *.mov | *.m4v                finals

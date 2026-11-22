@@ -1,4 +1,4 @@
-// Port of the unit tests of src-tauri/src/jobs/retry.rs, plus the counter rules of the driver.
+// Retries after a model error, plus the counter rules of the driver.
 
 import assert from "node:assert/strict";
 import test from "node:test";

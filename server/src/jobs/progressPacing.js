@@ -1,9 +1,9 @@
-// Typical times (docs/SPEC-desktop.md section 6 "Progress", Pacing): the active time at which each
+// Typical times (docs/SPEC.md section 8, "Progress", Pacing): the active time at which each
 // milestone is typically finished, from the defaults measured on real edits or from the last
 // completed jobs of the same kind and video type on this server.
 //
-// A history row has the total only (`progress_history`: kind, type, seconds, finished_at), so the
-// desktop app's per-milestone medians are gone: once at least `MIN_HISTORY_RUNS` rows have a
+// A history row has the total only (`progress_history`: kind, type, seconds, finished_at), so there are
+// no per-milestone medians: once at least `MIN_HISTORY_RUNS` rows have a
 // total, the median total replaces the default and every default milestone time is scaled by it.
 
 import { modelOf } from "./progressModels.js";

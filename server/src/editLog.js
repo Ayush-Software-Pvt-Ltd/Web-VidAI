@@ -1,5 +1,4 @@
-// The edit log service (docs/SPEC.md sections 15 and 16; the desktop app's log is
-// docs/SPEC-desktop.md "edit log"): `record` is called by the job manager, archive and Disk Cleanup;
+// The edit log service (docs/SPEC.md sections 15 and 16): `record` is called by the job manager, archive and Disk Cleanup;
 // `read` backs the `getEditLog` RPC function. There is no text file mirror any more: the
 // `edit_log` table is the only store, and it keeps the newest 20000 rows.
 

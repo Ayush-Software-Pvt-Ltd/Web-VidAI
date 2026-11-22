@@ -1,9 +1,9 @@
 // The event stream of an OpenCode 2 server (`GET /api/event`, server-sent events): the decoder
-// (ported from `SseDecoder` in `child.rs`) and the reader, which connects, waits for the first
+// and the reader, which connects, waits for the first
 // event, hands the `data` of every event on and, when the stream drops while the server is still
 // there, connects again.
 //
-// The desktop app never reconnected. A server of VidAI runs for hours of work, so a dropped
+// A server of VidAI runs for hours of work, so a dropped
 // connection (a proxy-less local socket still can be reset) must not end the job's events;
 // `Last-Event-ID` is sent when the server gave an id, and the caller drops an event it has seen
 // (`server.js` keeps the ids), because a server that replays on reconnect would repeat events.

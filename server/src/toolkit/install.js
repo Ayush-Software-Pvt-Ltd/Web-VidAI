@@ -1,5 +1,4 @@
-// Installing and upgrading the toolkit (docs/SPEC.md section 7), ported from the careful parts of
-// `src-tauri/src/toolkit.rs`: build next to the target and swap, never lose the agents'
+// Installing and upgrading the toolkit (docs/SPEC.md section 7): build next to the target and swap, never lose the agents'
 // `MEMORY.md`, write the version marker last.
 //
 // What is copied from the repository's `toolkit/`: `CLAUDE_VE_ALL/` (never `__pycache__`, `*.pyc`)

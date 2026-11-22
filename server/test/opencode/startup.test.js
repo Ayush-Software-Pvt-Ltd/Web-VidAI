@@ -1,4 +1,4 @@
-// Ports of `src-tauri/tests/opencode_startup.rs` against the fake: a slow start is waited for and
+// Starting the OpenCode 2 server against the fake: a slow start is waited for and
 // said, a server that never gets ready or ends at once fails with what to do, a progress display
 // without line ends is not lost, and the user's own configuration stays out.
 

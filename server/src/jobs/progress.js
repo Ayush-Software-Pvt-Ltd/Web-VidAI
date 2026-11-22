@@ -1,5 +1,4 @@
-// The progress of a job (docs/SPEC.md section 8 "Progress", carried over from
-// docs/SPEC-desktop.md section 6 and src-tauri/src/jobs/progress.rs). Entry point; each part is in
+// The progress of a job (docs/SPEC.md section 8 "Progress"). Entry point; each part is in
 // its own file:
 // - `progressModels.js`: milestones and weights per agent job kind, stage labels.
 // - `progressMarkers.js`: the `[VIDAI_PROGRESS name]` syntax, the prompt paragraph, `markerRules`.

@@ -1,6 +1,6 @@
 // How a failed request to the OpenCode server is told to the user (docs/SPEC.md section 5, "The
-// OpenCode 2 program"; ported from `describe` in `child.rs`). The server runs on the computer
-// that runs VidAI, so "Mac" and "PC" of the desktop texts became that phrase.
+// OpenCode 2 program"). The server runs on the computer that runs VidAI, so the texts say "the
+// computer that runs VidAI" and never "your Mac" or "your PC".
 
 /**
  * Why a request to the server did not get an answer.

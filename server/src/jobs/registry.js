@@ -1,5 +1,4 @@
-// The registry of the processes the job engine started (docs/SPEC.md section 9 and the registry
-// of `platform/process/mod.rs` in the old core): a file the engine keeps current while jobs run,
+// The registry of the processes the job engine started (docs/SPEC.md section 9 and "Recovery"): a file the engine keeps current while jobs run,
 // so that the next start of the server can end what a crashed or killed server left behind.
 //
 //   const registry = createProcessRegistry({ file, isAlive, endTree, clock, log });

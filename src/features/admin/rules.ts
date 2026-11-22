@@ -28,7 +28,7 @@ export const RANGES = {
 
 export type RangedKey = keyof typeof RANGES;
 
-/** SPEC section 5, "Limits": 5 to 100 percent in steps of 5. */
+/** SPEC section 5, "Limits (section 9)": 5 to 100 percent in steps of 5. */
 export const PERCENT_MIN = 5;
 export const PERCENT_MAX = 100;
 export const PERCENT_STEP = 5;

@@ -1,5 +1,5 @@
-// Wire types of channels and the workspace (docs/SPEC.md section 6, "Channels"; slot rules from
-// docs/SPEC-desktop.md section 4). Pure declarations; every field is always present.
+// Wire types of channels and the workspace (docs/SPEC.md section 6, "Channels").
+// Pure declarations; every field is always present.
 import type { PublicSettings } from "../wire.ts";
 
 /** "Auto-detect", "Always Long" or "Always Short": fixes the type of every video of a channel. */

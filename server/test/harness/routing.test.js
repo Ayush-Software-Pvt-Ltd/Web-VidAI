@@ -1,5 +1,4 @@
-// Where the server's own Claude Code setup points ANTHROPIC_BASE_URL (ported from the tests of
-// src-tauri/src/opencode/routing.rs).
+// Where the server's own Claude Code setup points ANTHROPIC_BASE_URL (docs/SPEC.md section 5).
 
 import assert from "node:assert/strict";
 import path from "node:path";

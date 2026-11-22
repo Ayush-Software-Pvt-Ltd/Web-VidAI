@@ -1,4 +1,4 @@
-// Progress markers (docs/SPEC-desktop.md section 6 "Progress", evidence 1): the agent writes
+// Progress markers (docs/SPEC.md section 8, "Progress", evidence 1): the agent writes
 // `[VIDAI_PROGRESS <name>]` on a line by itself in a normal message of the main session each time
 // a milestone is finished. The prompt lists the names (`markerInstructions`) and the activity log
 // shows such lines as compact status entries (`markerRules`, the `MarkerRules` of `log.js`).

@@ -93,6 +93,8 @@ describe("renderEnv", () => {
     assert.equal(env.HYPERFRAMES_RENDER_LOCK, "off");
     assert.equal(env.HYPERFRAMES_BROWSER_PATH, "/b/chrome");
     assert.equal(env.HYPERFRAMES_EXTRACT_CACHE_DIR, workFolders(work).extract);
+    // frames go straight to the encoder, also with several workers
+    assert.equal(env.HF_DE_PARALLEL_STREAM, "true");
     for (const name of ["TMPDIR", "TEMP", "TMP"]) assert.equal(env[name], workFolders(work).tmp);
     assert.equal(env.HYPERFRAMES_FFMPEG_PATH, "/f/ffmpeg");
     assert.equal(env.HYPERFRAMES_FFPROBE_PATH, "/f/ffprobe");

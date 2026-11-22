@@ -2,7 +2,6 @@
 
 This file is the contract for VidAI Server, the multi-user web app.
 If code and this file disagree, fix one of them in the same change.
-The desktop apps and the single-user web version are retired; their contract is kept as `docs/SPEC-desktop.md` only as the reference for the rules that are carried over (each place below names the section), and is deleted together with the old code.
 Never use the em dash character anywhere in the repository.
 
 ## 1. Product
@@ -14,8 +13,8 @@ Each edit is done by a locally installed coding agent (Claude Code or OpenCode 2
 
 Decisions of the product owner (2026-11-22), all settled:
 
-1. The server is Node.js in plain JavaScript (ES modules, no TypeScript, no build step, no Rust, no Tauri) with SQLite for accounts, queues and all management data.
-2. The browser UI stays React + TypeScript and keeps the existing screens where they still apply.
+1. The server is Node.js in plain JavaScript (ES modules, no TypeScript, no build step) with SQLite for accounts, queues and all management data.
+2. The browser UI is React + TypeScript (`src/`), served by the server.
 3. Accounts are created only by an admin, with an email and a password.
 4. The admin chooses the harness (the setup, which decides Claude Code or OpenCode 2), the API details and the model for everybody.
 5. Every user has several channels; a channel is a directory with one folder per video, its own prompts and styles; a user sees only their own channels and videos.
@@ -29,7 +28,7 @@ Decisions of the product owner (2026-11-22), all settled:
 13. The admin sets the maximum CPU and GPU share (5 to 100 percent in steps of 5) for one edit and for all edits together; the GPU share is approximate.
 14. Users can free disk space with Disk Cleanup, which deletes the files in a video's `CLAUDE_VE` folder.
 15. The server always speaks HTTPS and makes its own certificate on the first start.
-16. The server starts with an empty database; nothing is imported from the desktop app.
+16. The server starts with an empty database.
 
 Trust model: all users are colleagues on a private network.
 The agent runs as the operating system user that runs the server, with permission checks switched off, so an edit can read and write whatever that OS user can.
@@ -122,7 +121,7 @@ Tests never use the real data directory.
 | `server/test/` | `node --test` tests; `support/` has the fake agent programs and fixtures |
 | `toolkit/` | the editing toolkit sources (`CLAUDE_VE_ALL/`, `MEMORY.md`, `CLAUDE.md`, `default_prompt.md`) |
 | `src/` | the React UI |
-| `scripts/e2e/` | end-to-end suite (real server, fake agents, Chromium) |
+| `scripts/e2e-server/` | end-to-end suite (real server, fake agents, Chromium) |
 
 Modules start in this order: storage, harness, Claude Code, limits, toolkit, library, preview, timeline, render (which first removes what an interrupted render left behind), the player script, edit log, disk, jobs.
 They stop in the reverse order, so the job engine pauses its jobs before anything it uses goes away; preview copies, change-request pictures and the preview stop after it.
@@ -156,16 +155,162 @@ Each change is validated and clamped on the server and announced with `settings-
 
 ### Harness, program and model
 
-The four setups, their programs, addresses, optional keys, model lists, test requests, readiness rules and the OpenCode 2 details are carried over from `docs/SPEC-desktop.md` section 7a and section 6 "Readiness of a launch", with these changes:
+This is the one place that says how edits run: which program does the editing and which service the model comes from.
+The choice is one of four setups (`Setup`); the three that use a service (the API options `opencodeGo`, `anthropicApi`, `openaiApi`) each have their own address, API key, model and reasoning efforts.
 
-- the setup, API address, key, model and efforts are admin settings for everybody; users see the active setup and model read-only;
-- API keys are stored in the database encrypted with AES-256-GCM under `secret.key`; the UI only ever gets "saved" plus the last 4 characters; keys are scrubbed from logs as before;
-- the Claude subscription login is the login of the OS user that runs the server; the System page tells the admin to run `claude` once in a terminal on the server and shows the login state;
-- when the installed Claude Code's model list changes, the saved model and effort are checked again: a model that is gone becomes Claude Code's default (`null`), an effort the model does not support becomes `null`, and a changed choice is saved and announced with `settings-changed` and `system-changed`;
-- there is one decision for "can new edits start", `readiness.problem(facts)`, used by Start Editing, the status line and the System page; `server/test/support/fixtures/readiness-table.json` is run by the server tests and the UI tests;
-- `gitBashMissing` applies when the server runs on Windows with a Claude Code setup; `notPrepared` means the toolkit environment of section 7 is not ready.
+| Setup | Label | Program | Service | Default address | Key |
+|---|---|---|---|---|---|
+| `claudeSubscription` | Claude Code with Claude Subscription | Claude Code | the Claude login of the OS user that runs the server | none | none |
+| `opencodeGo` | OpenCode 2 with OpenCode Go Subscription | OpenCode 2 (`opencode2`) | OpenCode Go | `https://opencode.ai/inference/go/anthropic` | its own, required |
+| `anthropicApi` | Claude Code with Anthropic Compatible API | Claude Code | any Anthropic compatible API | `https://api.anthropic.com` | its own, optional |
+| `openaiApi` | OpenCode 2 with OpenAI Compatible API | OpenCode 2 (`opencode2`) | any OpenAI compatible API | `https://opencode.ai/inference/go/v1` | its own, optional |
+
+- A new database starts on `claudeSubscription`.
+- The setup, API address, key, model and efforts are admin settings for everybody; users see the active setup and model read-only.
+- Each API option keeps its own address (null = the default above), model, reasoning efforts (per model id) and key, so switching options never loses anything.
+- An API option can be selected only with its model chosen, and `opencodeGo` also only with its key saved; the program is not checked there, because a missing or unsupported program is a readiness problem (next section).
+- The program follows from the setup (`agents/harness.js`, `forNewJob`); a session stays in the program it started in (section 8, "State machine").
+- All four setups exist on macOS and on Windows.
+- A job on an API option keeps itself going when its model ends a turn early (section 8, "Keeping a job going").
+- API keys are stored in the database encrypted with AES-256-GCM under `secret.key`; the UI only ever gets "saved" plus the last 4 characters; a key never appears in an argument, a log, an error or an event, and is replaced by `[api key]` in the job log (section 8, "The job log"); the settings screen is its only source, never a `.env` file.
+- The Claude subscription login is the login of the OS user that runs the server; the System page tells the admin to run `claude` once in a terminal on the server and shows the login state.
+- When the installed Claude Code's model list changes, the saved model and effort are checked again: a model that is gone becomes Claude Code's default (`null`), an effort the model does not support becomes `null`, and a changed choice is saved and announced with `settings-changed` and `system-changed`.
+
+What each setup puts into a job's environment:
+
+- `claudeSubscription`: Claude Code runs on the server's own environment and the OS user's login; VidAI sets none of the variables below.
+  When that environment or Claude Code's settings file (`~/.claude/settings.json`, or `$CLAUDE_CONFIG_DIR/settings.json`; on Windows `%USERPROFILE%\.claude\settings.json`) already sets `ANTHROPIC_BASE_URL`, it is left alone and the System page says so plainly, because "Claude Subscription" would then not mean what it says.
+- `anthropicApi` (Claude Code): `ANTHROPIC_BASE_URL` (the address), `ANTHROPIC_API_KEY` (the key, which Claude Code sends as `x-api-key`), and `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` and `ANTHROPIC_DEFAULT_HAIKU_MODEL`, all set to the chosen model, so the edit (`--model <model>`), its sub-agents and background tasks use it; `--effort <level>` is added only when an effort is remembered for the model.
+  The `ANTHROPIC_AUTH_TOKEN` of the server's environment is removed when a key is saved.
+  Without a key `ANTHROPIC_API_KEY` of the server's environment is removed and `ANTHROPIC_AUTH_TOKEN` is set to the placeholder `no-key`: Claude Code then has credentials of its own kind and never falls back to the Claude login, and a server that needs no key ignores `Authorization: Bearer no-key`.
+- `opencodeGo` (OpenCode 2): the key as `OPENCODE_API_KEY`.
+- `openaiApi` (OpenCode 2): the key, when one is saved, as `VIDAI_API_KEY`; never together with `OPENCODE_API_KEY`.
+  The key of the server's own environment under either name is removed first.
+
+Addresses (`agents/setupsUrl.js`; null, an empty text or the default address of the option is stored as null):
+
+- For every option: the text is trimmed and a trailing `/` removed; `https://` is required, and plain `http://` is allowed only for `localhost`, `127.0.0.1` and `[::1]`; a user name, password, query or fragment is refused with `invalidInput`.
+- `opencodeGo` and `anthropicApi` use the Anthropic form (the programs append `/v1/messages` themselves): a trailing `/v1/messages` or `/v1` is removed.
+  Pay-as-you-go OpenCode is `https://opencode.ai/inference/anthropic`, entered by hand.
+- `openaiApi` uses the OpenAI form: a trailing `/chat/completions` is removed and `/v1` is kept, because it is part of the address.
+
+The key of an option:
+
+- Removing the key of the selected `opencodeGo` switches edits back to `claudeSubscription`; removing the key of the selected `anthropicApi` or `openaiApi` keeps it selected, because they work without a key.
+- Only `opencodeGo` needs its key (`keyRequired`); `anthropicApi` and `openaiApi` often point at a model server on the admin's own network (Ollama, LM Studio, vLLM, a LiteLLM proxy) that asks for none.
+  A job on `opencodeGo` without a key cannot launch ("No API key is saved for OpenCode Go.").
+- Without a key Fetch Models and Test send no key header (`anthropicApi` still sends `anthropic-version`), and a 401 answer to such a request says "The service wants an API key. Enter one in the settings." instead of blaming a key that was never sent.
+- A blank key is refused when saving.
+
+The model:
+
+- `opencodeGo`: a searchable list fetched live from the option's list address and kept with its address; a saved model the last list does not have is shown as no longer offered, and a launch then cannot use it.
+- `anthropicApi` and `openaiApi`: the model is a text box for the id as the service names it (a text with spaces or control characters is refused, an empty text clears it).
+  Fetch Models asks the service for its list to choose from; the list is not kept, nothing fetches it by itself and a launch never checks the model against it, because local servers and gateways name models freely.
+- Lists: `opencodeGo`: `GET <address>/v1/models` with the key as bearer token; `anthropicApi`: `GET <address>/v1/models` with `x-api-key` and `anthropic-version: 2023-06-01`; both are Anthropic's list form, following `has_more` with `after_id` (an OpenAI form list from a gateway is read as well).
+  `openaiApi`: `GET <address>/models` with `Authorization: Bearer <key>`, OpenAI's form `{"data":[{"id":...}]}`, other fields ignored.
+
+The reasoning effort is a choice under the model (Default, Low, Medium, High, Extra high, Max), remembered per option and model id; Default sends nothing.
+In Claude Code a chosen level is sent as `--effort <level>` (its effect behind a gateway is not verified); in OpenCode 2 it is the model variant of that name when the server's catalog offers it, otherwise the model runs on its default and the log says why.
+
+Test sends the one tiny request of the option (`POST <address>/v1/messages` with `max_tokens` 1, the chosen model and the headers above; `openaiApi`: `POST <address>/chat/completions`) and reports "OpenCode Go answered with GLM-5.3." (the service and the model) or the reason.
+Every request the server makes to a service has short time limits, follows no redirect (the key must never follow one), uses `http` without a proxy only for this computer, identifies itself as `VidAI/<version>` and never puts the key in a message.
+
+Errors of a service, for Test, the model list and jobs of every API option (`agents/apiHttpFailure.js`): a refused key (401), a model not allowed for the plan or a free model used outside OpenCode's own apps (403), a model not offered (404), a Go window reached (429 `GoUsageLimitError` with `metadata.limitName` "5 hour", "weekly" or "monthly"), a budget reached (429 `BudgetLimitError`), the free limit (`FreeUsageLimitError`), a balance used up (402), an overdue invoice, other rate limits (429) and the service's own trouble (5xx).
+An `opencode.ai` or `*.opencode.ai` address keeps OpenCode's own texts; any other address uses these generic ones:
+
+- Key refused: "The service did not accept the API key. Check that you copied the whole key, or make a new one with the service."
+- 403: "The service does not allow the model X for this key: it is not in your plan. Choose another model."
+- 404: "The service does not offer the model X at this address. Choose another model."
+- 429: "The service is limiting requests right now. Try again in a minute."
+- 5xx: "The service is having problems right now (error N). Try again later."
+- Other HTTP: "The service answered with an unexpected error (HTTP N)."
+- Budget: "A budget limit of the service is reached. Raise it with the service, or wait until it resets."
+- Free limit: "The free limit of the service is reached. Try again later, or choose a paid model."
+- Balance: "Your balance with the service is used up. Add credit with the service."
+- Overdue invoice: "Your account with the service has an overdue invoice. Settle it with the service."
+- Nothing recognizable: "The service reported an error."
+
+An unrecognized report of the program stays "Claude Code reported an error: <first line>" or "OpenCode 2 reported an error: <first line>"; texts about the local OpenCode 2 server itself keep naming OpenCode 2.
+
+The OpenCode 2 program:
+
+- It is `opencode2` (2.x), belongs to the setups `opencodeGo` and `openaiApi`, and is driven as section 8, "Driving OpenCode 2", says.
+- Finding it (`agents/opencode/locate.js`): `VIDAI_OPENCODE2_BIN` is the only candidate when set; otherwise the candidates are every `opencode2`, then every `opencode`, each on the `PATH` and then in the folders the installers use (`~/.opencode/bin`, Homebrew's two `bin` folders, `~/.local/bin`; on Windows also with `PATHEXT` and in `%LOCALAPPDATA%\Microsoft\WinGet\Links`, `%USERPROFILE%\.opencode\bin`, `%APPDATA%\npm`, `%USERPROFILE%\scoop\shims`).
+  The first candidate that reports a 2.x version is the program, so a 2.x `opencode` needs no shim, and a stale `opencode2` shim over an older binary does not hide a 2.x program elsewhere.
+  When no candidate reports 2.x, an `opencode2` counts as found but not supported, with the version it reports; a 1.x `opencode` alone means OpenCode 2 is not installed.
+  The version is what `--version` prints (with auto-update off, at most 45 seconds).
+- The environment of its server is the server's own minus `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `OPENCODE_PASSWORD`, `OPENCODE_SERVER_PASSWORD`, `OPENCODE_SERVER_USERNAME`, `OPENCODE_CONFIG_CONTENT`, `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, `OPENCODE_API_KEY`, `VIDAI_API_KEY` and `OPENCODE_FLAGS`, plus the key variable of the option, `OPENCODE_SERVER_PASSWORD` (a new random password per run), `OPENCODE_DISABLE_AUTOUPDATE=1`, and `OPENCODE_CONFIG_CONTENT`, the run configuration.
+- The run configuration has OpenCode's own keys and is merged above every configuration file of the OS user and below an administrator's managed settings: `formatter` and `lsp` off, `snapshots` false (the video folder holds gigabytes of footage), `share` disabled, `instructions` naming the `CLAUDE.md` of the working directory and `~/.claude/CLAUDE.md` (OpenCode does not read `CLAUDE.md` by itself; a file that does not exist is skipped), and VidAI's own provider `vidai` with the model.
+- How address and model become OpenCode's `provider/model`: on `opencodeGo` the default Go address is OpenCode's provider `opencode-go` and the pay-as-you-go address `opencode` (each knows the protocol, limits and price of every model of its catalog); any other address is `vidai`, Anthropic's API at `<address>/v1` through `@ai-sdk/anthropic`, with the key `{env:OPENCODE_API_KEY}`.
+  On `openaiApi` it is always `vidai`, named "OpenAI Compatible API (VidAI)", with `@ai-sdk/openai-compatible`, `baseURL` the address as it is and the key `{env:VIDAI_API_KEY}` (left out when no key is saved, because OpenCode 2.2.6 refuses `apiKey: false`), whatever the address; OpenCode's own providers are never used for it.
+  OpenCode answers `GET /api/model` with each model's resolved settings, the key included, so that answer is never logged.
+- A job never loads the OS user's own OpenCode MCP servers, plugins, agents, commands or project configuration (an MCP server that cannot connect delays the first message by about 33 seconds): the server gets an empty private config folder (`OPENCODE_CONFIG_DIR`) and `OPENCODE_CONFIG_PROJECT_DISABLE=1`; skills in `~/.claude/skills` and `AGENTS.md` files still apply.
+- Sessions live in OpenCode's own store, so a later server resumes a session by its id; a plain `opencode2 serve` does not resume interrupted work by itself, so nothing of a paused job runs on until Continue.
+- With `NODE_ENV=test`, `VIDAI_E2E_OPENCODE_LOGIN` (`own` or `public`) starts the server without VidAI's key and uses OpenCode's own provider of the address, whatever login it has.
 
 A job keeps the setup, program and model it started with, also for Continue, Re-Edit and timeline changes (section 8).
+
+### Readiness
+
+What new edits need on the server is one decision, made by one pure function with the same name on both sides: `problem(facts)` in `server/src/agents/readiness.js` and `problemOf` in `src/lib/readiness.ts`.
+It is used by Start Editing, the status line and the System page.
+The rule in one sentence: only the program that does the editing is needed, with the service it runs on; a server with no Claude login and no Claude Code can run edits on OpenCode Go or an API, and a server with only a Claude login is never asked about API keys or OpenCode.
+
+The facts are plain, so every combination is a unit test:
+
+- the setup (all four exist on every platform);
+- whether the setup's API key is saved and its model chosen (`keySaved`, `modelChosen`; they count only for the API options, and `keySaved` only for `opencodeGo`);
+- Claude Code: not installed, installed but logged out, or ready (`claude`); on Windows also whether Git for Windows is missing (`gitBashMissing`);
+- the OpenCode 2 program: not installed, installed in a version VidAI does not drive, or ready (`program`);
+- whether the toolkit environment of section 7 is prepared (`prepared`).
+
+The program follows from the setup.
+What blocks edits is the first of these that applies, in this order:
+
+| Order | Applies when | Problem |
+|---|---|---|
+| 1 | the setup is an API option that needs a key (`opencodeGo`) and its key is not saved | `apiKeyMissing` |
+| 2 | the setup is an API option and its model is not chosen | `apiModelMissing` |
+| 3 | the program is Claude Code and Git for Windows is missing (Windows) | `gitBashMissing` |
+| 4 | the program is Claude Code and it is not installed | `claudeMissing` |
+| 5 | the setup is `claudeSubscription` and Claude Code is logged out | `claudeLoggedOut` |
+| 6 | the program is OpenCode 2 and it is not installed | `programMissing` |
+| 7 | the program is OpenCode 2 and its version is not one VidAI drives | `programUnsupported` |
+| 8 | the toolkit environment is not prepared (section 7) | `notPrepared` |
+
+`server/test/support/fixtures/readiness-table.json` (every row named, with its facts, the program and the problem) is run by the server tests and by `src/lib/readiness.test.ts`, and both sides also run these invariants over the whole domain, so the two functions cannot disagree:
+
+- `claudeSubscription` never asks for an API key, a model or the OpenCode 2 program, whatever is stored or installed.
+- `apiKeyMissing` happens only on `opencodeGo`; `anthropicApi` and `openaiApi` need a chosen model and their program, never a key.
+- `opencodeGo` and `openaiApi` never ask for Claude Code, a Claude login or Git for Windows.
+- `anthropicApi` needs Claude Code installed (and Git for Windows on Windows), never a login and never the OpenCode 2 program.
+- Facts the setup does not look at never change the answer.
+
+The server gathers the facts lazily: an edit on OpenCode 2 never runs `claude`, an edit on Claude Code never runs `opencode2 --version`, and only `claudeSubscription` runs `claude auth status`.
+A refused start says the reason as a sentence, for example "No API key is saved for OpenCode Go. Edits are set to run on it. ..." (`notReady` or `invalidInput`), and every launch of a job checks again what its own session needs (section 8, "State machine").
+The admin can change the setup while jobs are queued or running: running jobs and the sessions of earlier edits keep the setup they started with; only new edits, and a job that must start a new session, use the new setup.
+
+### Usage limits
+
+All through the local Claude Code process, never a direct API call and never reading Claude's stored credentials.
+The model list and the usage limits are the Claude subscription's, so that process is started only while the setup is `claudeSubscription`; on the other setups neither the startup fetch, nor the schedule, nor a refresh runs it, and nothing is logged about Claude Code.
+
+- A Claude Code process in stream-json mode answers control requests without a model call: `initialize` returns `models` (each with `value`, `displayName`, `description`, `supportedEffortLevels`), the account's `subscriptionType` and `claude_code_version`; `get_settings` returns `applied.model` and `applied.effort`, the defaults Claude Code would use; `get_usage` returns `rate_limits_available` and `rate_limits` with `five_hour`, `seven_day` and model-scoped weekly entries, each `{ utilization (percent), resets_at }` or null.
+- The `rate_limit_event` lines of running jobs carry `rate_limit_info.unifiedWindows.{five_hour,seven_day}.{utilization (0..1), resetsAt (epoch seconds)}` and update the meters at no cost.
+- The model list is fetched at startup, on demand and at most once a day otherwise, and kept so the pickers are never empty after the first run.
+- `UsageStatus` (`getUsage`, event `usage-updated`) is refreshed at startup, every 60 seconds while a browser shows it, every 5 minutes while jobs run, on demand and from every `rate_limit_event`; a failed refresh keeps the last values and sets `error`.
+  One helper Claude Code process without MCP servers is reused for the periodic requests.
+- The 5-hour and weekly limits of the plan are shown to every user, with the weekly limits of model families by their display name.
+- New jobs use the model and effort selected at that moment and remember them; Continue reuses the job's own.
+  When the selected model does not support the selected effort, the effort is reset to null; when the selected model is no longer in the list, the selection falls back to null (Claude Code's default).
+
+OpenCode Go quota (`getOpencodeUsage`, `agents/opencode/usage.js`): a Go plan reports its three windows at `GET <Go root>/v1/usage` (for the default address `https://opencode.ai/inference/go/v1/usage`) with the key as bearer token, as `{"usage":{"rolling"|"weekly"|"monthly":{"status":"ok"|"rate-limited","percent":0..100,"resetsAt":ISO}}}`: a share of each window and when it resets, no dollars.
+Inference answers carry no rate-limit headers (only `retry-after` on a 429), so the endpoint is the only source.
+
+- While the setup is an API option whose address is an OpenCode Go address (on `opencode.ai`, with a path that starts with `/inference/go`), the meters show "5h", "Week" and "Month" as OpenCode reports them, with the reset times, using the selected option's own key.
+- When there is nothing true to show they say "not available" with the reason, never a number the server made up: an address that is not a Go address, a key the endpoint refuses (it may need the "Usage: Read" permission), a workspace without Go (403 `EntitlementError`), or no key.
+- It is refreshed on the schedule above and when the setup, key or address changes; only while the setup is an API option.
 
 ### Queues
 
@@ -208,7 +353,12 @@ VidAI never deletes or overwrites a file in a channel directory, with exactly tw
 ### Channels
 
 A channel belongs to one user and has a name (1 to 60 characters, unique for that user), a directory, a video type (`auto`, `long`, `short`) and two profiles (Long and Short), each with exactly 5 prompt slots and 5 style slots.
-Slot rules, names and the default prompt are carried over from `docs/SPEC-desktop.md` section 4 (channels) with the default prompt now read from `toolkit/default_prompt.md`.
+Each profile has exactly 5 prompt slots and 5 style slots (`{ name, text }`), and slot 0 is always named "Default".
+Other slot names are 1 to 40 characters after trimming; an empty name is "Prompt 2" to "Prompt 5" or "Style 2" to "Style 5".
+A saved profile that does not have exactly 5 prompts and 5 styles, or a name outside those limits, is refused with `invalidInput`; slot 0 is always saved as "Default".
+Each video remembers which prompt slot and which style slot (0 to 4) it uses; starting is refused with `invalidInput` when the chosen prompt is empty (the message names the slot and Long or Short) or a slot index is outside 0 to 4.
+A new channel gets the text of `toolkit/default_prompt.md` in prompt slot 0 of Long and of Short and everything else empty; when `<channel>/Style/STYLE.md` exists, its text (the file is only read) is copied once into style slot 0 of both.
+A channel name is 1 to 60 characters, has no control characters and is unique for the user; a folder is accepted as a channel only when it exists, is a directory, is not inside the server's data directory, is not a storage folder itself or a user's personal folder itself, and does not overlap another channel.
 Creating a channel either makes a new folder (in the personal folder or a chosen place) or links an existing one.
 Removing a channel removes only the row and its videos' rows (with their jobs, change requests, revisions and unfinished uploads, whose partial files are deleted) and the server's own folder of each of those videos (`<data dir>/projects/<videoKey>/`); the channel directory and everything in it stay, and so do the edit log's entries.
 Deleting a user removes those folders of all the user's videos the same way, and at start the server removes every folder under `<data dir>/projects/` that belongs to no video (logged with the count).
@@ -219,17 +369,31 @@ Channels can be reordered; the order is per user.
 
 A video is a folder directly inside a channel directory.
 Its id is `<channelId>/<folder name>`.
-Reserved names, A-roll detection (largest video file directly in the folder), the B-roll folder, natural sorting and `createdAt` are carried over from `docs/SPEC-desktop.md` section 2.
+Never a video: a name that starts with `.` or `CLAUDE_VE`, and the asset folders `Style`, `sample`, `samples`, `images`, `pictures`, `host images` and `host pictures` (compared ignoring case); `CLAUDE_VE*` is the working folder of an edit.
+A-roll files are regular files directly in the video folder with the extension `mp4`, `mov`, `m4v`, `mkv`, `mts`, `m2ts`, `avi` or `webm` (ignoring case); the main A-roll is the largest one, and a tie goes to the smaller name.
+The B-roll folder is the first subfolder (in natural order) whose name matches `b-roll`, `b_roll`, `b roll` or `broll`, with an optional `s` and in any case; when there is none it is `Broll`.
+Videos are listed newest first: the natural order of their folder names, descending, where runs of digits compare as numbers, letters ignore case and digits come before letters.
+`createdAt` is the creation time of the video folder, and its modified time on a file system that keeps no creation time.
+A link is followed only when it leads to a place inside the channel directory, and a video folder that is itself a link is not a video.
+A channel directory that is missing or unreadable gives no videos and is marked unavailable, so nobody concludes from it that a video was deleted.
 `createVideo(channelId, name)` makes a new folder (name 1 to 120 characters, no path separators, not reserved, not existing).
 
 Outputs of a video, found in `<video>/output/`:
 
 - project: `output/<video folder name>.hf/index.html` (section 10); a video has at most one project;
 - finals: `*.mp4`, `*.mov`, `*.m4v` directly in `output/`;
-- thumbnails `thumbnail-*.png|jpg|jpeg` and `meta.txt`, and `info.txt` in the video folder, as before.
+- thumbnails `thumbnail-*.png|jpg|jpeg` and `meta.txt` in `output/`, and `info.txt` in the video folder.
 
-Long or Short comes from the A-roll's display size (container metadata through ffprobe, rotation included); the effective type order is: video override, channel setting, detected, assumed Long (`docs/SPEC-desktop.md` section 8, "Effective type").
-The face-based picture check of the desktop app is not carried over.
+Long or Short is detected from the main A-roll and never asked:
+
+- Its display size is the coded size with the rotation applied (a 3840x2160 file rotated by 90 or 270 degrees is vertical); taller than wide is Short, otherwise Long.
+- MP4, MOV and M4V files are read in the server itself: the top-level `moov` box (header only, so a few small reads even for hours of footage) gives the track header size and matrix; a file without a readable `moov` box, such as one that is still being copied or recorded, falls through to `ffprobe`.
+  Every other container goes through `ffprobe` (15 seconds at most); a missing `ffprobe` is not remembered, so installing it fixes the detection without touching the file.
+- When nothing can be read, the type is unknown: the UI shows it as assumed Long with a hint.
+- Results are remembered per file by path, size and modified time, in a cache of at most 5000 files.
+- The effective type of a video (`videoType`, and the type a new job starts with) is the first that applies, and `typeSource` says which: `override` (the video's own choice on its row), `channel` (the channel's video type when it is `long` or `short`), `detected`, or `assumed` (Long).
+  `detectedType` always reports the detection, whatever decides the effective type.
+- There is no picture check: a file that carries no rotation information is judged by its metadata, and the channel's video type or the video's own choice overrides it.
 
 The library is rescanned after job events, uploads and channel changes, and every 5 seconds for users with an open event stream; `library-changed` goes only to the owner and only when their result differs.
 
@@ -288,18 +452,219 @@ Paths it stores (`timeline.json`, `recon.json`) are relative to the video folder
 
 `edit`, `reEdit` and `timelineEdit` are agent jobs; `render` runs HyperFrames directly, without an agent.
 A video has at most one active job (queued, running, pausing, paused, stopping) at a time.
-The state machine, "one session per video", the setup of a job and its fallback, how Claude Code and OpenCode 2 are driven, keeping a job going, retrying after a model error, error texts and the log format are carried over from `docs/SPEC-desktop.md` section 6 and section 7a, with these changes:
+Agent jobs work like this:
 
 - the agent's working directory is the video folder; the prompt gives the video folder, the channel directory and the toolkit folder as absolute paths;
 - sessions are remembered per video in the database; a session is resumed only by the program that created it;
-- "review file" becomes "the project", "review saved" becomes the milestone `project_saved`;
-- the completion marker stays `[OUTPUT COMPLETED]`; after it the server runs the profile check (section 10): when it fails the agent is told the errors and asked to fix them (at most twice), then the job fails with "The project has errors: ..." and, for `reEdit` and `timelineEdit`, the project is put back to the revision from before the job;
-- before every agent job that can change an existing project, a revision is saved (section 11); the `backup-output-N` copy of the desktop app is not carried over;
-- Render Final no longer talks to the agent;
-- the machine paragraph that asked the agent to adapt a Mac-only toolkit is gone; the prompt names the machine (OS, CPU, memory, GPU) in one line;
-- the cooperative `cpu.lock` and `gpu.lock` files are replaced by section 9.
+- the expected output is the project of section 10 (progress milestone `project_saved`);
+- the completion marker is `[OUTPUT COMPLETED]`; after it the server runs the profile check (section 10): when it fails the agent is told the errors and asked to fix them (at most twice), then the job fails with "The project has errors: ..." and, for `reEdit` and `timelineEdit`, the project is put back to the revision from before the job;
+- before every agent job that can change an existing project, a revision is saved (section 11);
+- Render Final does not talk to an agent;
+- the prompt names the machine (OS, CPU, memory, GPU) in one line;
+- the toolkit's heavy steps obey the limits of section 9, which the server enforces; there are no lock files between sessions.
 
 Which actions a video offers is computed by the server (`VideoView.actions`): `startEdit`, `pause`, `continue`, `stop`, `reEdit`, `review` (open the timeline; offered when a project exists), `renderFinal` (a project exists and no job is active), `upload`, `diskCleanup` (no job is active and `CLAUDE_VE` holds files), `archive`, `unarchive`, `startNow` (admin only, a queued edit held only by the start delay).
+
+### State machine
+
+- `startEdit`, `reEdit`, change requests on the timeline, `renderFinal` and `continueJob` put the job in `queued`; a queue is first in, first out (the edit queue also orders Urgent jobs first).
+  At most the queue's slots are held by jobs in `running`, `pausing` or `stopping`.
+  A changed limit applies at once: when an admin raises it, waiting jobs start right away.
+- `queued` to `running` when a slot is free and the start delay allows it: the agent process is started and its message is sent.
+- `running` to `pausing` on `pauseJob`: the turn is interrupted, the server waits for the agent to go idle, closes the process, then the job is `paused`; the session id is kept, so nothing is lost.
+- `paused` to `queued` on `continueJob`: a new process resumes the same session with a "continue" message.
+- `running`, `paused` or `queued` to `stopping` and then `stopped` on `stopJob`: interrupt, then the whole process tree ends; working files stay on disk, and a later Start Editing begins a new session.
+- `running` to `completed` when the agent is done by the rule of "Keeping a job going" and the expected output exists.
+- `running` to `failed` when the agent is finished without the expected output, exits with an error, or reports an error result.
+  `error` holds a short readable message, for example "Claude usage limit reached, resets at 4:30 PM" or "Claude finished without creating the project.".
+  A turn that ends before the work is done is not a failure: the job stays `running` and the server sends the next message; it fails only for the reasons listed in "Keeping a job going".
+- `continueJob` on a `failed` job resumes the same session and tells the agent what was missing.
+- The server closes a job's halt under the manager's lock before it sends a pause or a stop (also when shutting down); the driver writes a message only while the halt is open, so no message is ever sent after one was asked for.
+- A job recovered as paused after a restart has no process; nothing goes on until Continue.
+  Continue, like every launch, starts a new run with new counters.
+
+One session per video:
+
+- Every video is edited in sessions of its own; no two videos ever share one.
+  Each job runs its own agent process, started with exactly one of `--session-id <new uuid>` (a new session) or `--resume <the video's own session>` (Continue, Re-Edit, timeline edits).
+  `--continue` is never used: it picks the most recent conversation of the working directory.
+- Start Editing always starts a new session; `reEdit`, `timelineEdit` and Continue resume the video's own session.
+- The helper process for models and usage (section 5, "Usage limits") never carries a job: it has no session flag, runs with `--no-session-persistence` and only answers control requests.
+- OpenCode 2 chooses the id of a new session itself (`ses_...`); a session is resumed only by its own id, and each run has its own OpenCode 2 server.
+- A video has at most one active job, so no two live processes ever use the same session.
+
+Setup of a job:
+
+- A job records the setup its session runs on (`setup`, `model`, `effort`) and the program it runs in (`harness`).
+- A new edit uses the current setup (section 5): the admin's model and effort for it.
+- Re-Edit and timeline edits resume the video's session, so they stay on the setup and program that session started with (a conversation written by one model family cannot be safely replayed to another, and one program cannot resume another's session); without a session to resume they use the current setup.
+  Continue keeps the job's own setup, model, effort and program.
+- When the job's own setup cannot run at launch (the key of `opencodeGo` was removed, its model is no longer offered, its program is missing or not a version VidAI drives, or Claude Code is logged out on `claudeSubscription`), a launch that would resume a session starts a new session on the current setup instead, with the full instructions, records its new setup and program, and logs "This video's session ran on OpenCode Go (glm-5.3), which cannot continue it now (No API key is saved for OpenCode Go). A new session on Claude Code with Claude Subscription gets the full instructions.".
+  A launch that has to start a new session anyway fails with the reason (a readiness sentence of section 5).
+- The first status line of a run names the program, the service and the model: "Started a new Claude Code session on Anthropic Compatible API (model claude-sonnet-5-5)", "Resumed the OpenCode 2 session on OpenCode Go (model glm-5.3)"; the services are named OpenCode Go, Anthropic Compatible API and OpenAI Compatible API, and a launch on `claudeSubscription` names only the program.
+- A job on an API option gets its readable errors from what the service answered (section 5, "Harness, program and model"), never "Claude Code is logged out" or "Claude usage limit reached".
+
+### Driving Claude Code
+
+Spawn, with the video folder as working directory and the server's environment:
+
+```
+claude -p --input-format stream-json --output-format stream-json --verbose \
+  --permission-mode bypassPermissions [--model <model>] [--effort <effort>] \
+  (--session-id <new uuid> | --resume <session uuid>)
+```
+
+- The process is started in its own process group (Windows: Job Object) so the whole tree can be ended (section 8, "Recovery").
+- A job on `anthropicApi` also gets the variables of that option (section 5); a job on `claudeSubscription` gets none of them.
+- A message is one JSON line on stdin: `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"..."}]},"parent_tool_use_id":null,"session_id":""}`.
+- Interrupt is one JSON line on stdin: `{"type":"control_request","request_id":"<id>","request":{"subtype":"interrupt"}}`; Claude Code answers with a `control_response` and stops its background tasks.
+- stdout is one JSON object per line.
+  Relevant types: `system` (subtypes `init`, `task_started`, `task_notification`, `background_tasks_changed` and others), `assistant` (content blocks `text`, `thinking`, `tool_use`), `user` (tool results), `result`, `rate_limit_event`.
+  Unknown types and subtypes are ignored, never errors.
+- A `result` ends one turn, not the job.
+  Claude Code often ends a turn while background tasks (renders, sub-agents) still run and starts a new turn by itself when they report back.
+  The agent is idle, and the job may be finished, only when a `result` has arrived, no background task is active, and nothing new started during a settle time of 4 seconds; then the server closes stdin and the process exits with code 0.
+- After `--resume`, Claude Code can emit an immediate empty `result` (`num_turns` 0) before it handles the new message; it is not counted as the answer to the message just sent.
+- The error of `--resume` for a session Claude Code no longer has is recognised, and the job starts a new session with the full instructions plus a paragraph about the earlier work.
+- `--permission-mode bypassPermissions` is what `--dangerously-skip-permissions` sets; hooks and settings of the OS user's own Claude Code configuration apply and are left alone.
+- The helper for models and usage is a Claude Code process in the same stream-json mode that answers control requests without a model call (section 5, "Usage limits").
+
+### Driving OpenCode 2
+
+OpenCode 2 is driven through its own headless server, one server per run of a job, on this computer only; its HTTP API is `/api/...` with server-sent events at `/api/event` (`agents/opencode/`).
+It was chosen over `opencode2 run` because an interrupt is not a kill of a process per message, and because the server reports background work, which a job must wait for.
+
+A run:
+
+1. The server starts `opencode2 serve --stdio --hostname 127.0.0.1 --port 0` in its own process group, with the video folder as working directory and a pipe to its stdin.
+   With `--stdio` OpenCode picks a free port itself, ends when its stdin closes (so it never outlives VidAI, also after a crash), and keeps its password out of the environment of the commands it runs.
+2. The address is the first line it prints, `{"url":"http://127.0.0.1:<port>"}`.
+3. Every request carries the run's password as HTTP basic auth (user `opencode`) and the video folder as the header `x-opencode-directory` (percent-encoded), and goes to 127.0.0.1 without a proxy.
+4. `GET /api/event` is subscribed first (events of every session of the server: `{"id","created","type","location","data"}`, the first is `server.connected`), so nothing is missed.
+5. The model: on `opencodeGo`, OpenCode's own provider of the address (`opencode-go` or `opencode`) runs it only when `GET /api/model` lists it there and that provider would use VidAI's key (`GET /api/integration/<provider>` lists connections in the order OpenCode uses them and the first must be the variable `OPENCODE_API_KEY`); a login stored in OpenCode's own database comes first and cannot be overridden, so with one, VidAI's own provider `vidai` runs the model; so it does for any other address and for a model the catalog does not list.
+   On `openaiApi` `vidai` always runs it.
+6. A new session is `POST /api/session` with the title "VidAI: <video folder name>", the model (`{"providerID","id"}`), the video folder as its location, and permission rules that allow everything and deny `question` (which removes the question tool).
+   A permission request that still comes (`permission.asked`) is answered `once`; a form (`form.created`) is cancelled with a message that tells the model to go on without an answer.
+   A resumed session is checked with `GET /api/session/<id>`; a 404 is treated like a session Claude Code does not have (new session, full instructions).
+   A resumed session that ran on another model is moved to the model first (`POST /api/session/<id>/model`).
+7. A message is `POST /api/session/<id>/prompt` with `{"text"}`; it is queued and joins the current busy period of the session or starts one.
+   A message OpenCode refuses ends the turn at once with an error that says why.
+8. Pause and Stop are `POST /api/session/<id>/interrupt`; the running step and its commands stop at once.
+   Because background work would wake the session again, the server also ends the session tree's running background commands (`GET /api/experimental/job?sessionID=<id>&descendants=true&status=running`, then `DELETE /api/shell/<id>` for each), interrupts its sub-agents (`POST /api/session/<child>/interrupt`), and keeps interrupting busy periods that still start until the server is closed.
+9. Closing the run closes the stdin pipe and sends SIGTERM to the server's process group; the commands it started run in groups of their own and are ended with the job's process tree.
+
+Background work:
+
+- The shell tool moves a command that is still running after its timeout (2 minutes unless the model gives a longer one) to the background; `background: true` starts it there.
+  The sub-agent tool always runs its child session in the background.
+- Both answer at once; when the command ends or the child goes idle, a report is queued for the session that started it and starts a new busy period.
+  The job engine therefore sees them as Claude Code's background tasks, and a job is finished only when no turn runs and no background work is left.
+- While the main session waits for background work only, the server compares it with the OpenCode server's job list every 30 seconds; work the list does not have twice in a row is no longer waited for, so a lost report cannot hold a job forever.
+- The OpenCode block of the first message (section 8, "Prompt") names these tools and says that sub-agents and long commands report back, that a long command needs a long enough timeout, and to end the turn when only waiting.
+
+The event stream is translated into Claude Code's vocabulary, so the job engine, the log, the progress and the turn tracking read both programs the same way:
+
+| OpenCode 2 | Job engine event |
+|---|---|
+| main session busy (`session.execution.started`) | `system` `init` with the session id and model |
+| `session.text.ended` | assistant text (nested for a sub-agent's session) |
+| `session.tool.called` | assistant `tool_use`, named and shaped as Claude Code's tools (`shell` is `Bash` with `run_in_background`, `read`, `write`, `edit` are `Read`, `Write`, `Edit` with `file_path`, `subagent` is `Agent` with `subagent_type`) |
+| `session.tool.success` / `session.tool.failed` | user `tool_result` (failed: `is_error`) |
+| `session.tool.progress` | `system` `task_progress` |
+| a command or sub-agent that goes on in the background | `system` `task_started` |
+| its report queued for the main session | `system` `task_notification` |
+| terminal event of the main session (`session.execution.succeeded`, `.failed`, `.interrupted`) | one `result` per message that joined the busy period |
+| `session.retry.scheduled` for a usage limit | an error `result` at once; any other retry is `system` `api_retry` |
+
+Reasoning, deltas, steps, usage and heartbeat events are dropped; unknown events and fields are ignored.
+
+Errors and limits:
+
+- Errors arrive as `session.execution.failed` with OpenCode's error (`{"type","message","status","response":{"body"}}`); they become "API Error: <status> <body>" worded like a job on `anthropicApi` (section 5), and anything else is "OpenCode 2 reported an error: <first line>".
+- A Go, free or budget limit is not retried by OpenCode: the job ends at once with the limit in OpenCode's words.
+- A busy period interrupted without the server asking (OpenCode shutting down) is the error "OpenCode 2 stopped the turn (shutdown).".
+- A server that cannot start fails the job with "The OpenCode 2 program could not be started: <reason>"; the start may take up to 180 seconds (the first start can migrate a database or let macOS check the program), the log says "Still waiting for OpenCode to start (8 s)" after 8 seconds and every 15 seconds after, and the reason holds the last four lines the server printed.
+- The log names the program "OpenCode 2".
+
+### Keeping a job going
+
+Some models end a turn with a sentence that announces the next step and no tool call, long before the work is done.
+Claude Code then reports a normal `result`, and without this rule the job would look finished and fail with "Claude finished without creating the project.".
+The server therefore decides at every idle moment of every agent job, on every setup and in both programs (`jobs/keepgoing.js`, a pure function free of program types).
+The harness reports the idle moment with what the main conversation did since the last message (tool calls, whether it wrote `[OUTPUT COMPLETED]`) and the evidence (the project on disk, whether an edit's thumbnails and `meta.txt` are written, the finished progress milestones), and gets back: done, send this message, or stop.
+
+A job is done, checked only at an idle moment and never while a background task runs, when the deliverable exists and `[OUTPUT COMPLETED]` was written in this run:
+
+| Kind | Deliverable |
+|---|---|
+| `edit` | the project in `output/` that passes the profile check |
+| `reEdit`, `timelineEdit` | a project modified after the job started that passes the check |
+
+Cases:
+
+- The deliverable without the marker: one message asks to finish the last steps (naming missing thumbnails and `meta.txt` of an edit); at the next idle moment the job is done whatever the model wrote.
+- The marker without the deliverable: the model is asked to save it, at most twice; a third time fails with the missing output error.
+- Neither: the turn ended early; the model is asked to keep going.
+- Waiting for its own commands: a model that starts a long command in the background of a shell ends its turn to wait, which Claude Code does not track as a task.
+  The server reads the CPU time of the job's process tree every 5 seconds; when a process used at least a tenth of a core since the last look, the computer counts as busy with the model's commands for the next 90 seconds.
+  At an idle moment of a busy job, with neither deliverable nor marker, the turn counters are not touched and the model gets a wait message instead (do not end the turn, wait with one command that blocks until they finish, restart a command that shows no output for 10 minutes); at most one goes out every 5 minutes, it is logged "Asked to wait for the running commands (n): the computer is busy with your background work", and it counts only toward the ceiling.
+  A process that is not busy leaves the ordinary rules in force, so a hang is still found.
+
+The message goes to the same live process and session; nothing is restarted.
+The texts are in `server/src/jobs/promptTexts.js` (exact-text tests): "Keep going" says the project is not finished and asks to do the next step with tool calls and never to end a turn after only announcing a step; "Finish" names the saved project and what is still missing; "Save" says the marker was written but there is no project.
+On every setup except `claudeSubscription` they also ask to write each progress marker right after its step.
+
+The job stays `running` the whole time: no `failed` state, no error line.
+The log gets one status line per message, numbered per run: "Asked to keep going (1): the turn ended before the edit was finished", "Asked to finish the last steps (2): the project is saved, [OUTPUT COMPLETED] is not written yet", "Asked to save the project (3): [OUTPUT COMPLETED] was written, but it is not in the output folder".
+
+The job stops for real reasons only, each with a readable error, and Continue starts it again:
+
+- An API problem that the program reports after its own retries (an error result, or a result whose text starts with "API Error"), in the words of the provider (section 5, "Harness, program and model"; on the Claude subscription `jobs/errors.js`), with no further message; a temporary problem is first retried by the server itself (next section).
+- The process exits by itself or crashes ("Claude Code stopped unexpectedly (exit code 1): ..."), or prints nothing at all for the stall time of 20 minutes in the middle of a turn ("Claude Code stopped responding (no activity for 20 minutes)."; the job is done instead when the deliverable is there).
+  While a tool call runs that was started with a time limit of its own (the `timeout` of a shell call), the stall time is that limit plus two minutes when that is longer.
+- Pause, Stop or the server shutting down.
+- A stuck model, per run:
+  - 3 idle moments in a row whose turns made no tool call at all: "The model stopped working on the edit: it ended 3 turns in a row without doing anything. Press Continue Editing to try again."
+  - 8 messages in a row without new work (a new progress milestone or a new file written in the video folder): "The model made no progress on the edit after being asked 8 times to keep going. Press Continue Editing to try again."
+  - The ceiling of 40 messages in one run (waiting messages included): "The edit is still not finished after VidAI asked 40 times to keep going, the most it asks in one run. Press Continue Editing to go on." A deliverable that exists at the ceiling still completes the job.
+  - The wording says "the model", not "Claude", because on an API option it is not Claude.
+
+### Retrying after a model error
+
+A model provider fails now and then for a few minutes (overloaded, rate limited, a network drop), and an edit that ran for an hour should not stay dead because of it.
+`maxModelRetries` (section 5, 0 to 50, default 5; 0 turns it off) is how many times in a row the server waits and then continues the same session by itself, exactly like Continue (the job keeps its program and session).
+It is read when a failure happens, so a change applies to running jobs as well.
+
+What is retried (`jobs/retry.js`, from the result text and the HTTP status in it):
+
+- a status of 400, 408, 409, 425 or any 5xx;
+- 429 and any usage or rate limit, where the wait honors the reset time the provider names (Claude Code's rate limit event, or the epoch at the end of an OpenCode limit text) when that is later than the schedule's wait;
+- a text that says overloaded, rate limit, internal server error, bad gateway, service unavailable, temporarily unavailable, gateway timeout, timed out, `ETIMEDOUT`, `ECONNRESET`, `ECONNREFUSED`, socket hang up, fetch failed or network error.
+
+Never retried, and failing at once: a missing program or login, a status of 401, 402, 403 or 404, the OpenCode Go and Free usage limits, a used-up budget or credit, a model that is not found, Pause, Stop, shutdown, and the stuck-model rules above.
+
+The waits before retry 1 to 5 are 30 seconds, 1 minute, 2 minutes, 5 minutes and 10 minutes; every later retry waits 15 minutes.
+A reset time the provider named that is later than that wait is waited for instead.
+Waits are measured on the wall clock.
+
+- There is no new job state: the job stays `running` while it waits, so it keeps its slot and the queue behind it does not move (the provider fails for everybody).
+  Pause or Stop ends the wait at once and frees the slot; nothing is retried afterwards.
+- The job shows it: `lastActivity` says "Model error. Retrying at 14:32 (retry 3 of 5)" and the log gets "Model error (529 Overloaded). Retrying in 2 minutes (retry 3 of 5)", later "Retrying now (retry 3 of 5)".
+- The running clock keeps counting during the wait, so a usage limit whose reset is hours away holds its slot for hours, until the reset or Stop.
+- The count starts over when the job makes real progress (its finished milestones or its files written grew) and when the user presses Continue.
+  After `maxModelRetries` retries in a row without progress the job fails with the provider's error followed by "VidAI retried N times without success.".
+- The quiet limit of Claude Code (the process only stops with its limit seen on the event stream, no error result and no output) is retried the same way, waiting for the reset it announced.
+
+### The job log
+
+- The log of a job is one entry per thing the agent did, kept in `<data dir>/logs/<jobId>.jsonl` (one JSON object per line, appended in batches) and sent to the browser as `job-log` events, at most one batch per 150 ms.
+  An entry has `seq` (increasing per job), `ts`, `kind` (`status`, `assistant`, `tool`, `toolResult`, `user`, `error`), `text`, `detail` (full command, input or output, cut to 4000 characters) and `nested` (made by a sub-agent); `getJobLog` returns at most the last 5000 entries.
+- Entries are readable: a tool call becomes one line of at most 160 characters (for example "Bash: Render graphics at 1080", using the tool's description when there is one) with the full input in `detail`.
+  The agent's own messages are kept as written, and the UI renders their Markdown, never as HTML.
+  Thinking blocks are not logged.
+- Absolute paths in tool lines and results are shown relative to the video folder (`CLAUDE_VE/timeline.py`), or to the channel directory or the video's server folder (`<data dir>/projects/<videoKey>/`); whole path prefixes only, on Windows in all spellings (`C:\...`, `C:/...`, `/c/...`); `detail` keeps the original.
+- Every API key given to a job is registered with the scrubber and replaced by `[api key]` in every entry, in the file and in the events, also in its JSON-escaped form; text is scrubbed before it is cut to a length, so a cut can never leave half a secret.
+- Lines that name the program say "Claude Code" or "OpenCode 2" ("OpenCode 2 is running (model vidai/glm-5.3)", "Sent the edit instructions to OpenCode 2", "Pausing: asking OpenCode 2 to stop the current step").
 
 ### The edit queue
 
@@ -310,6 +675,10 @@ Which actions a video offers is computed by the server (`VideoView.actions`): `s
 - When a slot is free the first job in the line starts, skipping jobs of a user who already has `maxEditsPerUser` edits running (when that limit is set).
 - `startDelayMinutes` is kept between two launches of new sessions in this queue (a Continue that resumes a session is not a launch); `startNow` skips it for one job.
   The delay does not hold a job while nothing in the queue holds a slot, and the time of the last launch is kept in the database, so it survives a restart.
+  While the delay holds the first waiting launch the launches behind it wait too and start one delay apart; Continues behind it may pass it when a slot is free.
+  `startsAt` is set only while a queued job waits because of the delay (the first waiting launch gets the last launch plus the delay, the next one more delay, and so on) and is null otherwise; its `lastActivity` says "Waiting for the start delay", "Waiting for a free slot" or "Waiting to continue".
+  The queue is looked at again exactly when that delay runs out (a timer measured on the wall clock), when a setting changes and whenever a job ends; a last launch in the future counts as now.
+  `startNow` (admin only) works only for a queued edit held by nothing but the delay (otherwise `conflict`: "This edit is not waiting for the start delay."), starts it at once and restarts the delay clock, and the other waiting jobs get their new `startsAt`.
 - The per-user limit counts only that user's jobs that hold a slot.
 - Urgent is a checkbox in Start Editing and Re-Edit, shown only to users who may use it (`mayMarkUrgent`, default yes); an admin can switch Urgent on and off for any waiting job; a user who may not use it and asks for it gets `forbidden`.
 - Every waiting job has a position (1 = next, counted among waiting jobs only; a job skipped for the per-user limit keeps its number); users see "Waiting, position 3" for their own jobs and the count of jobs ahead; the admin's Queue page lists every job of all three queues with user, channel, video, kind, state, Urgent and position.
@@ -335,11 +704,15 @@ A `timelineEdit` job resumes the video's session; when the session cannot be res
 
 On start, jobs that were running, pausing or stopping become paused (agent jobs with a session) or stopped (no session, and every render); queued jobs stay queued and keep their place.
 The time the server was down is not counted as working time of a job.
-Process trees left over from a crashed server are ended (the registry of started processes is carried over from `docs/SPEC-desktop.md` section 6 and section 11 "Process trees").
+Every agent process is started in its own process group (macOS) or its own Job Object (Windows), so the whole tree (the agent, shells, ffmpeg, Python, Whisper, sub-agents) can be ended.
+Ending a tree on macOS sends SIGTERM to every member, waits a grace period of 3 seconds and then sends SIGKILL to what is left, never touching the server itself; on Windows closing the Job Object ends every process at once, and the same Job Object ends the tree when the server dies.
+Pause and Stop first ask the agent politely (interrupt, close stdin) and end the tree only when it does not go idle.
+The server keeps `<data dir>/processes.json`, written by temporary name and rename, with the id, command line and job of every process of a running job.
+At the next start the trees recorded there are ended before any job starts, but only a process that still exists with the same command line, so a process id that the system gave to another program is never touched; an entry whose command line could not be read is kept in the file and never ended, and a damaged file counts as empty.
 
 ### Prompt
 
-The first message of an edit is composed as in `docs/SPEC-desktop.md` section 6 "Prompt composition", with these differences.
+The first message of an edit is the only message that carries the whole instructions; follow-up messages to a resumed session stay short.
 The parts, in order, are separated by blank lines: the header, `PRODUCT_LINKS =` (and the PRODUCT_LINKS STEP when there is a link), `NOTES FOR THIS VIDEO:` (when not empty), the channel prompt of the video type and slot exactly as written, `CHANNEL_STYLE (<Long 16:9 | Short 9:16>):`, the "VidAI:" paragraph, the OpenCode 2 block (program OpenCode 2 only), the keep-working paragraph (every setup except `claudeSubscription`), and the progress markers of the kind (milestones below).
 The header has one line each, in this order: `MAIN_FOLDER` (the video folder, also the agent's working directory), `CHANNEL_FOLDER`, `TOOLKIT_FOLDER` (`<data dir>/toolkit/CLAUDE_VE_ALL`), `PYTHON` (the toolkit's Python), `Channel Name`, `VIDEO_TYPE` (Long or Short), `BROLL_FOLDER`, `PROJECT_FOLDER` (`<video>/output/<video folder name>.hf`), `CHECK_COMMAND`, `MACHINE:` and `LIMITS:`.
 All paths are absolute.
@@ -348,14 +721,71 @@ All paths are absolute.
 `LIMITS:` says in words how many processor cores and GPU tasks the job may use (section 9) and that the toolkit already obeys it.
 The "VidAI:" paragraph says: nobody can answer; the toolkit is called as `"<PYTHON>" "<TOOLKIT_FOLDER>/ve.py" <command> "<MAIN_FOLDER>"`, and `CLAUDE.md` and `MEMORY.md` next to `TOOLKIT_FOLDER` are read first; the style rule; the result is the project of section 10 in `PROJECT_FOLDER`, written by `ve.py hf`, which must pass `CHECK_COMMAND`; originals are linked, never copied or changed; every motion graphic is its own file in `compositions/`; the agent never renders a video file of the edit; and the agent ends with `[OUTPUT COMPLETED]`.
 A start is refused with `invalidInput` when the selected prompt of the channel for the video's type is empty or a slot is outside 0 to 4.
-Follow-up messages: Continue as before, naming the project and `CHECK_COMMAND` instead of a review file; Re-Edit as before with "update the project in PROJECT_FOLDER"; timeline changes as in section 11 (per request: number, time as `m:ss.mmm` and seconds, frame, area in words and pixels, picture files, clips under the frame from the top down, words spoken around that time, the user's text; then the fixed rules; when two requests conflict the later one wins).
+Only a message that starts a new session carries the header (with `MACHINE:` and `LIMITS:`) and the VidAI paragraph: the first message of an edit and the fallback below; a resumed session read them already.
+The channel prompt and style are copied exactly as the user wrote them, and the first message tells the agent that nobody can answer questions.
+Follow-up messages: Continue says that background tasks (OpenCode 2: commands and sub-agents) were stopped by the pause, asks to check what finished and to work until the project passes `CHECK_COMMAND`, adds what was missing when the last attempt failed, and repeats the progress-marker reminder; Re-Edit starts with "RE-EDIT REQUEST", carries the user's text and the rules (change only that, update the project in `PROJECT_FOLDER` in place, run `CHECK_COMMAND`, never render, write the marker); timeline changes as in section 11 (per request: number, time as `m:ss.mmm` and seconds, frame, area in words and pixels, picture files, clips under the frame from the top down, words spoken around that time, the user's text; then the fixed rules; when two requests conflict the later one wins).
 When a session cannot be resumed, the new session gets the full first message, a paragraph about the earlier work and then the follow-up.
 After `[OUTPUT COMPLETED]` the server checks the project; when it fails, the agent gets the errors and is asked to fix them and write the marker again, at most twice.
 The fixed texts are in `server/src/jobs/promptTexts.js`.
 
 ### Progress
 
-The progress engine (never backwards, 99 until done, evidence tiers, typical times) is carried over from `docs/SPEC-desktop.md` section 6 "Progress".
+`JobView.progress` drives the completion bar of every video row and of the activity panel: `percent` (0 to 100) and `stage`, one short label of what the job works on now.
+It is computed by `server/src/jobs/progress*.js` (a pure engine that takes the job's active milliseconds, wrapped by `progressTracker.js` with the clock and the file probes) and published by the job's driver.
+
+Each agent job kind has a model: a weighted checklist of milestones, not a strict sequence (the work after the edit plan runs in parallel, so milestones can finish in any order).
+The percent is the sum of the weights of the finished milestones plus an estimate from active time for the unfinished ones.
+The stage is the label of the first unfinished milestone in the order of the model, "Finishing up" when all are finished, and "Done" once the job is `completed`.
+Two more labels are not milestones: "Getting the tools ready" while the job installs or tests its tools, and "Working on the edit" (re-edit and timeline edit: "Working on the changes") once the bar is ahead of what the evidence confirms.
+The weights follow the share of the active time at which each milestone ends in real edits: for a Short of about 25 minutes the transcript is ready at about 3.5, the plan at 7, the graphics at 20.5 and the project at 23.5 minutes; a Long of about 40 minutes reaches them at about 8, 15, 34 and 40.
+The calibration is written next to the models in `progressModels.js`.
+
+A finished milestone implies the ones that must be done before it: `transcribed` implies `inspected`, `planned` implies `transcribed`, every milestone after the plan implies `planned`, and `project_saved` implies the graphics, b-roll, timeline and checks (and `changes_applied` for a re-edit or timeline edit).
+
+Evidence, most reliable first:
+
+1. Markers: a line in a normal message of the main session that holds only `[VIDAI_PROGRESS <name>]` (Markdown emphasis or code around it is allowed, case and `-` / `_` do not matter); a marker inside a sentence is prose, and markers of sub-agents never count.
+   The log shows each marker line as a compact status entry with the milestone's done text (for example "Transcription done"), and an unknown name as "Progress: <name>".
+2. Files in the project's output folder written after the job started, looked at about every 5 seconds: the project (`project_saved`) and a thumbnail together with `meta.txt` (`extras_written`).
+   Files that were already there, unchanged, when the run started never count.
+3. Kinds of files in the video folder outside `output/` (an edit only; `jobs/work*.js`): written since the job started, down to 8 levels, at most 20000 entries and 300 ms, never following a link and skipping `.git`, `node_modules`, `__pycache__`, `.venv`, `.hyperframes` and caches.
+   Only names count, never content, and only the part after the working folder `CLAUDE_VE`:
+   - an audio file: `inspected`;
+   - a transcript (a text file in a folder or with a name that says transcript, or any `srt` / `vtt`): `transcribed`;
+   - a plan (a text or script file whose name has the word plan, timeline, spec, cue, EDL, storyboard or shot list), once the footage was looked at: `planned`;
+   - anything in a folder named `gfx...`, `graphic...`, `hyperframes`, `remotion`, `compositions`, `cards` or `overlays`, once the footage was looked at: `planned`;
+   - anything named `qa`, `qa_...` or `...-qa`: `graphics_built`, `broll_ready` and `assembled`, which are implied and never learned from.
+   The number of such files also counts as work done for the stuck-model rule (section 8, "Keeping a job going").
+4. The stream, keyword based and not tied to one toolkit: a command or task about Whisper or transcribing (`inspected`); the main session reading a transcript data file or writing a plan-like or graphics file (`transcribed`, `planned`); a transcription sub-agent completing (`transcribed`; the completion of a shell command that only starts Whisper in the background is not); a sub-agent or task about graphics, HyperFrames, animations or cards starting (`planned`); every such graphics sub-agent started after the plan completing (`graphics_built`); every b-roll, conform, stabilization or product image sub-agent started after the plan completing (`broll_ready`); a thumbnail or meta sub-agent completing (`extras_written`).
+   Only a `completed` task notification counts; a stopped or failed task is done again later.
+5. Time (Pacing below).
+
+Setup is not the work.
+A command or task that installs, creates an environment, smoke-tests, downloads a model or tool, or asks for `--help` or `--version` is setup, however often it names Whisper: it never counts as transcription, never starts a step, and its time is not counted by the estimate.
+While one runs the stage is "Getting the tools ready"; before the footage was looked at, once any setup was seen, the stage stays that and the bar stays in its first 2 points until real work starts.
+
+Pacing (evidence 5):
+
+- A model has a typical timeline: the active time at which each milestone is typically finished (the defaults below, or learned from history) and the stretch each takes from the milestone whose end it follows (the b-roll and the graphics both follow the plan; the timeline follows both).
+- The job is put on that timeline at its anchor: the finished milestone that is typically reached last, at the active time it was finished (the start of the job when nothing is finished).
+  The thumbnails and the b-roll are not anchors, because they run beside the main work.
+  The job's pace is that milestone's active time over its typical time, between 0.5 and 6; without such a milestone it is 1.
+  Setup time is left out of the time since the anchor.
+- Each unfinished milestone is credited the share of its weight that the typical timeline has reached since the anchor, in its own stretch.
+- The stage stays one point short of its value until the typical end of its stretch.
+  When the job is later than that without evidence, the estimate goes on into the following milestones with a slow-down that never stops: the time past the typical end counts at 30% of the typical speed at first and then logarithmically less (the scale is 10% of the typical total time), and once the bar is 2 points past the value of the stage the stage reads "Working on the edit" until a step is confirmed.
+- Never past the files: a milestone that only a file confirms (the project, the thumbnails) is never credited by time, and the bar never goes above the value of everything before the first of them that is unfinished plus all but one point of its weight (an edit without a project: 95; re-edit and timeline edit: 94).
+- The bar never goes backwards, so evidence that the job is behind its estimate holds the bar until the estimate catches up.
+
+Typical times: the defaults are the active minutes in `progressModels.js` (an edit: about 25 for a Short and 42.5 for a Long; a re-edit: 7.5 and 12.5; a timeline edit: shorter).
+From the last 10 completed jobs of the same kind and video type (`progress_history`, section 15) the median total replaces the default once at least 3 of them exist, and every default milestone time is scaled by it.
+
+Rules:
+
+- A new job has `progress` null while it waits in the queue and starts from 0 with its own model when it runs.
+- Progress never goes backwards within a job and stays at 99 at most until the job is `completed`; then it is exactly 100 with the stage "Done".
+- It freezes while the job is pausing, paused, stopping, stopped or failed, and goes on from the same value and the same finished milestones on Continue, also after a restart of the server (`videos.progress_memory`); pauses do not count as time.
+- It is published with `job-updated` when the percent or the stage changes, at most about once a second per job (a new stage at once).
 Milestones: `edit`: inspected 3, transcribed 12, planned 15, graphics_built 34, broll_ready 10, assembled 9, checked 8, project_saved 5, extras_written 3; `reEdit`: changes_applied 65, project_saved 30; `timelineEdit`: changes_applied 70, project_saved 25; `render`: from the renderer's own progress lines (section 12).
 
 ## 9. Resource limits
@@ -555,7 +985,7 @@ The runner renders the project as it is when the job starts, with one `hyperfram
 - `<n>` is the job's CPU budget of section 9 when that is 4 or more (at most 8), otherwise 1 (one worker uses the faster capture path; two workers are slower than one);
 - at 2160 `<n>` is at most 4: 4 workers take the same time as 8 (17.5 s against 20.1 s for 15 seconds, 98 s against 87 to 94 s for one minute) with about 40 percent less memory (10.7 GB against 17 to 18 GB for one minute with five 4K cuts), so the cap is a ceiling on top of the CPU limits of section 9 and never raises a smaller budget;
 - `--gpu` (hardware encoding) is used while the job holds a GPU slot, which it takes for the whole render;
-- the environment sets `HYPERFRAMES_NO_TELEMETRY=1`, `HYPERFRAMES_NO_UPDATE_CHECK=1`, `HYPERFRAMES_RENDER_LOCK=off` (the queue is VidAI's), `HYPERFRAMES_EXTRACT_CACHE_DIR` and `TMPDIR` inside `cache/render/<jobId>/`, and the browser found by Prepare (`HYPERFRAMES_BROWSER_PATH`);
+- the environment sets `HYPERFRAMES_NO_TELEMETRY=1`, `HYPERFRAMES_NO_UPDATE_CHECK=1`, `HYPERFRAMES_RENDER_LOCK=off` (the queue is VidAI's), `HYPERFRAMES_EXTRACT_CACHE_DIR` and `TMPDIR` inside `cache/render/<jobId>/`, `HF_DE_PARALLEL_STREAM=true` (several workers pipe their frames in order straight into the one H.264 encoder instead of writing them to disk first: same time and memory, about 3.6 GB less temporary disk per minute at 2160; should the encoder not start, HyperFrames falls back to frames on disk, so the disk rule below keeps the disk-path numbers), and the browser found by Prepare (`HYPERFRAMES_BROWSER_PATH`);
 - the renderer stays a child of the server and is never detached: it ends itself when its parent goes away.
 
 A render needs room: about 10 GB of temporary files and 4.5 GB of memory for 15 minutes at 1080 (measured: 2.6 times real time with 4 workers, every frame and every cut right, sound within a tenth of a millisecond).
@@ -650,10 +1080,10 @@ Job logs are files (`logs/<jobId>.jsonl`), not rows.
 
 ## 16. User interface
 
-The existing screens and design system stay: the sidebar with the user's channels, the video list with its rows and actions, the activity panel with the job log and outputs, the Start Editing, Re-Edit and Stop sheets, channel settings with prompt and style slots, history (archive, edit log), the in-page folder picker.
+The main screens are: the sidebar with the user's channels, the video list with its rows and actions, the activity panel with the job log and outputs, the Start Editing, Re-Edit and Stop sheets, channel settings with prompt and style slots, history (archive, edit log), the in-page folder picker.
 Theme and text size are kept per browser (local storage), not on the server.
 
-New or changed:
+Also:
 
 - Sign in page; first-admin setup page; account menu (email, change password, sign out).
 - New Video (name, then an upload area for the A-roll and B-roll with progress, pause, resume and cancel per file); uploads also from a video's menu.
@@ -664,15 +1094,26 @@ New or changed:
 - Edit log: an admin chooses "Whose edits" (My edits, Everybody, or one user); the email column shows when other users' entries are listed; the choice stays for Refresh and older entries and is reset at sign-out.
 - Queues and Limits: a per-edit CPU or GPU value above its total shows "Limited by the total: an edit gets at most N%." beside the field.
 - Admin section: Users, Harness and Model, Queues and Limits, Storage, Queue (all jobs), System.
-- Removed: onboarding for an Editing Folder, the toolkit choice, review software, no-sleep, the desktop window chrome and quit dialogs.
 
-The layout floor, text zoom, popups and dialogs under zoom, and shortcut hints that leave out keys the browser keeps, are carried over from `docs/SPEC-desktop.md` section 12 "User interface in the browser".
+The page fills the browser tab and its title is `VidAI`; the platform (fonts, wording, shortcut keys) is the one of the browser's operating system (`src/lib/platform.ts`).
+The layout never gets less than 980 x 620 CSS px (`MIN_LAYOUT_SIZE` in `src/app/appearance.ts`).
+A browser window smaller than that does not squeeze the layout: the page scrolls in both directions as needed, on the app's own background.
+Dialogs, sheets, the file picker, toasts, menus and the "VidAI is not running" notice are fixed to the visible browser window, so they stay fully visible whatever the scroll position.
+Text size is applied by the page itself as CSS `zoom` on the root element.
+Cmd/Ctrl with `=`, `+`, `-` and `0` are left to the browser's own zoom; the other shortcuts work where the browser lets a page have the key.
+Hints and tooltips leave out a shortcut the browser keeps for itself (`PlatformInfo.offersShortcut`: the zoom keys, and Cmd+`,` on a Mac).
+The page also sets `--page-zoom` on the root element: popups (menus, selects, tooltips) are positioned with it so they stay at their anchor, and the size limits of dialogs, sheets and toasts divide the viewport by it so they fit a small browser window.
+The library rescans when the tab becomes visible or gets focus.
+When the event stream breaks, a full-page notice says that VidAI is not running and how to start it, and the page keeps trying to reconnect; when the stream is back the page reloads, so it never shows stale state (the same happens when the instance id of `hello` changes).
+Closing the tab changes nothing: edits keep running on the server, and opening the address again shows their current state.
+Several tabs may be open at once; all get every event.
 
 ## 17. Quality bar
 
 - `npm run check` runs everything: Prettier, ESLint (UI and server, zero warnings), TypeScript (UI, and the server's JavaScript with `checkJs`), UI tests (`vitest`), server tests (`node --test`), toolkit tests (`python -m unittest`).
 - Engine tests drive the real job engine against the fake agent programs in `server/test/support/` (`fake-claude.sh`, `fake-opencode2.py`, `fake-hyperframes.mjs`) with shortened timers.
-- `npm run e2e` starts the real server with a temporary data directory and the fake programs and drives it in Chromium: sign in, admin pages, channels, upload, start, queue order with Urgent, pause, continue, stop, timeline play, hand edits, change request, render, Disk Cleanup, two users at once.
+- `npm run e2e:server` (`scripts/e2e-server/`) starts the real server with a temporary data directory and the fake programs and drives it in Chromium: sign in, admin pages, channels, upload, start, queue order with Urgent, pause, continue, stop, timeline play, hand edits, change request, render, Disk Cleanup, two users at once.
+  The first scenario, `smoke`, covers sign in, the admin making a user, the admin's storage folder, the user's channel, an edit with the fake Claude Code, the timeline and a real final render; the others are still to be written.
 - Every rule of section 4 that keeps users apart has a test that tries to cross it.
 - Windows code paths (`server/src/platform/`) are written and unit tested where they can be on a Mac; what could not be run on a real Windows machine is listed in the README.
 

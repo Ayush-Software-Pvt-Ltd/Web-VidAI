@@ -1,5 +1,5 @@
-// Reading the model lists of a service (SPEC-desktop section 7a; src-tauri/src/opencode/http.rs
-// `parse_models_page` and `parse_openai_models`).
+// Reading the model lists of a service (docs/SPEC.md section 5, "Harness, program
+// and model").
 //
 // The Anthropic form is `{"data":[{"type":"model","id","display_name","created_at"}],
 // "has_more","last_id"}`, paged with `after_id`; the OpenAI form is `{"data":[{"id"}]}` (extra

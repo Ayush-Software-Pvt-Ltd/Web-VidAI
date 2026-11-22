@@ -1,9 +1,8 @@
-// One program of one job, from its start to its end (`run_process`, `drive`, `idle`, `pause`,
-// `stop`, `close_and_wait`, `end_tree` and `wait_until` of `driver.rs`): starts it, sends the
-// message, reads its events, decides when it is finished (docs/SPEC-desktop.md section 6, "Keeping
-// a job going"), carries out a pause or a stop, and leaves no process behind.
+// One program of one job, from its start to its end : starts it, sends the
+// message, reads its events, decides when it is finished (docs/SPEC.md section 8, "Keeping a job
+// going"), carries out a pause or a stop, and leaves no process behind.
 //
-// It is the Rust loop over the driver's channel, as one async function: every wait is a read of
+// It is one async function over the driver's mailbox: every wait is a read of
 // the mailbox with a limit (`driverMailbox.js`), so a request of the manager is seen at the next
 // wait. A continuation is written only while no pause or stop was requested (`d.halted()`).
 

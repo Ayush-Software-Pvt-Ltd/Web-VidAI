@@ -1,5 +1,5 @@
-// Whether a program file can run on this Mac's processor (docs/SPEC-desktop.md section 6,
-// "Finding and checking Claude Code").
+// Whether a program file can run on this Mac's processor (docs/SPEC.md section 5,
+// "Harness, program and model").
 //
 // A Mac can hold programs built for the other processor: a home folder or `/usr/local` copied
 // from an Intel Mac to an Apple Silicon Mac (Migration Assistant), or the other way round, or a

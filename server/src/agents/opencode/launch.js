@@ -1,5 +1,5 @@
 // What one OpenCode 2 server of a job is started with (docs/SPEC.md section 5, "The OpenCode 2
-// program"; docs/SPEC-desktop.md section 7a; ported from `launch2.rs`): the command line, the
+// program"): the command line, the
 // environment, the per-run configuration, how VidAI's address and model become OpenCode 2's
 // `provider/model`, and the permissions of its session.
 //

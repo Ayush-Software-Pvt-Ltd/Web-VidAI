@@ -73,9 +73,23 @@ function makePng() {
 
 /** @returns {string | null} The GSAP copy that comes with the renderer (HyperFrames). */
 function gsapFile() {
-  const vendor = path.resolve(here, "..", "..", "..", "node_modules", "hyperframes", "dist", "vendor", "npm");
+  const vendor = path.resolve(
+    here,
+    "..",
+    "..",
+    "..",
+    "node_modules",
+    "hyperframes",
+    "dist",
+    "vendor",
+    "npm",
+  );
   try {
-    const folder = fs.readdirSync(vendor).filter((n) => n.startsWith("gsap@")).sort().at(-1);
+    const folder = fs
+      .readdirSync(vendor)
+      .filter((n) => n.startsWith("gsap@"))
+      .sort()
+      .at(-1);
     const file = folder ? path.join(vendor, folder, "dist", "gsap.min.js") : "";
     return fs.existsSync(file) ? file : null;
   } catch {
@@ -85,7 +99,10 @@ function gsapFile() {
 
 /** The A-roll file of the video folder: the first video file in it. @param {string} dir */
 function arollOf(dir) {
-  const names = fs.readdirSync(dir).filter((n) => /\.(mp4|mov|m4v|mkv)$/iu.test(n)).sort();
+  const names = fs
+    .readdirSync(dir)
+    .filter((n) => /\.(mp4|mov|m4v|mkv)$/iu.test(n))
+    .sort();
   return names.length > 0 ? path.join(dir, names[0]) : null;
 }
 
@@ -156,7 +173,10 @@ if (!sid) {
         },
       ],
     },
-    get_settings: { effective: { model: "default" }, applied: { model: "claude-fake-1", effort: "high" } },
+    get_settings: {
+      effective: { model: "default" },
+      applied: { model: "claude-fake-1", effort: "high" },
+    },
     get_usage: { subscription_type: null, rate_limits_available: false, rate_limits: null },
   });
   const lines = readline.createInterface({ input: process.stdin });
@@ -170,7 +190,11 @@ if (!sid) {
         response:
           subtype in answers
             ? { subtype: "success", request_id: request.request_id, response: answers[subtype] }
-            : { subtype: "error", request_id: request.request_id, error: `Unsupported: ${subtype}` },
+            : {
+                subtype: "error",
+                request_id: request.request_id,
+                error: `Unsupported: ${subtype}`,
+              },
       });
     } catch {
       /* not JSON: ignore */

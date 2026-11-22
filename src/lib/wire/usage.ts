@@ -1,7 +1,7 @@
 // Wire types of the Claude Code control helper (docs/SPEC.md sections 5 and 14; written by
 // `server/src/agents/claude/`): the plan's usage meter, the model list Claude Code reports, and
 // where the server's Claude Code is pointed. Pure declarations; every field is always present
-// (`null` when empty). Times are milliseconds since 1970 (the desktop app used ISO texts here).
+// (`null` when empty). Times are milliseconds since 1970.
 
 import type { ClaudeModelInfo, OpencodeUsage } from "./harness.ts";
 

@@ -52,11 +52,10 @@ test("sanitizeProfile fixes names, drops extras and keeps text", () => {
   assert.equal(profile.prompts.length, 5);
 });
 
-test("sanitizeProfile reads the version 1 shape (one prompt, one style)", () => {
-  const profile = sanitizeProfile({ prompt: "old prompt", style: "old style" });
-  assert.equal(profile.prompts[0]?.text, "old prompt");
-  assert.equal(profile.styles[0]?.text, "old style");
-  assert.equal(profile.prompts[1]?.text, "");
+test("sanitizeProfile ignores single prompt and style texts outside the slots", () => {
+  const profile = sanitizeProfile({ prompt: "loose prompt", style: "loose style" });
+  assert.equal(profile.prompts[0]?.text, "");
+  assert.equal(profile.styles[0]?.text, "");
 });
 
 /** @param {number} [count] */

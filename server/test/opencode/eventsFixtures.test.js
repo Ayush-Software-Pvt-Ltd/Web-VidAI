@@ -1,5 +1,5 @@
 // The recordings of OpenCode 2.2.6 (`test/support/fixtures/opencode2-stream/`) replayed through
-// the translator: what the Rust tests of `events2.rs` assert, plus the same events fed to the
+// the translator: what the translator must produce, plus the same events fed to the
 // Claude `TurnTracker` (the job engine consumes them exactly that way) and checked against the
 // key sets `protocol.js` produces.
 

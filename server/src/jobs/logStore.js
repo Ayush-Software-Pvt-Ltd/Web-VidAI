@@ -1,4 +1,4 @@
-// The job log on disk (src-tauri/src/store.rs, job logs): one JSON object per line in
+// The job log on disk (docs/SPEC.md section 8, "The job log"): one JSON object per line in
 // `<data dir>/logs/<jobId>.jsonl`, appended in batches.
 //
 // Files are read and written synchronously on purpose: a batch is a few kilobytes every 150 ms,
@@ -91,7 +91,7 @@ export function createLogStore({ dir }) {
     append(jobId, entries) {
       const file = logPath(jobId);
       if (entries.length === 0) return;
-      // Key order of the Rust struct, so the files stay readable by either side.
+      // A fixed key order, so the files stay the same to read and to compare.
       const lines = entries.map((e) =>
         JSON.stringify({
           seq: e.seq,

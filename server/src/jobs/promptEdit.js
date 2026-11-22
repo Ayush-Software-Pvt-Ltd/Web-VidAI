@@ -1,5 +1,5 @@
 // The first message of an `edit` (docs/SPEC.md section 8, "Prompt"; the parts and their order are
-// those of docs/SPEC-desktop.md section 6, "Prompt composition"): the header, the product links
+// those of "Prompt"): the header, the product links
 // and their step, the notes of this video, the channel's prompt and style of the video type and
 // slot, the VidAI paragraph about the project, the OpenCode 2 block, the keep-working paragraph
 // and the progress markers.

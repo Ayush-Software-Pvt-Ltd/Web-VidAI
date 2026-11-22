@@ -1,5 +1,5 @@
 // The messages VidAI sends to the editing agent (docs/SPEC.md section 8, "Prompt", and section
-// 11, "Change requests"). Port of `src-tauri/src/jobs/prompt.rs` for the web product. The parts:
+// 11, "Change requests"). The parts:
 // `promptTexts.js` (every fixed text), `promptHeader.js` (header, machine and limits lines),
 // `promptEdit.js` (the first message), `promptFollowUp.js` (Continue, Re-Edit, project fix) and
 // `promptTimeline.js` (change requests).

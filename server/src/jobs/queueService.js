@@ -58,7 +58,7 @@ const realTimers = {
 
 /**
  * The delay is measured on the wall clock while a timer runs on a clock that stands still when
- * the computer sleeps, so the plan is looked at again at least this often (as in the desktop app).
+ * the computer sleeps, so the plan is looked at again at least this often.
  */
 export const MAX_WAIT_MS = 60_000;
 

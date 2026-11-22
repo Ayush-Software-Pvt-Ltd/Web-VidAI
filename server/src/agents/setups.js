@@ -1,7 +1,6 @@
-// The four setups and their API options (docs/SPEC.md section 5, "Harness, program and model";
-// docs/SPEC-desktop.md section 7a, "The four options"): names, addresses, protocols, keys and the
-// small checks on what an admin types. Ported from src-tauri/src/opencode/mod.rs and the names
-// of src/lib/setup.ts. Pure data and functions; nothing here reads a store or the network.
+// The four setups and their API options (docs/SPEC.md section 5, "Harness, program and model"):
+// names, addresses, protocols, keys and the small checks on what an admin types.
+// Pure data and functions; nothing here reads a store or the network.
 //
 // Split by job: addresses in `setupsUrl.js`, what a job needs in `setupsJob.js`, the per-option
 // state in `setupStore.js`.

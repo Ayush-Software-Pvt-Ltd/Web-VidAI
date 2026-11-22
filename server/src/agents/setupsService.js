@@ -1,6 +1,6 @@
 // The harness settings of the whole server (docs/SPEC.md section 5, "Harness, program and model"):
 // everything the admin screen changes and everything a new job needs to know about the setup.
-// Ported from src-tauri/src/commands/opencode.rs and src-tauri/src/opencode/mod.rs. Nothing here
+// Nothing here
 // is an RPC function (`rpc/adminHarness.js` is) and nothing here touches the network itself (the
 // injected `http` and `usage` do).
 //

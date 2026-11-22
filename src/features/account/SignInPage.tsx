@@ -1,5 +1,5 @@
 import { CircleAlert, LogIn } from "lucide-react";
-import { useRef, useState, type SyntheticEvent } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { Button, Field, Input } from "@/components/ui";
 import { useAppState, useAppStoreApi } from "@/lib/appEnv";
 import { toApiError } from "@/lib/errors";
@@ -21,6 +21,15 @@ export function SignInPage() {
   const [busy, setBusy] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+  // Set when a refusal should put the focus in the password field once it is enabled again.
+  const focusPassword = useRef(false);
+
+  useEffect(() => {
+    // Runs after the render that enabled the inputs again: a disabled input cannot take the focus.
+    if (busy || !focusPassword.current) return;
+    focusPassword.current = false;
+    passwordRef.current?.focus();
+  }, [busy, error]);
 
   async function submit(event: SyntheticEvent) {
     event.preventDefault();
@@ -36,11 +45,10 @@ export function SignInPage() {
       await store.getState().login(email.trim(), password);
       // The page now shows the app; nothing is left to do here.
     } catch (caught) {
+      focusPassword.current = true;
       setError(toApiError(caught).message);
       setPassword("");
       setBusy(false);
-      // The input is disabled while asking, so the focus moves once it can take it again.
-      requestAnimationFrame(() => passwordRef.current?.focus());
     }
   }
 

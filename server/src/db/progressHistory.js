@@ -1,6 +1,6 @@
 // The `progress_history` table (docs/SPEC.md section 15): how long completed jobs took, per kind
 // and video type, so the progress estimate learns the typical time of this server. Only the newest
-// rows the estimate looks at are kept (docs/SPEC-desktop.md section 6, "Progress": the last 10
+// rows the estimate looks at are kept (docs/SPEC.md section 8, "Progress": the last 10
 // completed jobs of a kind and type, the median once at least 3 of them have a time).
 
 import { HISTORY_RUNS } from "../jobs/progressPacing.js";

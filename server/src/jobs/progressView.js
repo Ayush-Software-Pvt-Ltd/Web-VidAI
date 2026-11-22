@@ -1,4 +1,4 @@
-// The published view of a job's progress (docs/SPEC-desktop.md section 6 "Progress", Rules): what
+// The published view of a job's progress (docs/SPEC.md section 8, "Progress", Rules): what
 // the UI shows when a job completes, and the cadence of publishing: `job-updated` when the percent
 // or the stage changes, at most about once a second per job (a new stage at once); the state is
 // written on a new stage and otherwise at most every 10 seconds.

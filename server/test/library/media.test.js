@@ -65,7 +65,7 @@ test("parseFfprobeJson reads width and height and applies the rotation", () => {
     width: 1920,
     height: 1080,
   });
-  // Zero passes through, like the Rust u32; videoTypeOfSize refuses it later.
+  // Zero passes through, like an unsigned 32-bit number; videoTypeOfSize refuses it later.
   assert.deepEqual(parseFfprobeJson('{"streams":[{"width":0,"height":10}]}'), {
     width: 0,
     height: 10,

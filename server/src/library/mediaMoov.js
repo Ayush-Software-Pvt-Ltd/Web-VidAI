@@ -1,5 +1,5 @@
 // The display size of an MP4, MOV or M4V file read in this process, without any external tool
-// (docs/SPEC-desktop.md section 8; ported from `src-tauri/src/media.rs`). The `moov` box holds the
+// (docs/SPEC.md section 6, "Videos"). The `moov` box holds the
 // track headers: width, height and the rotation matrix of each video track.
 //
 // The box walk reads only box headers and jumps over everything else, so a multi-GB file with

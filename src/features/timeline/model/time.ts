@@ -67,7 +67,8 @@ export function timeCode(frame: number, fps: TimelineFps): string {
 
 /**
  * A ruler label: whole seconds read `m:ss` (`h:mm:ss` from one hour on); a frame between two
- * seconds reads `m:ss:ff`.
+ * seconds reads `m:ss+Nf`, never a third colon part, which would read as minutes or hours
+ * (`0:01:15` looks like one minute fifteen, `1:02:15` like an hour).
  */
 export function rulerLabel(frame: number, fps: TimelineFps): string {
   const p = parts(frame, fps);
@@ -75,7 +76,7 @@ export function rulerLabel(frame: number, fps: TimelineFps): string {
     p.hours > 0
       ? `${p.hours}:${pad2(p.minutes)}:${pad2(p.seconds)}`
       : `${p.minutes}:${pad2(p.seconds)}`;
-  return p.frames === 0 ? base : `${base}:${pad2(p.frames)}`;
+  return p.frames === 0 ? base : `${base}+${p.frames}f`;
 }
 
 /** A length as `m:ss` (`h:mm:ss` from one hour on), rounded to the nearest second. */

@@ -1,4 +1,4 @@
-// Channel documents (export, import, the desktop settings file), the default prompt, new video
+// Channel documents (export, import), the default prompt, new video
 // folders and the workspace RPC functions.
 import { afterEach, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -183,51 +183,19 @@ describe("channel documents and videos", () => {
       assert.deepEqual(fs.readdirSync(world.dataDir).sort(), ["media"]);
     });
 
-    test("the desktop settings file imports: folder names are channel names, slots are fixed", async () => {
-      const result = await service().importDocument(alice, {
+    test("only the channels format is accepted, a settings file of another program is refused", async () => {
+      const settings = {
         format: "vidai-settings",
         version: 2,
-        general: { reviewSoftware: "fcp" },
-        channels: [
-          {
-            folderName: "Tech",
-            long: {
-              prompts: [
-                { name: "Mine", text: "p0" },
-                { name: " Fast ", text: "p1" },
-                { name: "", text: "p2" },
-              ],
-              styles: [{ name: "Default", text: "s0" }],
-            },
-          },
-          { folderName: "Old", videoType: "long", long: { prompt: "legacy", style: "look" } },
-        ],
-      });
-      assert.deepEqual(result, { updated: 0, created: 2 });
-      const [tech, old] = await service().list(alice.id);
-      assert.deepEqual(
-        tech?.long.prompts.map((slot) => [slot.name, slot.text]),
-        [
-          ["Default", "p0"],
-          ["Fast", "p1"],
-          ["Prompt 3", "p2"],
-          ["Prompt 4", ""],
-          ["Prompt 5", ""],
-        ],
-      );
-      assert.equal(tech?.long.styles[4]?.name, "Style 5");
-      assert.equal(tech?.videoType, "auto");
-      assert.equal(old?.videoType, "long");
-      assert.equal(old?.long.prompts[0]?.text, "legacy");
-      assert.equal(old?.long.styles[0]?.text, "look");
-    });
-
-    test("the desktop file's version limit is 2, a channels file's is 1", () => {
-      assert.throws(() => parseDocument({ format: "vidai-settings", version: 3, channels: [] }));
-      assert.doesNotThrow(() =>
-        parseDocument({ format: "vidai-settings", version: 1, channels: [] }),
-      );
+        channels: [{ folderName: "Tech", long: { prompts: [{ name: "Mine", text: "p0" }] } }],
+      };
+      await rejectsCode(service().importDocument(alice, settings), "invalidInput");
+      assert.deepEqual(await service().list(alice.id), []);
+      assert.throws(() => parseDocument({ format: "vidai-settings", version: 1, channels: [] }));
       assert.throws(() => parseDocument({ format: "vidai-channels", version: 2, channels: [] }));
+      assert.doesNotThrow(() =>
+        parseDocument({ format: "vidai-channels", version: 1, channels: [] }),
+      );
     });
 
     test("what is exported imports back unchanged", async () => {

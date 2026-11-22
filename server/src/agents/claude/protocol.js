@@ -1,5 +1,5 @@
 // The stream-json protocol of `claude -p --input-format stream-json --output-format stream-json`
-// (docs/SPEC-desktop.md section 6, "Driving Claude Code", verified against Claude Code 2.1.319).
+// (docs/SPEC.md section 8, "Driving Claude Code", verified against Claude Code 2.1.319).
 //
 // - Build stdin lines: user messages (`userMessageLine`) and control requests (`interruptLine`,
 //   `controlRequestLine` for `initialize`, `get_settings`, `get_usage`).

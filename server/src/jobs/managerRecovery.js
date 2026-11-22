@@ -1,5 +1,4 @@
-// Start-up and shutdown of the job manager (docs/SPEC.md section 8, "Start and quit", and
-// docs/SPEC-desktop.md section 6, "Quitting and starting"). Quit pauses every running agent job
+// Start-up and shutdown of the job manager (docs/SPEC.md section 8, "Recovery"). Quit pauses every running agent job
 // and stops renders; the next start makes whatever was still running paused (with a session) or
 // stopped, and never goes on by itself.
 

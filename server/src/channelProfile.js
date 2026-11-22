@@ -1,6 +1,5 @@
-// The prompt and style slots of a channel profile (docs/SPEC.md section 6, "Channels"; rules
-// carried over from docs/SPEC-desktop.md section 4 and `src-tauri/src/store.rs`): every profile has
-// exactly 5 prompts and 5 styles, slot 0 is named "Default", other names are 1 to 40 characters.
+// The prompt and style slots of a channel profile (docs/SPEC.md section 6, "Channels"):
+// every profile has exactly 5 prompts and 5 styles, slot 0 is named "Default", other names are 1 to 40 characters.
 // `validateProfile` is strict (what a user sends); `sanitizeProfile` is lenient (stored and imported
 // files, which must always load).
 
@@ -54,17 +53,13 @@ const isRecord = (value) => typeof value === "object" && value !== null && !Arra
 /**
  * @param {unknown} list
  * @param {"Prompt" | "Style"} label
- * @param {unknown} legacyText Version 1 files have one text per profile: it becomes slot 0.
  * @returns {ChannelSlot[]}
  */
-function sanitizeSlots(list, label, legacyText) {
+function sanitizeSlots(list, label) {
   const given = Array.isArray(list) ? list.slice(0, CHANNEL_SLOTS) : [];
   return Array.from({ length: CHANNEL_SLOTS }, (_, index) => {
     const fallback = emptySlot(label, index);
-    let entry = given[index];
-    if (index === 0 && given.length === 0 && typeof legacyText === "string") {
-      entry = { text: legacyText };
-    }
+    const entry = given[index];
     if (!isRecord(entry)) return fallback;
     const name =
       typeof entry.name === "string"
@@ -87,8 +82,8 @@ function sanitizeSlots(list, label, legacyText) {
 export function sanitizeProfile(value) {
   const record = isRecord(value) ? value : {};
   return {
-    prompts: sanitizeSlots(record.prompts, "Prompt", record.prompt),
-    styles: sanitizeSlots(record.styles, "Style", record.style),
+    prompts: sanitizeSlots(record.prompts, "Prompt"),
+    styles: sanitizeSlots(record.styles, "Style"),
   };
 }
 

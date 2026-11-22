@@ -133,7 +133,7 @@ test("an entry goes through the file and comes back unchanged", (t) => {
   ];
   assert.deepEqual(store.read("job1"), expected);
   assert.deepEqual(batches, [{ videoId: "v1", jobId: "job1", entries: expected }]);
-  // One JSON object per line, the key order of the Rust struct.
+  // One JSON object per line, in a fixed key order.
   const lines = fs.readFileSync(store.path("job1"), "utf8").trimEnd().split("\n");
   assert.equal(lines.length, 3);
   assert.deepEqual(Object.keys(JSON.parse(lines[0] ?? "")), [

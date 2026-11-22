@@ -135,7 +135,7 @@ npm run dev     # the interface alone on http://localhost:1420, against an in-me
 npm run check   # every gate
 ```
 
-`npm run dev` accepts `?scenario=<name>` (several, comma-separated; the list is in `src/lib/mock/scenarios.ts`), `?as=user`, `?latency=600`, `?speed=3` and `?ticks=off`.
+`npm run dev` accepts `?scenario=<name>` (several, comma-separated, for example `busy,usage-critical`; the list is in `src/lib/mock/scenarios.ts`), `?as=admin` or `?as=user`, `?latency=600`, `?speed=3`, `?minute=` and `?ticks=off`.
 Add `?backend=http` to use a running server instead of the mock (it is found at `https://127.0.0.1:14200`, or at `VIDAI_SERVER`).
 
 | Command                    | What it does                                          |

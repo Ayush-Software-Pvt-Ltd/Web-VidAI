@@ -1,5 +1,5 @@
 // The pure scheduling rules, one test per sentence of docs/SPEC.md section 8 ("The edit queue",
-// "The timeline queue and the render queue"); ported from the tests of `queue.rs::schedule`.
+// "The timeline queue and the render queue").
 
 import test from "node:test";
 import assert from "node:assert/strict";

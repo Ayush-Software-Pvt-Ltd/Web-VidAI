@@ -44,7 +44,7 @@ export function useApi(): Api {
  * Only the keyboard traits matter in a browser; the window frame traits are off.
  */
 export function usePlatform(): PlatformInfo {
-  return platformInfo(detectPlatform(), { web: true });
+  return platformInfo(detectPlatform());
 }
 
 /** The app store itself, for `getState()` inside event handlers. */

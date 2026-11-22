@@ -1,6 +1,5 @@
-// The words the driver says to the agent and about its own decisions (docs/SPEC-desktop.md section
-// 6, "Keeping a job going"; `prompt.rs` `continuation_body_on` of the old core). Each can be
-// replaced through `ctx.texts`; these are the old core's own sentences.
+// The words the driver says to the agent and about its own decisions (docs/SPEC.md section 8,
+// "Keeping a job going"). Each can be replaced through `ctx.texts`; these are the defaults.
 
 import { workNoun } from "./keepgoing.js";
 

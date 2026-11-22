@@ -1,5 +1,4 @@
-// Folder naming rules carried over from docs/SPEC-desktop.md section 2 (ported from
-// `src-tauri/src/scanner.rs`): reserved names inside a channel, the B-roll folder and the natural
+// Folder naming rules (docs/SPEC.md section 6, "Videos"): reserved names inside a channel, the B-roll folder and the natural
 // order of names. Shared by video creation, uploads and the library.
 
 const CHANNEL_ASSET_FOLDERS = [

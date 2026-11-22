@@ -15,7 +15,7 @@
  */
 import { createStore, type StoreApi } from "zustand";
 import { toast } from "@/components/ui";
-import { requestDiskCleanup } from "@/features/disk";
+import { requestDiskCleanup } from "@/features/disk/request";
 import type { Api } from "@/lib/api";
 import { toApiError, type ApiError } from "@/lib/errors";
 import { findVideo, type AppStore } from "@/lib/store";

@@ -1,5 +1,4 @@
-// Which setup and session a launch really uses (docs/SPEC-desktop.md section 6, "Setup and
-// session of a launch", carried over by docs/SPEC.md section 8). A job keeps the setup it was
+// Which setup and session a launch really uses (docs/SPEC.md section 8, "State machine"). A job keeps the setup it was
 // created with; a session may only be resumed by the program that made it, and only while that
 // setup can run now. Otherwise the job goes on in a new session on the current setup, which gets
 // the full instructions, and the log says so.

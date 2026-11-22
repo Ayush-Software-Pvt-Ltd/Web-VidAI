@@ -1,5 +1,4 @@
-// The plan's usage limits (docs/SPEC-desktop.md section 6, "Models, effort and usage limits";
-// ported from src-tauri/src/claude/usage.rs).
+// The plan's usage limits (docs/SPEC.md section 5, "Usage limits").
 //
 // The meter is fed two ways: the `get_usage` control request of the helper process (a periodic
 // refresh, see `service.js`) and, free of charge, the `rate_limit_event` lines of running jobs.

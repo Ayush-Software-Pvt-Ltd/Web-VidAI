@@ -1,5 +1,5 @@
 // User-readable job errors (`JobView.error`): short, human, no jargon, no em dash
-// (src-tauri/src/jobs/errors.rs; docs/SPEC.md section 8 carries them over).
+// (docs/SPEC.md section 8, "Retrying after a model error").
 //
 // "review file" became "the project" (a HyperFrames project folder, SPEC section 10). The program
 // that did the editing is named from the job's harness ("Claude Code" or "OpenCode 2"); only the
@@ -25,7 +25,7 @@ import { firstLine, truncateChars } from "./logText.js";
 
 /**
  * What the service behind an API option answers, in words. The wording lives with the
- * OpenCode service code (`failure_text_for` and `unknown_failure` of `opencode/http.rs`); it is
+ * OpenCode service code (`agents/opencode/`); it is
  * passed in so this module stays free of it.
  * @typedef {object} ServiceWording
  * @property {(status: number | null, text: string, model: string | null) => string} failureText
@@ -227,7 +227,7 @@ export function epochSuffix(text) {
 
 /**
  * The `error` of a job that gave up retrying after a model error: `message` plus how often it
- * retried (docs/SPEC-desktop.md section 6, "Retrying after a model error").
+ * retried (docs/SPEC.md section 8, "Retrying after a model error").
  * @param {string} message
  * @param {number} retries
  * @returns {string}

@@ -1,4 +1,4 @@
-// The scanner (docs/SPEC.md section 6, "Videos"; ported from `src-tauri/src/scanner.rs`): one
+// The scanner (docs/SPEC.md section 6, "Videos"): one
 // channel directory in, the videos in it out. Pure with respect to the database and the job
 // engine: it only reads folders. Detection of Long or Short, the latest job and the actions are
 // added by the library service.
@@ -23,7 +23,7 @@ import { extensionOf, readEntriesOrNull, statFile } from "./entries.js";
 import { mapLimit } from "./mapLimit.js";
 import { scanOutput, workingFolderHasFiles } from "./outputs.js";
 
-/** A-roll file extensions (SPEC-desktop section 2), compared ignoring case. */
+/** A-roll file extensions (docs/SPEC.md section 6, "Videos"), compared ignoring case. */
 export const AROLL_EXTENSIONS = ["mp4", "mov", "m4v", "mkv", "mts", "m2ts", "avi", "webm"];
 
 /**

@@ -90,6 +90,11 @@ export function renderEnv({ base, limits, workDir, browserPath, ffmpeg = null, f
     HYPERFRAMES_NO_UPDATE_CHECK: "1",
     HYPERFRAMES_RENDER_LOCK: "off",
     HYPERFRAMES_EXTRACT_CACHE_DIR: folders.extract,
+    // Several workers pipe their frames, in order, straight into the one H.264 encoder instead of
+    // writing every frame to disk first: same time and memory, about 3.6 GB less temporary disk
+    // per minute at 2160 (measured 2026-11-22, HyperFrames 0.9.80). Should the encoder not start,
+    // HyperFrames falls back to frames on disk, which the disk rule (`diskSpace.js`) still covers.
+    HF_DE_PARALLEL_STREAM: "true",
     // Unix reads TMPDIR, Windows TEMP and TMP; setting all three is harmless everywhere.
     TMPDIR: folders.tmp,
     TEMP: folders.tmp,

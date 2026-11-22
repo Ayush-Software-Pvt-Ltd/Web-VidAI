@@ -1,5 +1,4 @@
-// The Claude Code module (docs/SPEC.md sections 5 and 14; ported from src-tauri/src/claude/mod.rs
-// and the usage commands of src-tauri/src/commands/): the login of the OS user that runs the
+// The Claude Code module (docs/SPEC.md sections 5 and 14): the login of the OS user that runs the
 // server, the model list and the plan's usage meter, which every signed-in user sees read-only.
 //
 //   const claude = createClaudeModule({ events, dataDir, env: process.env, clock, log, setupOf });

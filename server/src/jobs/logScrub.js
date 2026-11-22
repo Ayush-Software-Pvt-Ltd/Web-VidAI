@@ -1,4 +1,4 @@
-// Keeping secrets out of the job log (src-tauri/src/jobs/log.rs, `add_secret_as` and `scrub_all`).
+// Keeping secrets out of the job log (docs/SPEC.md section 8, "The job log").
 //
 // An API key given to a job is registered here; every text that is written to the log file or
 // sent to the browser goes through `scrub` first, which replaces the key by a label

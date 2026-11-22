@@ -1,5 +1,5 @@
 // The parts of starting an OpenCode 2 server that differ between macOS/Linux and Windows
-// (docs/SPEC.md section 5, "The OpenCode 2 program"; docs/SPEC-desktop.md section 11).
+// (docs/SPEC.md section 5, "Harness, program and model").
 //
 // How the program itself is launched (an `.exe`, an npm shim, a script with a `#!` line) and the
 // absence of a console window are `process.js` and `launch.js`. What is left, and lives here:

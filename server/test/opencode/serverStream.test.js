@@ -1,5 +1,5 @@
-// The event stream: the decoder (ported from `sse_frames_in_any_pieces` of `child.rs`) and the
-// reader, which the desktop app did not have to test because it never reconnected.
+// The event stream: the decoder and the
+// reader, which connects again when the stream drops.
 
 import assert from "node:assert/strict";
 import http from "node:http";

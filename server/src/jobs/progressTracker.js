@@ -1,5 +1,5 @@
-// The driver's handle on the progress of the agent job it runs (docs/SPEC-desktop.md section 6
-// "Progress", the `Tracker` of progress.rs): the clock, the output folder and the working folder,
+// The driver's handle on the progress of the agent job it runs (docs/SPEC.md section 8,
+// "Progress"): the clock, the output folder and the working folder,
 // the restored engine of a continued job, what is published and when it is persisted.
 //
 // Everything outside is injected: the clock, the history table, the probe of the project files and

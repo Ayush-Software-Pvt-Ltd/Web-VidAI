@@ -1,5 +1,5 @@
-// The progress engine (ports of the unit tests of src-tauri/src/jobs/progress.rs, adapted to the
-// new milestone names and the project folder). The engine is pure and clock-free, so every test
+// The progress engine (the milestone names and the project folder
+// are those of docs/SPEC.md section 8, "Progress"). The engine is pure and clock-free, so every test
 // states the job's active time.
 
 import { test } from "node:test";
@@ -250,7 +250,7 @@ test("setup is not the work", () => {
 });
 
 test("setup seen in a re-edit never holds the bar in a first stage that has no footage", () => {
-  // The desktop app waited for "inspected", which a re-edit does not have; here only an edit does.
+  // "Inspected" is a milestone only an edit has, so a re-edit must not wait for it.
   const p = engine("reEdit");
   p.observe(tool("Bash", { command: "pip install x", description: "Install x" }, "s1"), MIN);
   p.observe(toolResult("s1"), 2 * MIN);

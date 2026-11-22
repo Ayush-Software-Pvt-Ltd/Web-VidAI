@@ -1,5 +1,4 @@
-// The progress models (docs/SPEC.md section 8 "Progress", carried over from docs/SPEC-desktop.md
-// section 6 "Progress", src-tauri/src/jobs/progress.rs): for every agent job kind a weighted
+// The progress models (docs/SPEC.md section 8, "Progress"): for every agent job kind a weighted
 // checklist of milestones, in the order the stage label follows.
 //
 // `render` has no model: the server runs the renderer itself and its progress comes from the
@@ -173,8 +172,8 @@ function step(name, weight, stage, after, typicalMin) {
 }
 
 /**
- * `edit`. Calibration (active minutes, waiting for the creator excluded) from the owner's real
- * edits, kept from the desktop app (progress.rs):
+ * `edit`. Calibration (active minutes, waiting for the creator excluded) from real
+ * edits:
  * - Short (about 90 s of output): transcription 1.5-5, transcription to written plan 3-8, plan to
  *   project 15-20, total 19.5-30, typically about 25. Inside the last stretch 4 graphics agents
  *   build 19-25 compositions while the lead conforms b-roll and sets the audio loudness;
@@ -209,7 +208,7 @@ const EDIT = Object.freeze({
  * `reEdit`: revisions of the owner's edits took 6-9 minutes on a Short (all text pop-ups moved and
  * checked frame by frame, the project exported again); a Long takes longer. The two weights
  * add up to 95: a finished re-edit shows 95, "Finishing up", until the job is completed, and
- * without the project file the bar stops at 94 (as in the desktop app).
+ * without the project file the bar stops at 94.
  * @type {Model}
  */
 const RE_EDIT = Object.freeze({

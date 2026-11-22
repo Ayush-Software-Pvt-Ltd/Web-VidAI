@@ -1,5 +1,5 @@
-// The OpenCode 2 server process of one job (docs/SPEC.md section 5, "The OpenCode 2 program";
-// ported from `child.rs`): started in a process group of its own, its listening line, the tail of
+// The OpenCode 2 server process of one job (docs/SPEC.md section 8, "Driving OpenCode 2"):
+// started in a process group of its own, its listening line, the tail of
 // what it prints, the wait for it to be ready, and the end of its whole process tree.
 //
 // Nothing here knows HTTP; the address it reports is the only thing the rest of the driver needs

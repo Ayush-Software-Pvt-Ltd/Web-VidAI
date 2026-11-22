@@ -1,6 +1,6 @@
 // The job driver against the real fake programs (`support/fake-claude.sh`, and once
-// `support/fake-opencode2.py`) with shortened timings; ported from `tests/jobs_engine.rs`
-// (docs/SPEC.md section 6). The queue, start delay and the manager's recovery are not here.
+// `support/fake-opencode2.py`) with shortened timings
+// (docs/SPEC.md section 8). The queue, start delay and the manager's recovery are not here.
 
 import assert from "node:assert/strict";
 import fs from "node:fs";

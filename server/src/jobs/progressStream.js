@@ -1,4 +1,4 @@
-// Inference from the stream (docs/SPEC-desktop.md section 6 "Progress", evidence 4 and "Setup is
+// Inference from the stream (docs/SPEC.md section 8, "Progress", evidence 4 and "Setup is
 // not the work"): generic keywords in tool calls, background tasks and sub-agents, never tied to
 // one toolkit's file names.
 

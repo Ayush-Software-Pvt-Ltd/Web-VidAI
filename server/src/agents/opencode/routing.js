@@ -1,5 +1,5 @@
 // Whether the server's own Claude Code setup already points Claude Code at another service
-// (docs/SPEC-desktop.md section 7a; src-tauri/src/opencode/routing.rs).
+// (docs/SPEC.md section 5, "Harness, program and model").
 //
 // Claude Code reads `ANTHROPIC_BASE_URL` from its environment and from the `env` object of its
 // settings file (`~/.claude/settings.json`, or `$CLAUDE_CONFIG_DIR/settings.json`), which it

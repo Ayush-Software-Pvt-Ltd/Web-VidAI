@@ -39,7 +39,7 @@ describe("platformInfo", () => {
     expect(pc.ariaShortcut("F")).toBe("Control+F");
   });
 
-  it("has no desktop traits", () => {
+  it("offers only the key conventions", () => {
     expect(Object.keys(platformInfo("macos")).sort()).toEqual([
       "ariaShortcut",
       "keyLabel",

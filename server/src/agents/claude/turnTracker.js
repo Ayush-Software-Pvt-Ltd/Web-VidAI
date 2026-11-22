@@ -1,5 +1,5 @@
-// The pure completion logic of docs/SPEC-desktop.md section 6 ("A `result` ends one turn, not the
-// job"): Claude is finished only when every message sent has been answered, no turn is in
+// The pure completion logic of docs/SPEC.md section 8, "Driving Claude Code" ("A `result` ends
+// one turn, not the job"): Claude is finished only when every message sent has been answered, no turn is in
 // progress, no background task is active, and nothing has happened for a settle time.
 //
 // Pure: it never reads a clock. Every method that needs the time gets `now` (milliseconds, any

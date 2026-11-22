@@ -1,5 +1,4 @@
-// The tracker and the publisher: ports of the progress assertions of
-// src-tauri/tests/jobs_progress.rs, feeding the engine the same stream events and file evidence
+// The tracker and the publisher: feeding the engine the same stream events and file evidence
 // directly (no process, no store), with an injected clock, probe, scan and history.
 
 import { test } from "node:test";

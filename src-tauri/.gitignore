@@ -1,2 +1,0 @@
-# Native helpers built by build.rs (Tauri sidecars, one per target triple)
-/binaries/

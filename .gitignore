@@ -4,10 +4,6 @@ node_modules/
 # Build output
 dist/
 dist-ssr/
-src-tauri/target/
-src-tauri/gen/schemas/
-src-web/target/
-src-web/gen/schemas/
 
 # Screenshots and other generated review material
 artifacts/

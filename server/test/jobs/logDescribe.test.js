@@ -1,4 +1,4 @@
-// Port of the describer, path and truncation tests of src-tauri/src/jobs/log.rs.
+// The describer, path and truncation rules of the job log.
 
 import assert from "node:assert/strict";
 import test from "node:test";

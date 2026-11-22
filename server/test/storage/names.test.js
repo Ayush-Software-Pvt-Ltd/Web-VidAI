@@ -1,4 +1,4 @@
-// The folder naming rules carried over from the desktop scanner (SPEC-desktop.md section 2).
+// The folder naming rules (docs/SPEC.md section 6, "Videos").
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {

@@ -1,4 +1,4 @@
-// What happens when a job's run ends (docs/SPEC.md section 8, "When a job ends", and section 11,
+// What happens when a job's run ends (docs/SPEC.md section 8, "What a job keeps and puts back", and section 11,
 // "Change requests"): revisions saved or restored, notes marked, the guarded transition, and the
 // bookkeeping that follows. The order matters: the project is put right BEFORE the state changes,
 // so nobody sees a failed job over a half-edited project.

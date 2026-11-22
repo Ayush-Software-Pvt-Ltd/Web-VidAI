@@ -1,5 +1,5 @@
-// One OpenCode 2 server and its session (docs/SPEC.md section 5, "The OpenCode 2 program"; ported
-// from `Server2` in `server2.rs`): starts the process, finds the model, creates or resumes the
+// One OpenCode 2 server and its session (docs/SPEC.md section 8, "Driving OpenCode 2"):
+// starts the process, finds the model, creates or resumes the
 // session, feeds the event stream through the translator (`events.js`) and carries out what it asks,
 // and gives the job engine the same few calls as a Claude Code session.
 //

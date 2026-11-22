@@ -1,4 +1,4 @@
-// Finding Claude Code (docs/SPEC.md section 5, "Finding and checking Claude Code").
+// Finding Claude Code (docs/SPEC.md section 5, "Harness, program and model").
 //
 // Where `claude` is looked for, in order:
 //

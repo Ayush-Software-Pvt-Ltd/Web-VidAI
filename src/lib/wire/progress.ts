@@ -1,7 +1,5 @@
 // How far a job is, as the server reports it (docs/SPEC.md section 8 "Progress"). Pure
 // declarations; every field is always present (`null` when empty), nothing is optional.
-// `percent` and `stage` mean what they meant in the desktop app's `JobProgress`, so the existing
-// progress display keeps working; `secondsLeft` is new.
 
 /** How far a job is: the bar of every video row and of the activity panel. */
 export interface JobProgress {

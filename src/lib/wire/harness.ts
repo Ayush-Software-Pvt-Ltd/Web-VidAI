@@ -1,7 +1,7 @@
 // Wire types of the harness area (docs/SPEC.md section 5, "Harness, program and model"): the
 // four setups' admin screen, what a user may see of it, and the readiness of a launch. Pure
 // declarations; every field is always present (`null` when empty). Times are milliseconds since
-// 1970, like everywhere else on this wire (the desktop app used ISO texts here).
+// 1970, like everywhere else on this wire.
 
 import type { Setup } from "../wire.ts";
 
@@ -121,7 +121,7 @@ export interface OpencodeUsageLimit {
   resetsAt: number | null;
 }
 
-/** The OpenCode Go quota as OpenCode reports it (SPEC-desktop section 7a, "OpenCode quota"). */
+/** The OpenCode Go quota as OpenCode reports it (docs/SPEC.md section 5, "Usage limits"). */
 export interface OpencodeUsage {
   /** Empty while unknown or unavailable. */
   limits: OpencodeUsageLimit[];

@@ -1,5 +1,4 @@
-// What the driver makes of what its program says and does (`observe`, `exited_by_itself`,
-// `error_end` and `check_output` of `driver.rs`): one line at a time into the turn tracker, the
+// What the driver makes of what its program says and does : one line at a time into the turn tracker, the
 // log and the progress, and the end of a program that ended without being asked to.
 
 import { hasCompletionMarker } from "./keepgoing.js";

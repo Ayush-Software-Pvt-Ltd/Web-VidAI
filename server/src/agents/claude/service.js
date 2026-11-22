@@ -1,6 +1,5 @@
-// Keeps `ClaudeInfo` and `UsageStatus` fresh (docs/SPEC.md sections 5 and 14; ported from
-// src-tauri/src/claude/service.rs): the cached values, the reused usage helper process and the
-// refresh schedule.
+// Keeps `ClaudeInfo` and `UsageStatus` fresh (docs/SPEC.md sections 5 and 14):
+// the cached values, the reused usage helper process and the refresh schedule.
 //
 // - Usage: at startup, every `usageIntervalVisibleMs` while somebody watches (an open event
 //   stream), every `usageIntervalJobsMs` while nobody watches but a job runs, on demand, and from

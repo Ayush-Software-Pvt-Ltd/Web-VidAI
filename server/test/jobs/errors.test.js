@@ -1,4 +1,4 @@
-// Port of the unit tests of src-tauri/src/jobs/errors.rs (job errors in words).
+// Job errors in words.
 
 import assert from "node:assert/strict";
 import test from "node:test";

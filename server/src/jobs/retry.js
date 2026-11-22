@@ -1,5 +1,5 @@
-// Automatic retries after the model provider failed (docs/SPEC-desktop.md section 6, "Retrying
-// after a model error", carried over by docs/SPEC.md section 8): which failures are the
+// Automatic retries after the model provider failed (docs/SPEC.md section 8, "Retrying
+// after a model error"): which failures are the
 // provider's, how long to wait before each retry, how the counter runs, and the words of the
 // wait. Pure, so it is tested without a process; the driver does the waiting.
 
@@ -134,7 +134,7 @@ export function classify(result, limit = null) {
 }
 
 /**
- * A status as the Rust takes it (`u16`): a whole number from 0 to 65535.
+ * A status as an HTTP status code: a whole number from 0 to 65535.
  * @param {number | null} status
  * @returns {number | null}
  */

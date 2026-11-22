@@ -1,5 +1,4 @@
-// Which actions a video row offers (docs/SPEC.md section 8, "Kinds, queues and actions"; ported
-// from `compute_actions` in `src-tauri/src/scanner.rs`). The server decides; the page only shows
+// Which actions a video row offers (docs/SPEC.md section 8, "Kinds, queues and actions"). The server decides; the page only shows
 // the buttons.
 //
 // The table. "latest job" is the newest job of the video; "active" means queued, running,

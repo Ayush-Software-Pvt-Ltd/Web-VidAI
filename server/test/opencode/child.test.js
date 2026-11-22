@@ -1,5 +1,4 @@
-// The server process (ported from the test of `child.rs`, with the cases the job engine tests
-// covered through the fake): output lines, the wait for the listening line, the failure text, the
+// The server process (with the cases the job engine tests cover through the fake): output lines, the wait for the listening line, the failure text, the
 // end of the whole process tree.
 
 import assert from "node:assert/strict";

@@ -1,5 +1,4 @@
-// Port of the unit tests of src-tauri/src/jobs/work.rs (files a real edit writes), plus the
-// busy-workers rules of src-tauri/src/jobs/driver.rs (`note_cpu`, `idle`).
+// Evidence of work (files a real edit writes), plus the busy-workers rules.
 
 import assert from "node:assert/strict";
 import fs from "node:fs";

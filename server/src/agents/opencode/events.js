@@ -1,6 +1,6 @@
 // The event stream of an OpenCode 2 server (`GET /api/event`, server-sent events), translated
 // into the vocabulary the job engine reads for Claude Code (`StreamEvent` of
-// `agents/claude/protocol.js`). docs/SPEC.md section 5, "The OpenCode 2 program", has the table.
+// `agents/claude/protocol.js`). docs/SPEC.md section 8, "Driving OpenCode 2", has the table.
 //
 // What OpenCode 2 sends (recorded from 2.2.6, `test/support/fixtures/opencode2-stream/`): one JSON
 // object per event, `{"id","created","type","location","data","durable"}`, for every session of
@@ -40,7 +40,7 @@
 // Reasoning, deltas, steps, usage, shells, instructions and catalog events are dropped; unknown
 // events and fields are ignored, never errors. Costs are the sum of the steps' `cost`.
 //
-// The translator is pure: no I/O and no timers. Its owner (the server client of `server2`) sends
+// The translator is pure: no I/O and no timers. Its owner (the server client in `server.js`) sends
 // the HTTP calls the returned `Action`s describe, and tells it what it did (`promptSent`,
 // `promptRefused`, `abortRequested`, `reconcile`).
 
@@ -417,7 +417,7 @@ export class Translator {
     const session = strAt(form, "sessionID");
     if (id === null || session === null) return;
     // An MCP server's form belongs to the folder it runs for; this server is the job's own. (A
-    // translator without a folder and a form without one are equal, as in the Rust original.)
+    // translator without a folder and a form without one are equal.)
     const ours =
       session === "global"
         ? strAt(event, "location", "directory") === this.#directory

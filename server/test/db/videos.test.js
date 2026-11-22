@@ -151,7 +151,7 @@ test("inputs are validated on the way in and read leniently on the way out", () 
   }
   assert.deepEqual(videos.getInputs(key), good, "a refused change leaves the stored inputs");
 
-  // A damaged stored value falls back to the default field by field (like the Rust store).
+  // A damaged stored value falls back to the default field by field.
   db.run(
     "UPDATE videos SET inputs = ? WHERE id = ?",
     JSON.stringify({ productLinks: "keep", notes: 5, promptSlot: 9, styleSlot: 3 }),

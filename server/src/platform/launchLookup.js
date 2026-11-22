@@ -1,6 +1,6 @@
-// Finding programs the way Windows does (docs/SPEC-desktop.md section 11): `PATHEXT`, case-
-// insensitive variable names, and Git Bash. Used by `launch.js` (to start shims and scripts)
-// and `agents/claude/locate.js` (to find `claude`).
+// Finding programs the way Windows does (docs/SPEC.md section 5, "Harness, program and
+// model"): `PATHEXT`, case-insensitive variable names, and Git Bash. Used by `launch.js` (to
+// start shims and scripts) and `agents/claude/locate.js` (to find `claude`).
 //
 // Everything here is written with `path.win32` and takes the file system as a parameter
 // (`isFile`), so it is unit tested on every platform.

@@ -1,5 +1,4 @@
-// Long or Short from the A-roll (docs/SPEC.md section 6; docs/SPEC-desktop.md section 8, ported
-// from `src-tauri/src/media.rs`).
+// Long or Short from the A-roll (docs/SPEC.md section 6, "Videos").
 //
 // - The main A-roll's display size is its coded size with the rotation applied.
 // - MP4, MOV and M4V are read in this process (`mediaMoov.js`); other containers, and MP4 family
@@ -8,7 +7,7 @@
 // - Taller than wide is Short, otherwise Long; an empty size is "unknown" (shown as assumed Long).
 // - Results are remembered per file by path, size and modified time, in a bounded cache.
 //
-// The desktop app's face-based picture check and `arollRotation` are not carried over.
+// There is no face-based picture check and no `arollRotation`.
 
 import { runHelper } from "../platform/process.js";
 import { findFfprobe } from "../platform/tools.js";
@@ -100,7 +99,7 @@ export function parseFfprobeJson(text) {
       if (tags.rotate.trim() !== "" && Number.isFinite(parsed)) rotation = parsed;
     }
   }
-  // Half a quarter turn rounds away from zero, like the Rust `round`.
+  // Half a quarter turn rounds away from zero.
   const quarterTurns = Math.sign(rotation) * Math.round(Math.abs(rotation) / 90);
   const odd = Math.abs(quarterTurns % 2) === 1;
   const w = /** @type {number} */ (width);

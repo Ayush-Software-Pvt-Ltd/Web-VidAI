@@ -1,4 +1,4 @@
-// Shortening absolute paths in one-line summaries (src-tauri/src/jobs/log.rs, `Paths`).
+// Shortening absolute paths in one-line summaries (docs/SPEC.md section 8, "The job log").
 //
 // A path inside the video folder is shown relative to it (`CLAUDE_VE/timeline.py`), any other
 // path inside one of the other known folders relative to that (`Other Video/CLAUDE_VE/notes.md`,
@@ -59,7 +59,7 @@ function unixPrefixes(folders) {
 }
 
 /**
- * Lower case for ASCII letters only (as the Rust did): other letters keep their length.
+ * Lower case for ASCII letters only: other letters keep their length.
  * @param {string} text
  * @returns {string}
  */

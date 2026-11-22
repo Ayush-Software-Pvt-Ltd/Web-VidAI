@@ -1,4 +1,4 @@
-// The estimate (docs/SPEC-desktop.md section 6 "Progress", Pacing = evidence 5): where on its
+// The estimate (docs/SPEC.md section 8, "Progress", Pacing = evidence 5): where on its
 // typical timeline a job is, from what the evidence confirmed and the active time since, as a
 // percent, a stage label and the time left. Pure: the engine (`progressEngine.js`) owns the state
 // and calls `estimate` with it.

@@ -1,5 +1,4 @@
-// The OpenCode Go quota (docs/SPEC-desktop.md section 6, "OpenCode quota"; src-tauri/src/opencode/
-// usage.rs).
+// The OpenCode Go quota (docs/SPEC.md section 5, "Usage limits").
 //
 // The Go plan has three windows (5-hour, weekly, monthly) and reports them at
 // `GET <Go root>/v1/usage` (for the default address `https://opencode.ai/inference/go/v1/usage`)

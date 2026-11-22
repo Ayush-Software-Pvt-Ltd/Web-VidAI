@@ -1,4 +1,4 @@
-// The OpenCode Go quota (ported from the tests of src-tauri/src/opencode/usage.rs).
+// The OpenCode Go quota (docs/SPEC.md section 5, "Usage limits").
 
 import assert from "node:assert/strict";
 import { describe, it, after } from "node:test";

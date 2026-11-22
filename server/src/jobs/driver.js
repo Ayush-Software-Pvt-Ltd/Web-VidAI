@@ -1,6 +1,5 @@
-// The driver of one job (docs/SPEC.md section 9 and docs/SPEC-desktop.md section 6, "Driving
-// Claude Code", "Keeping a job going" and "Retrying after a model error"; `driver.rs` of the old
-// core): `runAgentJob(ctx)` runs one job from the first message to its end and reports one
+// The driver of one job (docs/SPEC.md section 9 and section 8, "Driving Claude Code",
+// "Keeping a job going" and "Retrying after a model error"): `runAgentJob(ctx)` runs one job from the first message to its end and reports one
 // outcome. The manager (queue, slots, start delay, database) decides when to call it and what to
 // store; this file decides everything that happens in between:
 //
@@ -13,10 +12,10 @@
 //   and keeping its slot meanwhile;
 // - pauses and stops at any moment, and always ends with exactly one outcome and no process left.
 //
-// Departures from the old core: every job keeps itself going (there is no mode where it ends when
-// the model goes quiet); no session claim (one session belongs to one job here); no machine
-// locks; no backup of the output folder before a re-edit (a project version is a new file); a
-// project that fails `verify` is sent back to the model twice.
+// Every job keeps itself going (there is no mode where it ends when the model goes quiet); there
+// is no session claim (one session belongs to one job), no machine lock and no backup of the
+// output folder before a re-edit (a project version is a new file); a project that fails `verify`
+// is sent back to the model twice.
 
 import { createDriverState } from "./driverState.js";
 import { checkOutput } from "./driverObserve.js";
@@ -113,7 +112,7 @@ import { continueAfterError } from "./driverTexts.js";
  */
 
 /**
- * The log line of the first message by kind (the old core's words).
+ * The log line of the first message by kind (the words the creator sees in the log).
  * @param {JobKind} kind
  * @param {string} name
  * @returns {string}

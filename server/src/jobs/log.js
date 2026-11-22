@@ -1,4 +1,4 @@
-// The job log (src-tauri/src/jobs/log.rs): one entry per line of what the agent did, kept in
+// The job log (docs/SPEC.md section 8, "The job log"): one entry per line of what the agent did, kept in
 // `<data dir>/logs/<jobId>.jsonl` and sent to the browser in batches.
 //
 // The parts, each in its own file:

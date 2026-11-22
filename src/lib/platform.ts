@@ -75,11 +75,7 @@ function browserKeepsShortcut(keys: readonly KeyName[], platform: Platform): boo
 }
 
 /** The shortcut conventions of `platform`. */
-export function platformInfo(
-  platform: Platform,
-  // Accepted for callers written when the desktop app existed; the page always runs in a browser.
-  _options: { web?: boolean } = {},
-): PlatformInfo {
+export function platformInfo(platform: Platform): PlatformInfo {
   const mac = platform === "macos";
   const keys = mac ? MAC_KEYS : PC_KEYS;
   const show = (key: KeyName) => (isToken(key) ? keys[key] : key);

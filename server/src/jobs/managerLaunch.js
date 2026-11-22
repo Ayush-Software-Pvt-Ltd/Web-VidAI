@@ -1,5 +1,4 @@
-// Launching a job that got a slot (docs/SPEC.md section 8, "Launching", and docs/SPEC-desktop.md
-// section 6): resolve the video, decide setup and session, save the revision before a job that can
+// Launching a job that got a slot (docs/SPEC.md section 8, "State machine"): resolve the video, decide setup and session, save the revision before a job that can
 // change a project, take the change requests, compose the messages, build the driver's context and
 // run it. Every failure on the way ends the job as failed with a sentence; nothing is thrown to the
 // queue.

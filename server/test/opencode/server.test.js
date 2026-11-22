@@ -1,5 +1,4 @@
-// One server and its session against the fake OpenCode 2 (ported from the unit tests of
-// `server2.rs`), and what the driver promises beyond the desktop app: no process left behind, the
+// One server and its session against the fake OpenCode 2 and what the driver promises: no process left behind, the
 // user's own configuration never read, a key that never leaks, a dropped stream that is connected
 // again without a duplicate event, and a request that times out as a readable failure.
 

@@ -1,4 +1,4 @@
-// The one queue a running job's driver reads (the `DriverMsg` channel of `driver.rs`): the events of
+// The one queue a running job's driver reads the events of
 // its agent program and the requests of the manager (pause, stop), in the order they came. Reading
 // has a time limit and every limit is a timer of the injected `timers`, so the driver never polls
 // and tests move time by hand.

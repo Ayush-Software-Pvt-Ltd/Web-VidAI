@@ -4,7 +4,7 @@
 // macOS and other Unix systems: the program is started directly (the kernel reads `#!` lines).
 //
 // Windows can only start `.exe` files directly, and Claude Code may be installed in several
-// shapes (docs/SPEC-desktop.md section 11):
+// shapes (docs/SPEC.md sections 2 and 8):
 //
 // - `claude.exe` (native installer, WinGet, or the binary of the npm package): started directly.
 // - An npm `.cmd` shim (`%APPDATA%\npm\claude.cmd`): never run through `cmd.exe`, whose quoting
@@ -19,7 +19,7 @@
 //   its own rules (and expands `{}`, `*`, `~` and `@file` in words that are not quoted), so
 //   every argument is passed fully quoted in the form MSYS2 reads back literally (`msysQuote`).
 // - A batch file that is not an npm shim: refused. Node cannot start batch files without
-//   `cmd.exe` (and the Rust core's cmd.exe quoting is exactly what is not safe for JSON).
+//   `cmd.exe` (and its quoting is exactly what is not safe for JSON).
 // - Anything else is handed to Windows as is.
 //
 // The decisions are pure (`resolveWindowsLaunch` takes the file system and the lookups as
