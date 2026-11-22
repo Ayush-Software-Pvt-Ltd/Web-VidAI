@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from "lucide-react";
-import { Select as RadixSelect } from "radix-ui";
+import * as RadixSelect from "@radix-ui/react-select";
 import { useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { returnFocus } from "./focusReturn";

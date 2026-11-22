@@ -21,7 +21,7 @@
  * not look empty and nothing moves when the values arrive.
  */
 import { CircleAlert, ExternalLink, RefreshCw } from "lucide-react";
-import { Popover } from "radix-ui";
+import * as Popover from "@radix-ui/react-popover";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Meter, meterTone, toast } from "@/components/ui";
 import { buttonBase, buttonSizes, buttonVariants } from "@/components/ui/buttonStyles";

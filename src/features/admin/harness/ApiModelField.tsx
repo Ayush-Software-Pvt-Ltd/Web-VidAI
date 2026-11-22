@@ -7,7 +7,7 @@
  * searchable `ModelCombobox` instead.
  */
 import { ListChecks } from "lucide-react";
-import { Popover } from "radix-ui";
+import * as Popover from "@radix-ui/react-popover";
 import { useId, useRef, useState } from "react";
 import { Button, Input, Tooltip } from "@/components/ui";
 import { returnFocus } from "@/components/ui/focusReturn";

@@ -1,4 +1,4 @@
-import { ScrollArea as RadixScrollArea } from "radix-ui";
+import * as RadixScrollArea from "@radix-ui/react-scroll-area";
 import {
   useCallback,
   useLayoutEffect,

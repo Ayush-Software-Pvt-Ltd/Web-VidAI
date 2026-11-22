@@ -1,5 +1,5 @@
 import { CircleAlert, CircleCheck, Info, X } from "lucide-react";
-import { Toast as RadixToast } from "radix-ui";
+import * as RadixToast from "@radix-ui/react-toast";
 import { useSyncExternalStore, type ReactNode } from "react";
 import { getToasts, subscribe, toast, type ToastTone } from "./toastStore";
 import { cn } from "@/lib/cn";

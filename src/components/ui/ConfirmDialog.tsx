@@ -1,4 +1,4 @@
-import { AlertDialog } from "radix-ui";
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { useState, type ReactNode } from "react";
 import { Button } from "./Button";
 import { quietFocusReturn } from "./focusReturn";

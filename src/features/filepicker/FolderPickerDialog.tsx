@@ -20,7 +20,7 @@ import {
   Unplug,
   X,
 } from "lucide-react";
-import { Dialog as RadixDialog } from "radix-ui";
+import * as RadixDialog from "@radix-ui/react-dialog";
 import { useEffect, useId, useRef, useState, type ClipboardEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";

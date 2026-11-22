@@ -1,4 +1,4 @@
-import { Dialog as RadixDialog } from "radix-ui";
+import * as RadixDialog from "@radix-ui/react-dialog";
 import { cn } from "@/lib/cn";
 import { quietFocusReturn } from "./focusReturn";
 import { type DialogProps, PanelBody } from "./Dialog";

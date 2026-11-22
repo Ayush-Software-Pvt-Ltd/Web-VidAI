@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { Dialog as RadixDialog } from "radix-ui";
+import * as RadixDialog from "@radix-ui/react-dialog";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { quietFocusReturn } from "./focusReturn";

@@ -6,7 +6,7 @@
  * Go's model field; the other two options take a typed id (`ApiModelField`).
  */
 import { ChevronDown, TriangleAlert } from "lucide-react";
-import { Popover } from "radix-ui";
+import * as Popover from "@radix-ui/react-popover";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { returnFocus } from "@/components/ui/focusReturn";
 import { fieldBase } from "@/components/ui/Input";

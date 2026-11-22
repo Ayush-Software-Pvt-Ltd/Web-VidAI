@@ -1,4 +1,4 @@
-import { ToggleGroup } from "radix-ui";
+import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 

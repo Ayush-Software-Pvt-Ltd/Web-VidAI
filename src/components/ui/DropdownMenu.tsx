@@ -1,5 +1,5 @@
 import { Check, ChevronRight } from "lucide-react";
-import { DropdownMenu as RadixMenu } from "radix-ui";
+import * as RadixMenu from "@radix-ui/react-dropdown-menu";
 import { createContext, use, useRef, type ComponentProps, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { returnFocus } from "./focusReturn";

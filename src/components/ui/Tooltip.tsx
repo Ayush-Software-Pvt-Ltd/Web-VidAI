@@ -1,4 +1,4 @@
-import { Tooltip as RadixTooltip } from "radix-ui";
+import * as RadixTooltip from "@radix-ui/react-tooltip";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { isFocusReturn } from "./focusReturn";

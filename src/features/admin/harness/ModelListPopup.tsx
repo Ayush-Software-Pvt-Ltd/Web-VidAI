@@ -6,7 +6,7 @@
  * `ApiModelField` (Fetch Models of the other two options).
  */
 import { Check, CircleAlert, RefreshCw, Search } from "lucide-react";
-import { Popover } from "radix-ui";
+import * as Popover from "@radix-ui/react-popover";
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Button, Input, ScrollArea, Spinner } from "@/components/ui";
 import type { Resource } from "@/lib/store";
