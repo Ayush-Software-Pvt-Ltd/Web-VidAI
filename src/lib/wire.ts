@@ -92,11 +92,6 @@ export interface AdminSettings {
   gpuPerEditPercent: number;
   gpuTotalPercent: number;
 
-  /**
-   * Absolute folders inside which users may place channels. The default storage folder
-   * `<data dir>/media` is always one too and is not listed here.
-   */
-  storageRoots: string[];
   /** The largest single upload in GB, 1 to 2000. */
   maxUploadGb: number;
   /** Size in GB of the preview copies kept before the oldest are deleted, 1 to 2000. */

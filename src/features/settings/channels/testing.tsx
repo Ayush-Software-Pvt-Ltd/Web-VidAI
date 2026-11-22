@@ -2,10 +2,10 @@
 import userEvent from "@testing-library/user-event";
 import { screen, within } from "@testing-library/react";
 import { Toaster } from "@/components/ui";
-import { MEDIA_ROOT } from "@/lib/mock/areas/workspace";
 import type { MockBackend } from "@/lib/mock";
 import { ADMIN_ID } from "@/lib/mock/seed/session";
-import { profile } from "@/lib/mock/seed/workspace";
+import { BEAUTY_DIR, HOME, TECH_DIR } from "@/lib/mock/seed/storage";
+import { makeChannel } from "@/lib/mock/seed/workspace";
 import { recordedApp, type RecordedOptions } from "@/features/jobs/recordedApp";
 import { GuardProvider } from "../GuardProvider";
 import { ChannelsSection } from "./ChannelsSection";
@@ -13,22 +13,14 @@ import { ChannelsSection } from "./ChannelsSection";
 export const BEAUTY = "Beauty Channel";
 export const TECH = "Tech Reviews";
 
-/** The directory of a channel the seed makes for the admin. */
-export const adminDir = (name: string) => `${MEDIA_ROOT}/${ADMIN_ID}/${name}`;
+/** The directory of a channel the seed makes for the admin (an admin chose it). */
+export const adminDir = (name: string) =>
+  name === BEAUTY ? BEAUTY_DIR : name === TECH ? TECH_DIR : `${HOME}/Footage/${name}`;
 
 /** Adds one more channel to the admin's channels (through `prepare`). */
 export function addAdminChannel(backend: MockBackend, name: string): string {
   const id = `c0ffee${String(backend.world.channels.length + 1).padStart(26, "0")}`;
-  backend.world.channels.push({
-    id,
-    userId: ADMIN_ID,
-    name,
-    dir: adminDir(name),
-    videoType: "auto",
-    long: profile("long"),
-    short: profile("short"),
-    available: true,
-  });
+  backend.world.channels.push(makeChannel(id, ADMIN_ID, name, adminDir(name)));
   return id;
 }
 
@@ -61,3 +53,6 @@ export const channelButton = (name: string) =>
 /** The text of every path shown (`PathText` marks its element with `data-path`). */
 export const shownPaths = (root: ParentNode = document.body) =>
   [...root.querySelectorAll("[data-path]")].map((el) => el.textContent);
+
+/** The heading of the open channel in the editor (the name is text: only an admin changes it). */
+export const openChannel = (name: string) => screen.getByRole("heading", { level: 2, name });

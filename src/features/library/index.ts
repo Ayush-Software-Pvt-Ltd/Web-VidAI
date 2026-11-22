@@ -2,8 +2,6 @@ export { focusVideoRow } from "./focus";
 export { LibrarySidebar } from "./LibrarySidebar";
 export { LibraryToolbar } from "./LibraryToolbar";
 export { useSearchShortcut } from "./useSearchShortcut";
-export { NewVideoProvider } from "./newVideo";
-export { useNewVideoHandler, type NewVideoHandler } from "./newVideoContext";
 export { RowUploadSlot, type RowUploadSlotProps } from "./RowUploadSlot";
 export { ModelControls } from "./ModelControls";
 export { UsageMeters } from "./UsageMeters";

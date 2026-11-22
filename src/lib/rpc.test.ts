@@ -47,6 +47,6 @@ describe("rpc names", () => {
 
   it("keep public functions a subset and events listed", () => {
     for (const name of PUBLIC_RPC_NAMES) expect(RPC_NAMES).toContain(name);
-    expect(EVENT_NAMES).toHaveLength(12);
+    expect(EVENT_NAMES).toHaveLength(13);
   });
 });

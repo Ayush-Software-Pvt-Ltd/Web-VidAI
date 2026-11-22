@@ -1,13 +1,15 @@
 /**
- * Settings, Channels: the list (order, unreachable folder), the editor (name, type, slots, prompt
- * tools), Save and the unsaved-changes guard, removal and what a second user sees.
+ * Settings, Channels: the list (order, unreachable folder), the editor (type, slots, prompt tools),
+ * Save and the unsaved-changes guard, what a second user sees, and that a user cannot make, rename
+ * or remove a channel (an admin does, and the page follows `workspace-changed`).
  */
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelUpdate } from "@/lib/types";
-import { addJob } from "@/lib/mock/seed/jobs";
-import { ADMIN_ID, USER_ID } from "@/lib/mock/seed/session";
+import { MockBackend } from "@/lib/mock";
+import { USER_ID } from "@/lib/mock/seed/session";
+import { HOME } from "@/lib/mock/seed/storage";
 import {
   ADMIN_CHANNEL_BEAUTY,
   ADMIN_CHANNEL_TECH,
@@ -22,6 +24,7 @@ import {
   adminDir,
   channelButton,
   channelNamed,
+  openChannel,
   renderChannels,
   shownPaths,
 } from "./testing";
@@ -43,12 +46,12 @@ describe("Channels: list", () => {
     expect(shownPaths(list)).toEqual([adminDir(BEAUTY), adminDir(TECH)]);
     expect(screen.queryByText("Travel Diary")).not.toBeInTheDocument();
     // The first channel is open.
-    expect(screen.getByRole("textbox", { name: "Channel name" })).toHaveValue(BEAUTY);
+    expect(openChannel(BEAUTY)).toBeInTheDocument();
   });
 
   it("shows only the channels of the signed-in user, never the first user's", async () => {
     await renderChannels({ user: "user" });
-    expect(screen.getByRole("textbox", { name: "Channel name" })).toHaveValue("Travel Diary");
+    expect(openChannel("Travel Diary")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "1 Channel" })).toBeInTheDocument();
     expect(screen.queryByText(BEAUTY)).not.toBeInTheDocument();
     expect(screen.queryByText(TECH)).not.toBeInTheDocument();
@@ -57,7 +60,7 @@ describe("Channels: list", () => {
 
   it("opens the channel asked for", async () => {
     await renderChannels({}, { initialChannelId: ADMIN_CHANNEL_TECH });
-    expect(screen.getByRole("textbox", { name: "Channel name" })).toHaveValue(TECH);
+    expect(openChannel(TECH)).toBeInTheDocument();
   });
 
   it("opens on the Short tab when asked", async () => {
@@ -86,12 +89,39 @@ describe("Channels: list", () => {
     expect(screen.getByRole("textbox", { name: "Long 16:9 prompt" })).toBeEnabled();
   });
 
-  it("shows the empty state of a person without channels and opens New Channel from it", async () => {
-    const { user } = await renderChannels({ scenarios: ["no-channels"] });
-    expect(screen.getByText("No channels yet", { selector: "h3, h2, p, div" })).toBeInTheDocument();
-    const buttons = screen.getAllByRole("button", { name: "New Channel" });
-    await user.click(buttons[buttons.length - 1] as HTMLElement);
-    expect(await screen.findByRole("dialog", { name: "New Channel" })).toBeInTheDocument();
+  it("tells a person without channels that an admin adds them, with no New Channel", async () => {
+    await renderChannels({ scenarios: ["no-channels"] });
+    expect(screen.getByText("No channels yet")).toBeInTheDocument();
+    expect(screen.getByText("An admin adds channels for you.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /New Channel/ })).not.toBeInTheDocument();
+  });
+
+  it("shows a channel an admin adds for the user, and drops one an admin removes, at once", async () => {
+    const { backend } = await renderChannels({ user: "user" });
+    expect(openChannel("Travel Diary")).toBeInTheDocument();
+    const admin = new MockBackend({
+      world: backend.world,
+      as: "admin",
+      latencyMs: 0,
+      autoTick: false,
+    });
+    try {
+      await admin.adminCreateChannel({
+        name: "Cooking",
+        userId: USER_ID,
+        dir: `${HOME}/Movies`,
+        videoType: "auto",
+      });
+      expect(await screen.findByRole("button", { name: /^Cooking/ })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "2 Channels" })).toBeInTheDocument();
+      await admin.adminRemoveChannel({ id: USER_CHANNEL_TRAVEL });
+      await waitFor(() => {
+        expect(screen.queryByRole("button", { name: /^Travel Diary/ })).not.toBeInTheDocument();
+      });
+      expect(openChannel("Cooking")).toBeInTheDocument();
+    } finally {
+      admin.dispose();
+    }
   });
 
   it("reorders with the keyboard and sends the new order", async () => {
@@ -169,12 +199,9 @@ describe("Channels: editor", () => {
       "The long style of this channel.",
     );
     expect(screen.getByText("All changes saved")).toBeInTheDocument();
-    expect(
-      shownPaths(
-        screen.getByRole("textbox", { name: "Channel name" }).closest("div")?.parentElement
-          ?.parentElement ?? document.body,
-      ),
-    ).toContain(adminDir(BEAUTY));
+    expect(shownPaths(openChannel(BEAUTY).parentElement ?? document.body)).toContain(
+      adminDir(BEAUTY),
+    );
   });
 
   it("marks unsaved changes per tab and channel, then saves only what changed", async () => {
@@ -193,7 +220,7 @@ describe("Channels: editor", () => {
     expect(calls("updateChannel")).toHaveLength(1);
     const sent = calls("updateChannel")[0] as { id: string; update: ChannelUpdate };
     expect(sent.id).toBe(ADMIN_CHANNEL_BEAUTY);
-    expect(sent.update).toMatchObject({ name: null, videoType: null, short: null });
+    expect(sent.update).toMatchObject({ videoType: null, short: null });
     expect(sent.update.long?.styles[0]?.text).toBe("Bold captions");
     expect(channelNamed(backend, BEAUTY)?.short.styles[0]?.text).not.toBe("Bold captions");
     expect(channelNamed(backend, BEAUTY)?.long.styles).toHaveLength(SEEDED_STYLE_COUNT);
@@ -223,55 +250,24 @@ describe("Channels: editor", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
-  it("renames a channel without touching its folder", async () => {
-    const { user, backend, calls } = await renderChannels();
-    const name = screen.getByRole("textbox", { name: "Channel name" });
-    expect(
-      screen.getByText("The name is only for you. Renaming a channel does not touch its folder."),
-    ).toBeInTheDocument();
-    await user.clear(name);
-    await user.type(name, "  Glow Naturals  ");
-    expect(screen.getByText(/Unsaved changes to the name/)).toBeInTheDocument();
-    await user.keyboard("{Enter}");
-    await waitFor(() => {
-      expect(adminChannels(backend).map((c) => c.name)).toContain("Glow Naturals");
-    });
-    expect(calls("updateChannel")).toEqual([
-      {
-        id: ADMIN_CHANNEL_BEAUTY,
-        update: { name: "Glow Naturals", videoType: null, long: null, short: null },
-      },
-    ]);
-    // The folder stays where it was.
-    expect(channelNamed(backend, "Glow Naturals")?.dir).toBe(adminDir(BEAUTY));
-    expect(channelButton("Glow Naturals")).toBeInTheDocument();
-    expect(await screen.findByText("Saved")).toBeInTheDocument();
+  it("shows the name and the folder as text: a user cannot rename or move a channel", async () => {
+    const { user } = await renderChannels();
+    expect(openChannel(BEAUTY)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Channel name" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New Channel" })).not.toBeInTheDocument();
+    await user.click(channelButton(TECH));
+    expect(openChannel(TECH)).toBeInTheDocument();
+    expect(shownPaths()).toContain(adminDir(TECH));
   });
 
-  it("refuses an empty or too long name before saving", async () => {
+  it("sends no name, folder or owner when the user saves a change", async () => {
     const { user, calls } = await renderChannels();
-    const name = screen.getByRole("textbox", { name: "Channel name" });
-    await user.clear(name);
-    expect(screen.getByText("A channel name must have 1 to 60 characters.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-    await user.type(name, "x".repeat(61));
-    expect(screen.getByText("A channel name must have 1 to 60 characters.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-    expect(calls("updateChannel")).toEqual([]);
-  });
-
-  it("shows the server's sentence when the name is already used", async () => {
-    const { user, backend } = await renderChannels();
-    const name = screen.getByRole("textbox", { name: "Channel name" });
-    await user.clear(name);
-    await user.type(name, TECH);
+    await user.type(screen.getByRole("textbox", { name: "Long 16:9 style" }), " more");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Not saved. You already have a channel with this name.",
-    );
-    expect(name).toHaveAttribute("aria-invalid", "true");
-    expect(channelNamed(backend, BEAUTY)).toBeDefined();
-    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    const [sent] = calls("updateChannel") as { update: Record<string, unknown> }[];
+    expect(Object.keys(sent?.update ?? {}).sort()).toEqual(["long", "short", "videoType"]);
   });
 
   it("sets the channel video type with Save, Revert and the unsaved-changes state", async () => {
@@ -305,7 +301,7 @@ describe("Channels: editor", () => {
     expect(calls("updateChannel")).toEqual([
       {
         id: ADMIN_CHANNEL_BEAUTY,
-        update: { name: null, videoType: "short", long: null, short: null },
+        update: { videoType: "short", long: null, short: null },
       },
     ]);
     expect(await screen.findByText("Saved")).toBeInTheDocument();
@@ -494,7 +490,7 @@ describe("Channels: unsaved-changes guard", () => {
   it("Stay keeps the draft and the channel", async () => {
     const { user } = await dirtyBeauty();
     await user.click(screen.getByRole("button", { name: "Stay" }));
-    expect(screen.getByRole("textbox", { name: "Channel name" })).toHaveValue(BEAUTY);
+    expect(openChannel(BEAUTY)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Long 16:9 style" })).toHaveValue(
       "The long style of this channel. edited",
     );
@@ -503,7 +499,7 @@ describe("Channels: unsaved-changes guard", () => {
   it("Discard drops the draft and switches", async () => {
     const { user, backend } = await dirtyBeauty();
     await user.click(screen.getByRole("button", { name: "Discard Changes" }));
-    expect(screen.getByRole("textbox", { name: "Channel name" })).toHaveValue(TECH);
+    expect(openChannel(TECH)).toBeInTheDocument();
     expect(channelNamed(backend, BEAUTY)?.long.styles[0]?.text).not.toMatch(/edited$/);
     await user.click(channelButton(BEAUTY));
     expect(screen.getByRole("textbox", { name: "Long 16:9 style" })).toHaveValue(
@@ -515,134 +511,32 @@ describe("Channels: unsaved-changes guard", () => {
     const { user, backend } = await dirtyBeauty();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: "Channel name" })).toHaveValue(TECH);
+      expect(openChannel(TECH)).toBeInTheDocument();
     });
     expect(channelNamed(backend, BEAUTY)?.long.styles[0]?.text).toMatch(/ edited$/);
   });
-
-  it("asks before New Channel opens while a change is unsaved", async () => {
-    const { user } = await renderChannels();
-    await user.type(screen.getByRole("textbox", { name: "Long 16:9 style" }), " edited");
-    await user.click(screen.getByRole("button", { name: "New Channel" }));
-    expect(
-      await screen.findByRole("dialog", { name: `Save changes to “${BEAUTY}”?` }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "New Channel" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Discard Changes" }));
-    expect(await screen.findByRole("dialog", { name: "New Channel" })).toBeInTheDocument();
-  });
 });
 
-describe("Channels: remove", () => {
-  it("removes a channel after a confirmation that says what happens to the files", async () => {
-    const { user, backend, calls } = await renderChannels();
-    await user.click(channelButton(TECH));
-    await user.click(screen.getByRole("button", { name: "Remove…" }));
-    const dialog = await screen.findByRole("alertdialog", {
-      name: `Remove “${TECH}” from VidAI?`,
-    });
-    expect(dialog).toHaveTextContent("VidAI forgets the channel with its prompts and styles");
-    expect(dialog).toHaveTextContent(
-      "Its videos leave VidAI with their jobs, change requests, revisions and unfinished uploads.",
-    );
-    expect(dialog).toHaveTextContent(
-      "The channel folder and everything in it stay on the server's disk, and the edit log keeps its entries.",
-    );
-    expect(dialog).toHaveTextContent(
-      "While an edit of one of its videos waits, runs or is paused, the channel cannot be removed",
-    );
-    await user.click(within(dialog).getByRole("button", { name: "Remove Channel" }));
-    await waitFor(() => {
-      expect(channelNamed(backend, TECH)).toBeUndefined();
-    });
-    expect(calls("removeChannel")).toEqual([{ id: ADMIN_CHANNEL_TECH }]);
-    // The channel next to it opens.
-    await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: "Channel name" })).toHaveValue(BEAUTY);
-    });
-    // The folder is not touched: it is only forgotten, and the other users keep theirs.
-    expect(backend.world.channels.some((c) => c.id === USER_CHANNEL_TRAVEL)).toBe(true);
-  });
-
-  it("shows the empty state after the last channel is removed", async () => {
-    const { user } = await renderChannels({ user: "user" });
-    await user.click(screen.getByRole("button", { name: "Remove…" }));
-    await user.click(await screen.findByRole("button", { name: "Remove Channel" }));
-    expect(
-      await screen.findByText("No channels yet", { selector: "h3, h2, p, div" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Channels" })).toBeInTheDocument();
-  });
-
-  it("says that unsaved changes are discarded with the channel", async () => {
-    const { user } = await renderChannels();
-    await user.type(screen.getByRole("textbox", { name: "Long 16:9 style" }), " edited");
-    await user.click(screen.getByRole("button", { name: "Remove…" }));
-    expect(await screen.findByRole("alertdialog")).toHaveTextContent(
-      "Your unsaved changes to it are discarded.",
-    );
-  });
-
-  it.each(["queued", "running", "paused"] as const)(
-    "keeps the channel and shows the server's sentence while an edit of it is %s",
-    async (state) => {
-      const { user, backend } = await renderChannels({
-        prepare: (b) => {
-          addJob(
-            b.world,
-            {
-              channelId: ADMIN_CHANNEL_BEAUTY,
-              folderName: "Onion video",
-              userId: ADMIN_ID,
-              state,
-            },
-            Date.now(),
-          );
-        },
-      });
-      await user.click(screen.getByRole("button", { name: "Remove…" }));
-      await user.click(await screen.findByRole("button", { name: "Remove Channel" }));
-      await waitFor(() => {
-        expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-      });
-      expect(
-        await screen.findByText("Stop the running edits of this channel's videos first."),
-      ).toBeInTheDocument();
-      expect(channelNamed(backend, BEAUTY)).toBeDefined();
-      expect(screen.getByRole("textbox", { name: "Channel name" })).toHaveValue(BEAUTY);
-    },
-  );
-
-  it("removes a channel whose edits have all ended", async () => {
-    const { user, backend } = await renderChannels({
-      prepare: (b) => {
-        addJob(
-          b.world,
-          {
-            channelId: ADMIN_CHANNEL_BEAUTY,
-            folderName: "Onion video",
-            userId: ADMIN_ID,
-            state: "completed",
-          },
-          Date.now(),
-        );
-      },
-    });
-    await user.click(screen.getByRole("button", { name: "Remove…" }));
-    await user.click(await screen.findByRole("button", { name: "Remove Channel" }));
-    await waitFor(() => {
-      expect(channelNamed(backend, BEAUTY)).toBeUndefined();
-    });
-  });
-
-  it("does not let a second user see or remove the first user's channel", async () => {
+describe("Channels: users cannot make, change or remove channels", () => {
+  it("has no call for it on the user's side and sees only own channels", async () => {
     const { backend } = await renderChannels({ user: "user" });
     expect(screen.queryByText(BEAUTY)).not.toBeInTheDocument();
-    // The server refuses another user's channel as not found, whatever the page does.
-    await expect(backend.removeChannel({ id: ADMIN_CHANNEL_BEAUTY })).rejects.toMatchObject({
-      code: "notFound",
+    expect("createChannel" in backend).toBe(false);
+    expect("removeChannel" in backend).toBe(false);
+    // The admin's functions answer forbidden to a user, whatever the page does.
+    await expect(backend.adminRemoveChannel({ id: ADMIN_CHANNEL_BEAUTY })).rejects.toMatchObject({
+      code: "forbidden",
     });
+    await expect(
+      backend.adminUpdateChannel({
+        id: USER_CHANNEL_TRAVEL,
+        update: { name: "Mine", userId: null, dir: null, videoType: null },
+      }),
+    ).rejects.toMatchObject({ code: "forbidden" });
     expect(channelNamed(backend, BEAUTY)).toBeDefined();
     expect(backend.world.channels.filter((c) => c.userId === USER_ID)).toHaveLength(1);
+    expect(backend.world.channels.find((c) => c.id === USER_CHANNEL_TRAVEL)?.name).toBe(
+      "Travel Diary",
+    );
   });
 });

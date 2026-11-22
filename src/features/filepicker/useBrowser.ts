@@ -3,21 +3,31 @@
  * Navigation is asynchronous and answers can arrive in any order, so only the answer to the last
  * navigation counts (an earlier, slower one is dropped).
  *
+ * The picker is the admin's and browses the server's whole file system (SPEC section 6, "Folders
+ * on the server"), so there is no folder it may not leave: the top is the top of a drive.
+ *
  * What a failed listing does depends on why the server refused:
- * - the folder is gone (`invalidInput`, `notFound`): the nearest folder above that still exists is
- *   shown, with a remark that says so;
- * - the server does not allow it (`forbidden`, `conflict`, for example a folder of a channel of
- *   somebody else): the folder that was shown stays, with the server's sentence as a remark;
- * - anything else (`io`, a lost connection) is the error state, which offers Try again.
+ * - the folder is gone or cannot be read (`invalidInput`, `notFound`, for example an unplugged
+ *   drive): the nearest folder above that still exists is shown, with a remark that says so;
+ * - the server does not allow it (`forbidden`, `conflict`): the folder that was shown stays, with
+ *   the server's sentence as a remark;
+ * - anything else (`io`, a lost connection) is the error state, which offers Try Again.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Api } from "@/lib/api";
 import { toApiError } from "@/lib/errors";
 import type { FsListing, FsPlace } from "@/lib/types";
-import { crumbsBelow, isInsidePath, leafName, parentOf, samePath } from "./pathText";
+import {
+  crumbsBelow,
+  isAbsolutePath,
+  isInsidePath,
+  leafName,
+  parentOf,
+  samePath,
+} from "./pathText";
 
 export interface GoOptions {
-  /** When `path` cannot be shown at all, show the personal folder instead (the first listing). */
+  /** When `path` cannot be shown at all, show the home folder instead (the first listing). */
   fallbackHome?: boolean;
 }
 
@@ -42,11 +52,15 @@ export interface Browser {
   /** A remark about the last navigation, `null` when there is none. */
   notice: Notice | null;
   say: (notice: Notice | null) => void;
-  /** Opens `path` (`null` is the personal folder); resolves with the listing, or `null` if it failed or was replaced. */
+  /** Opens `path` (`null` is the home folder); resolves with the listing, or `null` if it failed or was replaced. */
   go: (path: string | null, options?: GoOptions) => Promise<FsListing | null>;
-  /** The place (storage folder or personal folder) `path` lies in, the innermost one. */
+  /** The place (home, drive or volume) `path` lies in, the innermost one. */
   placeOf: (path: string) => FsPlace | null;
-  /** The folder above, `null` at the top of a storage folder. */
+  /** The drive or volume `path` lies on: the breadcrumbs start there. */
+  driveOf: (path: string) => FsPlace | null;
+  /** Whether a folder seen in a listing cannot become a channel (it is `taken`). */
+  isTaken: (path: string) => boolean;
+  /** The folder above, `null` at the top of a drive. */
   upTarget: string | null;
 }
 
@@ -79,23 +93,24 @@ export function useBrowser(api: Pick<Api, "fsPlaces" | "fsList">): Browser {
     };
   }, [api]);
 
-  const placeOf = useCallback((path: string): FsPlace | null => {
+  const innermost = useCallback((path: string, wanted: (place: FsPlace) => boolean) => {
     let best: FsPlace | null = null;
     for (const place of placesRef.current) {
-      if (!isInsidePath(place.path, path)) continue;
+      if (!wanted(place) || !isInsidePath(place.path, path)) continue;
       if (best === null || place.path.length > best.path.length) best = place;
     }
     return best;
   }, []);
 
-  /** The folder above `path` when it is still inside a storage folder, else `null`. */
-  const parentInside = useCallback(
-    (path: string): string | null => {
-      const up = parentOf(path);
-      return up !== null && placeOf(up) !== null ? up : null;
-    },
-    [placeOf],
+  const placeOf = useCallback((path: string) => innermost(path, () => true), [innermost]);
+  const driveOf = useCallback(
+    (path: string) => innermost(path, (place) => place.kind !== "home"),
+    [innermost],
   );
+
+  /** What the listings seen so far said about each folder: `taken` or not. */
+  const takenRef = useRef(new Map<string, boolean>());
+  const isTaken = useCallback((path: string) => takenRef.current.get(path) === true, []);
 
   /** How the picker calls a folder: a place by its name, any other by its last part. */
   const nameOf = useCallback(
@@ -122,6 +137,7 @@ export function useBrowser(api: Pick<Api, "fsPlaces" | "fsList">): Browser {
           const answer = await api.fsList(target === null ? undefined : { path: target });
           if (mine !== latest.current) return null;
           shown.current = answer;
+          for (const entry of answer.entries) takenRef.current.set(entry.path, entry.taken);
           setLocation(answer.path);
           setListing(answer);
           setError(null);
@@ -141,8 +157,9 @@ export function useBrowser(api: Pick<Api, "fsPlaces" | "fsList">): Browser {
         } catch (failure) {
           if (mine !== latest.current) return null;
           const problem = toApiError(failure);
-          if ((problem.code === "invalidInput" || problem.code === "notFound") && target !== null) {
-            const up = parentInside(target);
+          const missing = problem.code === "invalidInput" || problem.code === "notFound";
+          if (missing && target !== null && isAbsolutePath(target)) {
+            const up = parentOf(target);
             if (up !== null) {
               gone = target;
               target = up;
@@ -171,7 +188,7 @@ export function useBrowser(api: Pick<Api, "fsPlaces" | "fsList">): Browser {
         }
       }
     },
-    [api, parentInside, nameOf],
+    [api, nameOf],
   );
 
   const shownHere = listing !== null && listing.path === location;
@@ -179,7 +196,7 @@ export function useBrowser(api: Pick<Api, "fsPlaces" | "fsList">): Browser {
   if (location !== null) {
     if (shownHere) upTarget = listing.parent;
     else {
-      const crumbs = crumbsBelow(location, rootCrumb(placeOf(location)));
+      const crumbs = crumbsBelow(location, rootCrumb(driveOf(location)));
       upTarget = crumbs.length > 1 ? (crumbs.at(-2)?.path ?? null) : null;
     }
   }
@@ -196,11 +213,13 @@ export function useBrowser(api: Pick<Api, "fsPlaces" | "fsList">): Browser {
     say: setNotice,
     go,
     placeOf,
+    driveOf,
+    isTaken,
     upTarget,
   };
 }
 
-/** The first breadcrumb of a place. */
+/** The first breadcrumb of a drive or volume. */
 export function rootCrumb(place: FsPlace | null): { name: string; path: string } | null {
   return place === null ? null : { name: place.name, path: place.path };
 }

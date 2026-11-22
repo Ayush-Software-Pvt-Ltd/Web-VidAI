@@ -1,9 +1,10 @@
-// Channels (SPEC section 6): create, directory rules across users, update, remove, reorder, list.
+// Channels (SPEC section 6): the admin's create and remove, the directory rule across users, the
+// owner's update, reorder, list, and what users can no longer do.
 import { afterEach, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { cleanChannelName, folderNameFor } from "../../src/channels.js";
+import { cleanChannelName } from "../../src/channels.js";
 import { DEFAULT_PROMPT, createWorld, rejectsCode, treeOf } from "../storage/support.js";
 
 /** @typedef {import("../storage/support.js").World} World */
@@ -16,182 +17,98 @@ describe("channels", () => {
   /** @type {{ id: string, email: string }} */
   let bob;
   /** @type {string} */
-  let share;
-  /** @type {string} */
-  let outside;
+  let area;
   /** @type {Set<string>} */
   let active;
 
   beforeEach(() => {
     active = new Set();
-    world = createWorld({
-      storageRoots: ["share"],
-      hasActiveJobs: (channelId) => active.has(channelId),
-    });
+    world = createWorld({ hasActiveJobs: (channelId) => active.has(channelId) });
     alice = world.makeUser("alice@example.com");
     bob = world.makeUser("bob@example.com");
-    share = path.join(world.root, "share");
-    outside = world.mkdir("outside");
+    area = world.mkdir("area");
     world.emitted.length = 0;
   });
   afterEach(() => world.cleanup());
 
   const service = () => world.mod.api.channels;
-  /** @param {string} dir */
-  const link = (dir) => /** @type {const} */ ({ kind: "link", dir });
-  /** @param {string} name @param {{ id: string }} [user] */
-  const linked = (name, user = alice) => {
-    const dir = world.mkdir(`share/${name}`);
-    return service().create(user, { name, videoType: "auto", location: link(dir) });
-  };
+  /** Makes the folder `area/<name>` and a channel of that name around it. @param {string} name @param {{ id: string }} [user] */
+  const linked = (name, user = alice) =>
+    world.makeChannel(user, name, { dir: world.mkdir(`area/${name}`) });
+  /** @param {string} dir @param {{ id: string }} [user] @param {string} [name] */
+  const around = (dir, user = alice, name = "Around") =>
+    service().create({ name, userId: user.id, dir, videoType: "auto" });
 
-  describe("create with a new folder", () => {
-    test("makes the folder in the personal folder and fills slot 0 with the default prompt", async () => {
-      const channel = await service().create(alice, {
+  describe("create", () => {
+    test("makes a channel around an existing directory with the default prompt in slot 0", async () => {
+      const dir = world.mkdir("area/My Channel");
+      const channel = await service().create({
         name: "My Channel",
+        userId: alice.id,
+        dir,
         videoType: "short",
-        location: { kind: "new", parent: null, folderName: null },
       });
-      const personal = path.join(world.dataDir, "media", alice.id);
-      assert.equal(channel.dir, path.join(personal, "My Channel"));
-      assert.ok(fs.statSync(channel.dir).isDirectory());
+      assert.equal(channel.dir, dir);
       assert.equal(channel.name, "My Channel");
       assert.equal(channel.videoType, "short");
       assert.equal(channel.available, true);
-      assert.match(channel.id, /^[0-9a-f]{32}$/);
-      for (const profile of [channel.long, channel.short]) {
-        assert.equal(profile.prompts.length, 5);
-        assert.equal(profile.styles.length, 5);
-        assert.deepEqual(profile.prompts[0], { name: "Default", text: DEFAULT_PROMPT });
-        assert.deepEqual(profile.styles[0], { name: "Default", text: "" });
+      assert.equal(channel.long.prompts[0]?.text, DEFAULT_PROMPT);
+      assert.equal(channel.short.prompts[0]?.text, DEFAULT_PROMPT);
+      assert.equal(channel.long.prompts[1]?.text, "");
+      assert.deepEqual(
+        (await service().list(alice.id)).map((listed) => listed.id),
+        [channel.id],
+      );
+      assert.deepEqual(await service().list(bob.id), []);
+    });
+
+    test("tells the owner's pages and nobody else", async () => {
+      await linked("Told");
+      const names = world.emitted.map((event) => [event.event, event.userId, event.admins]);
+      assert.deepEqual(names, [
+        ["workspace-changed", alice.id, false],
+        ["library-changed", alice.id, false],
+      ]);
+    });
+
+    test("the real path is stored, links followed", async () => {
+      const real = world.mkdir("area/real");
+      fs.symlinkSync(real, path.join(area, "alias"));
+      const channel = await around(path.join(area, "alias"));
+      assert.equal(channel.dir, real);
+    });
+
+    test("STYLE.md of the directory becomes style slot 0 and is only read", async () => {
+      const dir = world.mkdir("area/Styled/Style");
+      fs.writeFileSync(path.join(dir, "STYLE.md"), "warm colours");
+      const before = treeOf(world.root);
+      const channel = await around(path.dirname(dir));
+      assert.equal(channel.long.styles[0]?.text, "warm colours");
+      assert.equal(channel.short.styles[0]?.text, "warm colours");
+      assert.deepEqual(treeOf(world.root), before);
+    });
+
+    test("a channel goes last in its owner's order", async () => {
+      await linked("A");
+      await linked("B");
+      const c = await linked("C");
+      assert.equal((await service().list(alice.id)).at(-1)?.id, c.id);
+    });
+
+    test("a folder that does not exist, a file and text that is no path are invalidInput with field dir", async () => {
+      const file = path.join(area, "a-file.txt");
+      fs.writeFileSync(file, "x");
+      for (const bad of [path.join(area, "missing"), file, "relative/path", ""]) {
+        const error = await rejectsCode(around(bad), "invalidInput");
+        assert.equal(error.field, "dir", String(bad));
       }
-      assert.ok(world.emitted.some((e) => e.event === "library-changed" && e.userId === alice.id));
-    });
-
-    test("the two profiles are separate copies", async () => {
-      const channel = await linked("Copies");
-      const [first] = await service().list(alice.id);
-      assert.ok(first);
-      assert.notEqual(first.long, first.short);
-      assert.deepEqual(channel.long, channel.short);
-    });
-
-    test("a folder name and a parent can be given", async () => {
-      const channel = await service().create(alice, {
-        name: "Named",
-        videoType: "auto",
-        location: { kind: "new", parent: share, folderName: "chosen folder" },
-      });
-      assert.equal(channel.dir, path.join(share, "chosen folder"));
-    });
-
-    test("the folder name comes from the channel name, with unsafe characters made harmless", async () => {
-      const channel = await service().create(alice, {
-        name: "A/B: C? ..",
-        videoType: "auto",
-        location: { kind: "new", parent: share, folderName: null },
-      });
-      assert.equal(path.dirname(channel.dir), share);
-      assert.ok(!path.basename(channel.dir).includes("/"));
-      assert.ok(!path.basename(channel.dir).startsWith("."));
-      assert.ok(channel.dir.startsWith(share));
-    });
-
-    test("a parent outside the storage folders is forbidden and nothing is made", async () => {
-      const make = (/** @type {string} */ parent) =>
-        service().create(alice, {
-          name: "X",
-          videoType: "auto",
-          location: { kind: "new", parent, folderName: "x" },
-        });
-      await rejectsCode(make(outside), "forbidden");
-      await rejectsCode(make(`${share}/../outside`), "forbidden");
-      fs.symlinkSync(outside, path.join(share, "out-link"));
-      await rejectsCode(make(path.join(share, "out-link")), "forbidden");
-      assert.deepEqual(fs.readdirSync(outside), []);
+      await rejectsCode(around(`${area}/../area`), "forbidden");
       assert.deepEqual(await service().list(alice.id), []);
     });
 
-    test("another user's personal folder is forbidden as a parent", async () => {
-      const bobFolder = await world.mod.api.roots.personalFolder(bob.id);
-      await rejectsCode(
-        service().create(alice, {
-          name: "X",
-          videoType: "auto",
-          location: { kind: "new", parent: bobFolder, folderName: "x" },
-        }),
-        "forbidden",
-      );
-      assert.deepEqual(fs.readdirSync(bobFolder), []);
-    });
-
-    test("a bad folder name is invalidInput", async () => {
-      for (const folderName of ["..", ".", "a/b", "a\\b", ".hidden", "", " x", "x".repeat(121)]) {
-        await rejectsCode(
-          service().create(alice, {
-            name: "X",
-            videoType: "auto",
-            location: { kind: "new", parent: share, folderName },
-          }),
-          "invalidInput",
-        );
-      }
-      assert.deepEqual(fs.readdirSync(share), []);
-    });
-
-    test("an existing folder is conflict and its files are untouched", async () => {
-      fs.mkdirSync(path.join(share, "taken"));
-      fs.writeFileSync(path.join(share, "taken", "mine.txt"), "mine");
-      await rejectsCode(
-        service().create(alice, {
-          name: "X",
-          videoType: "auto",
-          location: { kind: "new", parent: share, folderName: "taken" },
-        }),
-        "conflict",
-      );
-      assert.deepEqual(treeOf(path.join(share, "taken")), ["mine.txt"]);
-    });
-
-    test("a folder inside another channel is conflict and nothing appears there", async () => {
-      const first = await linked("First");
-      for (const user of [alice, bob]) {
-        await rejectsCode(
-          service().create(user, {
-            name: `Inner ${user.id.slice(0, 4)}`,
-            videoType: "auto",
-            location: { kind: "new", parent: first.dir, folderName: "inner" },
-          }),
-          "conflict",
-        );
-      }
-      assert.deepEqual(fs.readdirSync(first.dir), []);
-    });
-
-    test("a missing parent is invalidInput", async () => {
-      await rejectsCode(
-        service().create(alice, {
-          name: "X",
-          videoType: "auto",
-          location: { kind: "new", parent: path.join(share, "nope", "deeper"), folderName: "x" },
-        }),
-        "invalidInput",
-      );
-      assert.equal(fs.existsSync(path.join(share, "nope")), false);
-    });
-
-    test("the default prompt file missing is notFound and no folder is left behind", async () => {
-      world.cleanup();
-      world = createWorld({ storageRoots: ["share"], defaultPromptPaths: ["/does/not/exist.md"] });
-      alice = world.makeUser("a@example.com");
-      await rejectsCode(
-        world.mod.api.channels.create(alice, {
-          name: "X",
-          videoType: "auto",
-          location: { kind: "new", parent: path.join(world.root, "share"), folderName: "x" },
-        }),
-        "notFound",
-      );
+    test("a link that loops or leads nowhere is refused", async () => {
+      fs.symlinkSync(path.join(area, "nowhere"), path.join(area, "dangling"));
+      await rejectsCode(around(path.join(area, "dangling")), "forbidden");
     });
   });
 
@@ -208,274 +125,75 @@ describe("channels", () => {
       assert.equal([...cleanChannelName("\u{1F600}".repeat(60))].length, 60);
     });
 
-    test("folderNameFor", () => {
-      assert.equal(folderNameFor("Plain", "darwin"), "Plain");
-      assert.equal(folderNameFor("a/b\\c", "darwin"), "a-b-c");
-      assert.equal(folderNameFor("  .hidden  ", "darwin"), "hidden");
-      assert.equal(folderNameFor("trailing. .", "darwin"), "trailing");
-      assert.equal(folderNameFor("", "darwin"), "Channel");
-      assert.equal(folderNameFor("...", "darwin"), "Channel");
-      assert.equal(folderNameFor("a:b?", "win32"), "a-b-");
-      assert.equal(folderNameFor("CON", "win32"), "Channel");
-      assert.equal(folderNameFor("x".repeat(300), "darwin").length, 120);
-      assert.equal(folderNameFor("evil‮fdp", "darwin"), "evil-fdp");
-    });
-
     test("a name is unique for the user without regard to letter case, not across users", async () => {
       await linked("Tech");
-      const dir = world.mkdir("share/tech2");
-      await rejectsCode(
-        service().create(alice, { name: "TECH", videoType: "auto", location: link(dir) }),
-        "conflict",
-      );
-      const other = await service().create(bob, {
-        name: "TECH",
-        videoType: "auto",
-        location: link(dir),
-      });
+      const dir = world.mkdir("area/tech2");
+      const error = await rejectsCode(around(dir, alice, "TECH"), "conflict");
+      assert.equal(error.message, "This user already has a channel with that name.");
+      assert.equal(error.field, "name");
+      const other = await around(dir, bob, "TECH");
       assert.equal(other.name, "TECH");
     });
 
-    test("a refused name makes no folder", async () => {
+    test("a refused name makes no channel", async () => {
       await linked("Dup");
-      const before = fs.readdirSync(share).sort();
-      await rejectsCode(
-        service().create(alice, {
-          name: "dup",
-          videoType: "auto",
-          location: { kind: "new", parent: share, folderName: "dup-folder" },
-        }),
-        "conflict",
-      );
-      assert.deepEqual(fs.readdirSync(share).sort(), before);
+      const dir = world.mkdir("area/other");
+      await rejectsCode(around(dir, alice, "dup"), "conflict");
+      await rejectsCode(around(dir, alice, ""), "invalidInput");
+      assert.equal((await service().list(alice.id)).length, 1);
     });
   });
 
-  describe("create around an existing directory", () => {
-    test("uses the real path and reads Style/STYLE.md into style slot 0", async () => {
-      const dir = world.mkdir("share/styled/Style");
-      fs.writeFileSync(path.join(dir, "STYLE.md"), "The look\n");
-      const channel = await service().create(alice, {
-        name: "Styled",
-        videoType: "auto",
-        location: link(path.join(share, "styled")),
-      });
-      assert.equal(channel.dir, path.join(share, "styled"));
-      assert.equal(channel.long.styles[0]?.text, "The look\n");
-      assert.equal(channel.short.styles[0]?.text, "The look\n");
-      assert.equal(fs.readFileSync(path.join(dir, "STYLE.md"), "utf8"), "The look\n");
-    });
-
-    test("a STYLE.md that is a link out is not read", async () => {
-      fs.writeFileSync(path.join(outside, "secret.md"), "SECRET");
-      const dir = world.mkdir("share/sneaky/Style");
-      fs.symlinkSync(path.join(outside, "secret.md"), path.join(dir, "STYLE.md"));
-      const channel = await service().create(alice, {
-        name: "Sneaky",
-        videoType: "auto",
-        location: link(path.join(share, "sneaky")),
-      });
-      assert.equal(channel.long.styles[0]?.text, "");
-    });
-
-    test("a directory outside the storage folders is forbidden", async () => {
-      for (const dir of [
-        outside,
-        "/",
-        `${share}/..`,
-        world.dataDir,
-        path.join(world.dataDir, "logs"),
-      ]) {
-        await rejectsCode(
-          service().create(alice, { name: "X", videoType: "auto", location: link(dir) }),
-          "forbidden",
-        );
+  describe("the directory rule (checkChannelDir)", () => {
+    test("the data directory, what lies inside it and what holds it are refused", async () => {
+      fs.mkdirSync(path.join(world.dataDir, "projects"));
+      for (const dir of [world.dataDir, path.join(world.dataDir, "projects"), world.root]) {
+        const error = await rejectsCode(around(dir), "invalidInput");
+        assert.equal(error.message, "This folder belongs to VidAI's own data.");
+        assert.equal(error.field, "dir");
       }
-      fs.symlinkSync(outside, path.join(share, "out"));
-      await rejectsCode(
-        service().create(alice, {
-          name: "X",
-          videoType: "auto",
-          location: link(path.join(share, "out")),
-        }),
-        "forbidden",
-      );
+      // A link into it is the same place.
+      fs.symlinkSync(world.dataDir, path.join(area, "data-link"));
+      await rejectsCode(around(path.join(area, "data-link")), "invalidInput");
+      assert.deepEqual(await service().list(alice.id), []);
     });
 
-    test("a storage folder itself cannot be a channel", async () => {
-      const media = path.join(world.dataDir, "media");
-      for (const dir of [share, media]) {
-        await rejectsCode(
-          service().create(alice, { name: "X", videoType: "auto", location: link(dir) }),
-          "invalidInput",
-        );
-      }
-    });
-
-    test("a folder around a storage folder cannot be a channel", async () => {
-      const inner = world.mkdir("share/inner");
-      world.settings.update({ storageRoots: [share, inner] });
-      await rejectsCode(
-        service().create(alice, { name: "X", videoType: "auto", location: link(inner) }),
-        "invalidInput",
-      );
-    });
-
-    test("a personal folder itself cannot be a channel, a folder inside it can", async () => {
-      const personal = await world.mod.api.roots.personalFolder(alice.id);
-      await rejectsCode(
-        service().create(alice, { name: "X", videoType: "auto", location: link(personal) }),
-        "invalidInput",
-      );
-      const inside = path.join(personal, "inside");
-      fs.mkdirSync(inside);
-      const channel = await service().create(alice, {
-        name: "Inside",
-        videoType: "auto",
-        location: link(inside),
-      });
-      assert.equal(channel.dir, inside);
-    });
-
-    test("another user's personal folder is forbidden", async () => {
-      const bobFolder = await world.mod.api.roots.personalFolder(bob.id);
-      fs.mkdirSync(path.join(bobFolder, "theirs"));
-      await rejectsCode(
-        service().create(alice, {
-          name: "X",
-          videoType: "auto",
-          location: link(path.join(bobFolder, "theirs")),
-        }),
-        "forbidden",
-      );
-    });
-
-    test("the data folder is refused when an admin made it a storage folder", async () => {
-      const logs = world.mkdir("data/logs");
-      world.settings.update({ storageRoots: [world.dataDir] });
-      await rejectsCode(
-        service().create(alice, { name: "X", videoType: "auto", location: link(logs) }),
-        "invalidInput",
-      );
-      await rejectsCode(
-        service().create(alice, { name: "X", videoType: "auto", location: link(world.dataDir) }),
-        "invalidInput",
-      );
-    });
-
-    test("a file or a missing folder is invalidInput", async () => {
-      fs.writeFileSync(path.join(share, "file.txt"), "x");
-      for (const dir of [path.join(share, "file.txt"), path.join(share, "missing")]) {
-        await rejectsCode(
-          service().create(alice, { name: "X", videoType: "auto", location: link(dir) }),
-          "invalidInput",
-        );
-      }
-      await rejectsCode(
-        service().create(alice, { name: "X", videoType: "auto", location: link("relative") }),
-        "invalidInput",
-      );
-    });
-  });
-
-  describe("one directory, one channel", () => {
-    test("the same directory twice is conflict, for the same user and for another", async () => {
-      const first = await linked("One");
-      for (const user of [alice, bob]) {
-        await rejectsCode(
-          service().create(user, {
-            name: `Again ${user.email}`,
-            videoType: "auto",
-            location: link(first.dir),
-          }),
-          "conflict",
-        );
-      }
-    });
-
-    test("a folder inside a channel is conflict", async () => {
-      const first = await linked("Outer");
+    test("the same, an inner and an outer directory of any channel are conflict", async () => {
+      const first = await linked("First");
+      const error = await rejectsCode(around(first.dir, bob, "Same"), "conflict");
+      assert.equal(error.message, "This folder already belongs to a channel.");
       const inner = path.join(first.dir, "inner");
       fs.mkdirSync(inner);
-      await rejectsCode(
-        service().create(bob, { name: "Inner", videoType: "auto", location: link(inner) }),
-        "conflict",
-      );
+      await rejectsCode(around(inner, bob, "Inner"), "conflict");
+      await rejectsCode(around(area, bob, "Outer"), "conflict");
+      // Through a link it is still the same directory.
+      fs.symlinkSync(first.dir, path.join(world.root, "alias"));
+      await rejectsCode(around(path.join(world.root, "alias"), bob, "Aliased"), "conflict");
+      // Next to it is fine, and the answer does not name the owner.
+      const sibling = world.mkdir("area/First 2");
+      assert.equal((await around(sibling, bob, "Sibling")).dir, sibling);
+      assert.ok(!error.message.includes("alice"));
     });
 
-    test("a folder around a channel is conflict", async () => {
-      fs.mkdirSync(path.join(share, "holder", "ch"), { recursive: true });
-      await service().create(alice, {
-        name: "Held",
-        videoType: "auto",
-        location: link(path.join(share, "holder", "ch")),
-      });
-      await rejectsCode(
-        service().create(bob, {
-          name: "Holder",
-          videoType: "auto",
-          location: link(path.join(share, "holder")),
-        }),
-        "conflict",
-      );
+    test("a channel's own directory is no overlap for itself when it is excepted", async () => {
+      const first = await linked("First");
+      const other = await linked("Other");
+      const check = world.mod.api.checkChannelDir;
+      assert.equal(await check(first.dir, { exceptChannelId: first.id }), first.dir);
+      await rejectsCode(check(first.dir), "conflict");
+      await rejectsCode(check(first.dir, { exceptChannelId: other.id }), "conflict");
     });
 
-    test("a link to another channel's folder is the same folder", async () => {
-      const first = await linked("Target");
-      fs.symlinkSync(first.dir, path.join(share, "alias"));
-      await rejectsCode(
-        service().create(bob, {
-          name: "Alias",
-          videoType: "auto",
-          location: link(path.join(share, "alias")),
-        }),
-        "conflict",
-      );
-    });
-
-    test("the refusal does not say whose channel it is", async () => {
-      const first = await linked("Secret Owner Channel");
-      const error = await rejectsCode(
-        service().create(bob, { name: "Mine", videoType: "auto", location: link(first.dir) }),
-        "conflict",
-      );
-      assert.equal(error.message, "This folder already belongs to a channel.");
-      assert.ok(!error.message.includes("alice") && !error.message.includes("Secret"));
-    });
-
-    test("two creations at once cannot both get one directory", async () => {
-      const dir = world.mkdir("share/race");
-      const results = await Promise.allSettled([
-        service().create(alice, { name: "R1", videoType: "auto", location: link(dir) }),
-        service().create(bob, { name: "R2", videoType: "auto", location: link(dir) }),
-      ]);
-      assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
-      assert.equal(world.mod.api.channelsRepo.listAll().length, 1);
+    test("nothing is made or changed by a refusal", async () => {
+      const first = await linked("First");
+      const before = treeOf(world.root);
+      await rejectsCode(around(first.dir, bob), "conflict");
+      await rejectsCode(around(path.join(area, "missing"), bob), "invalidInput");
+      assert.deepEqual(treeOf(world.root), before);
     });
   });
 
-  describe("another user's channels", () => {
-    test("are not listed, found, changed, removed or reordered", async () => {
-      const mine = await linked("Mine");
-      assert.deepEqual(await service().list(bob.id), []);
-      await rejectsCode(service().update(bob.id, mine.id, { name: "Stolen" }), "notFound");
-      await rejectsCode(service().remove(bob.id, mine.id), "notFound");
-      await rejectsCode(service().reorder(bob.id, [mine.id]), "notFound");
-      await rejectsCode(service().createVideo(bob.id, mine.id, "V"), "notFound");
-      const [still] = await service().list(alice.id);
-      assert.equal(still?.name, "Mine");
-      assert.deepEqual(fs.readdirSync(mine.dir), []);
-    });
-
-    test("the answer for a stranger's channel equals the answer for none", async () => {
-      const mine = await linked("Mine");
-      const foreign = await rejectsCode(service().remove(bob.id, mine.id), "notFound");
-      const missing = await rejectsCode(service().remove(bob.id, "0".repeat(32)), "notFound");
-      assert.equal(foreign.message, missing.message);
-    });
-  });
-
-  describe("update", () => {
+  describe("update (the owner's changes)", () => {
     test("changes the given fields only", async () => {
       const channel = await linked("Before");
       const profile = structuredClone(channel.long);
@@ -483,17 +201,15 @@ describe("channels", () => {
         profile.prompts[1]
       ).text = "second";
       const updated = await service().update(alice.id, channel.id, {
-        name: "After",
         videoType: "long",
         long: profile,
       });
-      assert.equal(updated.name, "After");
+      assert.equal(updated.name, "Before");
       assert.equal(updated.videoType, "long");
       assert.equal(updated.long.prompts[1]?.text, "second");
       assert.deepEqual(updated.short, channel.short);
       assert.equal(updated.dir, channel.dir);
       const again = await service().update(alice.id, channel.id, {
-        name: null,
         videoType: null,
         long: null,
         short: null,
@@ -501,54 +217,117 @@ describe("channels", () => {
       assert.deepEqual(again, updated);
     });
 
-    test("a name that another channel of the user has is conflict, its own is fine", async () => {
-      const one = await linked("One");
-      await linked("Two");
-      await rejectsCode(service().update(alice.id, one.id, { name: "two" }), "conflict");
-      assert.equal((await service().update(alice.id, one.id, { name: "ONE" })).name, "ONE");
-      await rejectsCode(service().update(alice.id, one.id, { name: "" }), "invalidInput");
-    });
-
     test("is allowed while an edit of the channel runs", async () => {
       const channel = await linked("Busy");
       active.add(channel.id);
       assert.equal(
-        (await service().update(alice.id, channel.id, { name: "Still ok" })).name,
-        "Still ok",
+        (await service().update(alice.id, channel.id, { videoType: "short" })).videoType,
+        "short",
       );
+    });
+
+    test("another user's channel is notFound, the same answer as for none", async () => {
+      const mine = await linked("Mine");
+      const foreign = await rejectsCode(
+        service().update(bob.id, mine.id, { videoType: "long" }),
+        "notFound",
+      );
+      const missing = await rejectsCode(
+        service().update(bob.id, "0".repeat(32), { videoType: "long" }),
+        "notFound",
+      );
+      assert.equal(foreign.message, missing.message);
+      assert.equal((await service().list(alice.id))[0]?.videoType, "auto");
     });
   });
 
-  describe("remove", () => {
+  describe("remove (admin)", () => {
     test("deletes the row and leaves every file", async () => {
       const channel = await linked("Gone");
       fs.mkdirSync(path.join(channel.dir, "Video 1"));
       fs.writeFileSync(path.join(channel.dir, "Video 1", "clip.mp4"), "video");
       const before = treeOf(world.root);
-      await service().remove(alice.id, channel.id);
+      world.emitted.length = 0;
+      await service().remove(channel.id);
       assert.deepEqual(await service().list(alice.id), []);
       assert.deepEqual(treeOf(world.root), before);
-      await rejectsCode(service().remove(alice.id, channel.id), "notFound");
+      assert.deepEqual(
+        world.emitted.map((event) => [event.event, event.userId]),
+        [
+          ["workspace-changed", alice.id],
+          ["library-changed", alice.id],
+        ],
+      );
+      await rejectsCode(service().remove(channel.id), "notFound");
     });
 
     test("is conflict while an edit of its videos runs, and nothing changes", async () => {
       const channel = await linked("Running");
       active.add(channel.id);
-      await rejectsCode(service().remove(alice.id, channel.id), "conflict");
+      const error = await rejectsCode(service().remove(channel.id), "conflict");
+      assert.equal(error.message, "Stop the running edits of this channel's videos first.");
       assert.equal((await service().list(alice.id)).length, 1);
       active.clear();
-      await service().remove(alice.id, channel.id);
+      await service().remove(channel.id);
     });
 
     test("the directory can become a channel again afterwards", async () => {
       const channel = await linked("Again");
-      await service().remove(alice.id, channel.id);
-      const second = await service().create(bob, {
-        name: "Bobs now",
-        videoType: "auto",
-        location: link(channel.dir),
-      });
+      await service().remove(channel.id);
+      const second = await around(channel.dir, bob, "Bobs now");
       assert.equal(second.dir, channel.dir);
+    });
+  });
+
+  describe("users can no longer make, rename or remove channels", () => {
+    test("createChannel, removeChannel and createVideo are not functions any more", async () => {
+      const mine = await linked("Mine");
+      const dir = world.mkdir("area/Wanted");
+      const calls = /** @type {[string, unknown][]} */ ([
+        ["createChannel", { name: "Mine 2", videoType: "auto", location: { kind: "link", dir } }],
+        ["removeChannel", { id: mine.id }],
+        ["createVideo", { channelId: mine.id, name: "Video" }],
+      ]);
+      for (const [name, input] of calls) {
+        await rejectsCode(world.callRpc(alice, name, input), "notFound");
+      }
+      assert.equal((await service().list(alice.id)).length, 1);
+      assert.deepEqual(fs.readdirSync(mine.dir), []);
+    });
+
+    test("updateChannel refuses a name, even next to allowed fields", async () => {
+      const mine = await linked("Mine");
+      const error = await rejectsCode(
+        world.callRpc(alice, "updateChannel", { id: mine.id, update: { name: "Renamed" } }),
+        "invalidInput",
+      );
+      assert.equal(error.field, "update.name");
+      await rejectsCode(
+        world.callRpc(alice, "updateChannel", {
+          id: mine.id,
+          update: { videoType: "short", name: "Renamed" },
+        }),
+        "invalidInput",
+      );
+      const [listed] = await service().list(alice.id);
+      assert.equal(listed?.name, "Mine");
+      assert.equal(listed?.videoType, "auto");
+      // The allowed fields still work through the RPC.
+      const updated = await world.callRpc(alice, "updateChannel", {
+        id: mine.id,
+        update: { videoType: "short" },
+      });
+      assert.equal(updated.videoType, "short");
+    });
+
+    test("nor can they send a directory or an owner through updateChannel", async () => {
+      const mine = await linked("Mine");
+      for (const update of [{ dir: area }, { userId: bob.id }]) {
+        await rejectsCode(
+          world.callRpc(alice, "updateChannel", { id: mine.id, update }),
+          "invalidInput",
+        );
+      }
     });
   });
 
@@ -564,10 +343,6 @@ describe("channels", () => {
       const reordered = await service().reorder(alice.id, [c.id, a.id, b.id]);
       assert.deepEqual(
         reordered.map((channel) => channel.name),
-        ["C", "A", "B"],
-      );
-      assert.deepEqual(
-        (await service().list(alice.id)).map((channel) => channel.name),
         ["C", "A", "B"],
       );
       const d = await linked("D");
@@ -597,17 +372,17 @@ describe("channels", () => {
         (await service().list(bob.id)).map((channel) => channel.id),
         [x.id, y.id],
       );
-      // Ids of another user's channels are not accepted in a new order.
       await rejectsCode(service().reorder(alice.id, [a.id, x.id]), "notFound");
     });
 
     test("a channel whose folder cannot be reached is listed as unavailable, unchanged", async () => {
       const channel = await linked("Away");
+      const outside = world.mkdir("outside");
       fs.renameSync(channel.dir, `${channel.dir}-moved`);
       let [listed] = await service().list(alice.id);
       assert.equal(listed?.available, false);
       assert.equal(listed?.dir, channel.dir);
-      // A link put in its place that leads out is not available either.
+      // A link put in its place that leads elsewhere is not available either.
       fs.symlinkSync(outside, channel.dir);
       [listed] = await service().list(alice.id);
       assert.equal(listed?.available, false);

@@ -8,7 +8,10 @@ resetAddress();
 
 const NAME = "Travel Diary";
 const nav = () => screen.getByRole("navigation", { name: "Settings" });
-const nameField = () => screen.getByRole("textbox", { name: "Channel name" });
+/** A field the person can edit: the first Long 16:9 style of the channel. */
+const nameField = () =>
+  screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Long 16:9 style" });
+let original = "";
 const question = () => screen.findByRole("dialog", { name: `Save changes to “${NAME}”?` });
 const heading = () => screen.getByRole("heading", { level: 1 });
 
@@ -79,6 +82,7 @@ describe("the unsaved-changes guard in the whole app", () => {
   async function changedChannel() {
     const ctx = await openApp({ path: "/settings/channels", user: "user" });
     await findSettingsPage();
+    original = nameField().value;
     await ctx.user.type(nameField(), " Two");
     return ctx;
   }
@@ -87,9 +91,9 @@ describe("the unsaved-changes guard in the whole app", () => {
     const { user } = await changedChannel();
     await user.click(within(nav()).getByRole("button", { name: "Appearance" }));
     await question();
-    expect(screen.getByText(/You changed the name\./)).toBeInTheDocument();
+    expect(screen.getByText(/You changed the Long 16:9 style\./)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Stay" }));
-    expect(nameField()).toHaveValue(`${NAME} Two`);
+    expect(nameField()).toHaveValue(`${original} Two`);
     expect(window.location.pathname).toBe("/settings/channels");
   });
 
@@ -100,7 +104,7 @@ describe("the unsaved-changes guard in the whole app", () => {
     await user.click(screen.getByRole("button", { name: "Discard Changes" }));
     expect(heading()).toHaveTextContent("Appearance");
     await user.click(within(nav()).getByRole("button", { name: "Channels" }));
-    expect(nameField()).toHaveValue(NAME);
+    expect(nameField()).toHaveValue(original);
   });
 
   it("asks for Done and Esc too, and Save keeps the change", async () => {
@@ -118,10 +122,8 @@ describe("the unsaved-changes guard in the whole app", () => {
     await question();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await findMainPage();
-    const channel = app.store
-      .getState()
-      .workspace.data?.channels.find((c) => c.name.endsWith("Two"));
-    expect(channel?.name).toBe(`${NAME} Two`);
+    const channel = app.store.getState().workspace.data?.channels.find((c) => c.name === NAME);
+    expect(channel?.long.styles[0]?.text).toBe(`${original} Two`);
   });
 });
 
@@ -132,6 +134,7 @@ describe("Back and Forward", () => {
     await user.click(await screen.findByRole("button", { name: /^Settings/ }));
     await findSettingsPage();
     await user.click(within(nav()).getByRole("button", { name: "Channels" }));
+    original = nameField().value;
     await user.type(nameField(), " Two");
 
     // Back asks first, and the address stays.
@@ -139,7 +142,7 @@ describe("Back and Forward", () => {
     await question();
     expect(window.location.pathname).toBe("/settings/channels");
     await user.click(screen.getByRole("button", { name: "Stay" }));
-    expect(nameField()).toHaveValue(`${NAME} Two`);
+    expect(nameField()).toHaveValue(`${original} Two`);
 
     // Done asks the same question; Discard Changes then leaves.
     await user.click(screen.getByRole("button", { name: "Done" }));

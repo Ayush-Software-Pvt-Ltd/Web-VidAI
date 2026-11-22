@@ -3,19 +3,20 @@ import { useStore } from "zustand";
 import { useJobsEnv } from "@/features/jobs";
 import { useSession } from "@/lib/appEnv";
 import { useUploads } from "./env";
-import { NewVideoDialog, type DialogStep } from "./NewVideoDialog";
+import { UploadFilesDialog } from "./UploadFilesDialog";
 
 /**
  * Mounted once by the main window. It owns what must outlive every dialog: it tells the uploads
  * controller whose tab this is (so unfinished uploads of a reloaded page come back as "choose the
- * same file again"), asks before the page is left while bytes are moving, and shows the New Video
- * dialog or the Upload files dialog of a row (`uploadFor` of the jobs controller).
+ * same file again"), asks before the page is left while bytes are moving, and shows the Upload
+ * Files dialog of a video (`uploadFor` of the jobs controller) or of a channel (`dialog` of the
+ * uploads controller).
  */
 export function UploadsHost() {
   const controller = useUploads();
   const { controller: jobs } = useJobsEnv();
   const userId = useSession()?.id ?? null;
-  const newVideo = useStore(controller.state, (s) => s.newVideo);
+  const channelDialog = useStore(controller.state, (s) => s.dialog);
   const uploadFor = useStore(jobs.state, (s) => s.uploadFor);
 
   useEffect(() => {
@@ -37,22 +38,13 @@ export function UploadsHost() {
   }, [controller]);
 
   if (userId === null) return null;
-  if (newVideo !== null) {
-    const step: DialogStep = newVideo.created
-      ? { kind: "files", videoId: newVideo.created.id, created: true }
-      : { kind: "name", channelId: newVideo.channelId };
-    return (
-      <NewVideoDialog
-        key={newVideo.created ? "files" : "name"}
-        step={step}
-        onClose={controller.closeNewVideo}
-      />
-    );
+  if (channelDialog !== null) {
+    return <UploadFilesDialog target={channelDialog} onClose={controller.closeDialog} />;
   }
   if (uploadFor !== null) {
     return (
-      <NewVideoDialog
-        step={{ kind: "files", videoId: uploadFor, created: false }}
+      <UploadFilesDialog
+        target={{ kind: "video", videoId: uploadFor }}
         onClose={jobs.closeUpload}
       />
     );

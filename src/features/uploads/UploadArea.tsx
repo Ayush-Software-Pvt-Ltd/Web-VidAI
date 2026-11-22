@@ -1,20 +1,12 @@
 import { FolderOpen, Upload } from "lucide-react";
-import { useId, useRef, useState, type DragEvent } from "react";
+import { useRef, useState, type DragEvent } from "react";
 import { Button } from "@/components/ui";
 import { useAppState } from "@/lib/appEnv";
 import { cn } from "@/lib/cn";
-import type { UploadFolder } from "@/lib/types";
-import { useUploads, useVideoUploads } from "./env";
-import { ACCEPT, FOLDER_LABELS } from "./summary";
+import type { UploadTarget } from "@/lib/types";
+import { useTargetUploads, useUploads } from "./env";
+import { UploadedFiles } from "./UploadedFiles";
 import { UploadRow } from "./UploadRow";
-
-const ZONES: { folder: UploadFolder; description: string }[] = [
-  {
-    folder: "video",
-    description: "The main recording of the video. Its largest video file is the A-roll.",
-  },
-  { folder: "broll", description: "Extra footage, pictures and audio that the edit can use." },
-];
 
 /** The files of a drop; folders that were dropped are left out (a browser cannot read them). */
 function droppedFiles(event: DragEvent): File[] {
@@ -32,25 +24,15 @@ function droppedFiles(event: DragEvent): File[] {
   return Array.from(files);
 }
 
-function DropZone({
-  folder,
-  description,
-  onFiles,
-}: {
-  folder: UploadFolder;
-  description: string;
-  onFiles: (folder: UploadFolder, files: File[]) => void;
-}) {
+function DropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const label = FOLDER_LABELS[folder];
-  const titleId = useId();
   return (
     <section
-      aria-labelledby={titleId}
-      data-dropzone={folder}
+      aria-label="Add files"
+      data-dropzone
       className={cn(
-        "flex min-w-0 flex-col items-center gap-2 rounded-lg border border-dashed px-3 py-4 text-center transition-colors duration-100",
+        "flex min-w-0 flex-col items-center gap-2 rounded-lg border border-dashed px-3 py-6 text-center transition-colors duration-100",
         over ? "border-accent bg-accent-soft" : "border-border-strong bg-transparent",
       )}
       onDragOver={(event) => {
@@ -63,89 +45,74 @@ function DropZone({
       onDrop={(event) => {
         event.preventDefault();
         setOver(false);
-        onFiles(folder, droppedFiles(event));
+        onFiles(droppedFiles(event));
       }}
     >
       <Upload className="size-5 text-fg-subtle" aria-hidden />
-      <h3 id={titleId} className="text-base font-medium text-fg">
-        {label}
-      </h3>
-      <p className="text-xs text-fg-muted">{description}</p>
+      <p className="text-base font-medium text-fg">Drop files here</p>
       <input
         ref={input}
         type="file"
         multiple
-        accept={ACCEPT}
         tabIndex={-1}
-        aria-label={`${label} files`}
+        aria-label="Files to upload"
         className="sr-only"
         onChange={(event) => {
-          onFiles(folder, Array.from(event.target.files ?? []));
+          onFiles(Array.from(event.target.files ?? []));
           event.target.value = "";
         }}
       />
       <Button
         size="sm"
         icon={<FolderOpen />}
-        aria-label={`Choose files for the ${label}`}
         onClick={() => {
           input.current?.click();
         }}
       >
-        Choose files
+        Choose Files
       </Button>
     </section>
   );
 }
 
 /**
- * The upload area of a video (SPEC section 16): one drop zone for the A-roll and one for the
- * B-roll, with the accepted kinds and the largest size said under them, and the list of this
- * video's files with their progress. The uploads themselves belong to the controller, not to this
- * component.
+ * The body of the Upload Files dialog (SPEC section 16): one drop zone, the uploads that are not
+ * finished with their progress, and the files that are in the folder now. A finished upload leaves
+ * the list of uploads once the folder's list has been read again, so it is never shown twice. The
+ * uploads themselves belong to the controller, not to this component.
  */
-export function UploadArea({ videoId }: { videoId: string }) {
+export function UploadArea({ target }: { target: UploadTarget }) {
   const controller = useUploads();
-  const items = useVideoUploads(videoId);
+  const items = useTargetUploads(target);
   const maxGb = useAppState((s) => s.workspace.data?.settings.maxUploadGb ?? null);
-  const add = (folder: UploadFolder, files: File[]) => {
-    controller.add(videoId, folder, files);
+  const finished = items.filter((item) => item.phase === "done").map((item) => item.key);
+  const pending = items.filter((item) => item.phase !== "done");
+  const finishedKey = finished.join(",");
+  // The folder was read after these uploads finished: its list shows them, so they leave this one.
+  const onRead = (readFor: string) => {
+    for (const key of readFor.split(",")) if (key !== "") controller.dismiss(key);
+  };
+
+  const add = (files: File[]) => {
+    controller.add(target, files);
   };
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-3">
-        {ZONES.map((zone) => (
-          <DropZone key={zone.folder} {...zone} onFiles={add} />
-        ))}
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <DropZone onFiles={add} />
+        <p className="text-xs text-fg-muted">
+          Any kind of file{maxGb !== null && `, up to ${maxGb} GB each`}. Uploads go on when you
+          close this window.
+        </p>
       </div>
-      <p className="text-xs text-fg-muted">
-        Videos, audio, pictures and text files (txt, md, srt)
-        {maxGb !== null && `, up to ${maxGb} GB each`}. Drop them on a box or choose them. Uploads
-        go on when you close this window.
-      </p>
-      {items.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-fg">Files</h3>
-            {items.some((item) => item.phase === "done") && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  controller.clearFinished(videoId);
-                }}
-              >
-                Clear finished
-              </Button>
-            )}
-          </div>
-          <ul aria-label="Files of this video" className="flex flex-col gap-2">
-            {items.map((item) => (
-              <UploadRow key={item.key} item={item} />
-            ))}
-          </ul>
-        </div>
+      {pending.length > 0 && (
+        <ul aria-label="Uploads" className="flex flex-col gap-2">
+          {pending.map((item) => (
+            <UploadRow key={item.key} item={item} />
+          ))}
+        </ul>
       )}
+      <UploadedFiles target={target} refreshKey={finishedKey} onRead={onRead} />
     </div>
   );
 }

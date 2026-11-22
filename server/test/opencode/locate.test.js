@@ -107,6 +107,44 @@ describe("where it is looked for", () => {
     );
   });
 
+  test("WinGet's package folders of OpenCode follow its links, per user and per machine", () => {
+    const local = "C:\\Users\\Ed\\AppData\\Local\\Microsoft\\WinGet";
+    const machine = "C:\\Program Files\\WinGet";
+    /** @type {Record<string, string[]>} */
+    const tree = {
+      [`${local}\\Packages`]: [
+        "Other.Tool_Microsoft.Winget.Source_8wekyb3d8bbwe",
+        "anomaly.opencode_Microsoft.Winget.Source_8wekyb3d8bbwe",
+        "Anomaly.OpenCodeNot_x",
+      ],
+      [`${machine}\\Packages`]: ["Anomaly.OpenCode_Microsoft.Winget.Source_8wekyb3d8bbwe"],
+    };
+    const listed = /** @type {string[]} */ ([]);
+    const dirs = windowsDirs(
+      {
+        USERPROFILE: "C:\\Users\\Ed",
+        LOCALAPPDATA: "C:\\Users\\Ed\\AppData\\Local",
+        APPDATA: "C:\\Users\\Ed\\AppData\\Roaming",
+        ProgramFiles: "C:\\Program Files",
+      },
+      (dir) => {
+        listed.push(dir);
+        return tree[dir] ?? [];
+      },
+    );
+    assert.deepEqual(dirs, [
+      `${local}\\Links`,
+      `${local}\\Packages\\anomaly.opencode_Microsoft.Winget.Source_8wekyb3d8bbwe`,
+      `${machine}\\Links`,
+      `${machine}\\Packages\\Anomaly.OpenCode_Microsoft.Winget.Source_8wekyb3d8bbwe`,
+      "C:\\Users\\Ed\\.opencode\\bin",
+      "C:\\Users\\Ed\\AppData\\Roaming\\npm",
+      "C:\\Users\\Ed\\scoop\\shims",
+      "C:\\Users\\Ed\\.local\\bin",
+    ]);
+    assert.deepEqual(listed, [`${local}\\Packages`, `${machine}\\Packages`]);
+  });
+
   test("missing app-data variables fall back into the profile; names ignore letter case", () => {
     assert.deepEqual(windowsDirs({ UserProfile: "C:\\Users\\Ed" }), [
       "C:\\Users\\Ed\\AppData\\Local\\Microsoft\\WinGet\\Links",
@@ -208,6 +246,64 @@ describe("Windows lookups", () => {
     assert.deepEqual(win([npm]), [npm]);
     assert.deepEqual(win([scoop]), [scoop]);
     assert.deepEqual(win([local]), [local]);
+  });
+
+  /** @param {Record<string, string[]>} tree @returns {(dir: string) => string[]} */
+  const listing = (tree) => (dir) => tree[dir] ?? [];
+  const wingetPackage = "Anomaly.OpenCode_Microsoft.Winget.Source_8wekyb3d8bbwe";
+
+  test("a WinGet install without links (only the package folder) is found", async () => {
+    const exe = `C:\\Users\\Ed\\AppData\\Local\\Microsoft\\WinGet\\Packages\\${wingetPackage}\\opencode.exe`;
+    const { versionOf } = versions({ [exe]: "2.2.6" });
+    const found = await findOpencode2(env, {
+      platform: "win32",
+      home: "C:\\Users\\Ed",
+      ...filesOf([exe]),
+      listDir: listing({
+        "C:\\Users\\Ed\\AppData\\Local\\Microsoft\\WinGet\\Packages": [wingetPackage],
+      }),
+      versionOf,
+    });
+    assert.deepEqual(found, { path: exe, version: "2.2.6" });
+  });
+
+  test("a machine-scope WinGet link and package folder are found", async () => {
+    const link = "C:\\Program Files\\WinGet\\Links\\opencode.exe";
+    const pkg = `C:\\Program Files\\WinGet\\Packages\\${wingetPackage}\\opencode.exe`;
+    const machine = {
+      platform: /** @type {NodeJS.Platform} */ ("win32"),
+      home: "C:\\Users\\Ed",
+      listDir: listing({ "C:\\Program Files\\WinGet\\Packages": [wingetPackage] }),
+    };
+    const machineEnv = { ...env, ProgramFiles: "C:\\Program Files" };
+    const viaLink = await findOpencode2(machineEnv, {
+      ...machine,
+      ...filesOf([link]),
+      ...versions({ [link]: "2.2.6" }),
+    });
+    assert.deepEqual(viaLink, { path: link, version: "2.2.6" });
+    const viaPackage = await findOpencode2(machineEnv, {
+      ...machine,
+      ...filesOf([pkg]),
+      ...versions({ [pkg]: "2.2.6" }),
+    });
+    assert.deepEqual(viaPackage, { path: pkg, version: "2.2.6" });
+  });
+
+  test("the installer's opencode2.cmd and opencode.exe are one program, asked once", async () => {
+    const bin = "C:\\Users\\Ed\\.opencode\\bin";
+    const real = (/** @type {string} */ f) =>
+      f.toLowerCase().endsWith("opencode2.cmd") ? `${bin}\\opencode.exe` : f;
+    const { versionOf, asked } = versions({ [`${bin}\\opencode2.cmd`]: "2.2.6" });
+    const found = await findOpencode2(env, {
+      platform: "win32",
+      home: "C:\\Users\\Ed",
+      isFile: filesOf([`${bin}\\opencode2.cmd`, `${bin}\\opencode.exe`]).isFile,
+      realpath: real,
+      versionOf,
+    });
+    assert.deepEqual(found, { path: `${bin}\\opencode2.cmd`, version: "2.2.6" });
+    assert.deepEqual(asked, [`${bin}\\opencode2.cmd`]);
   });
 
   test("PATH comes first, with quoted, spaced and relative entries handled", () => {
@@ -349,6 +445,35 @@ describe("choosing among candidates", () => {
     );
   });
 
+  test("an opencode that does not say its version is found, but not supported", async () => {
+    const { versionOf } = versions({});
+    const status = await opencodeStatus(env, { ...base, ...filesOf(["/p/opencode"]), versionOf });
+    assert.deepEqual(
+      {
+        found: status.found,
+        path: status.path,
+        version: status.version,
+        supported: status.supported,
+      },
+      { found: true, path: "/p/opencode", version: null, supported: false },
+    );
+    assert.equal(problem(status), "OpenCode 2 is installed but did not say which version it is.");
+  });
+
+  test("a silent opencode counts even behind a 1.x one; a 2.x one still wins", async () => {
+    const two = ["/p/opencode", "/h/.opencode/bin/opencode"];
+    const mixed = versions({ "/p/opencode": "1.18.31" });
+    assert.deepEqual(
+      await findOpencode2(env, { ...base, ...filesOf(two), versionOf: mixed.versionOf }),
+      { path: "/h/.opencode/bin/opencode", version: null },
+    );
+    const better = versions({ "/h/.opencode/bin/opencode": "2.2.6" });
+    assert.deepEqual(
+      await findOpencode2(env, { ...base, ...filesOf(two), versionOf: better.versionOf }),
+      { path: "/h/.opencode/bin/opencode", version: "2.2.6" },
+    );
+  });
+
   test("the well-known folders are used after PATH", async () => {
     const file = "/h/.opencode/bin/opencode";
     const { versionOf } = versions({ [file]: "2.2.6" });
@@ -463,6 +588,13 @@ describe("real programs", { skip: process.platform === "win32" }, () => {
   test("version() parses what --version prints and switches auto-update off", async () => {
     const file = script("opencode", `echo "opencode v2.2.6 $OPENCODE_DISABLE_AUTOUPDATE"`);
     assert.equal(await version(file, envOf()), "2.2.6");
+  });
+
+  test("version() reads standard error when standard output has no version", async () => {
+    const file = script("loud", 'echo "starting" ; echo "opencode v2.4.1" >&2');
+    assert.equal(await version(file, envOf()), "2.4.1");
+    const quiet = script("quiet", 'echo "opencode v2.5.0" >&2 ; echo "done"');
+    assert.equal(await version(quiet, envOf()), "2.5.0");
   });
 
   test("version() is null for a failure, a missing file and no version", async () => {

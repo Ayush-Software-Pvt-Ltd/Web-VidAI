@@ -392,6 +392,42 @@ test("cleanWorkingFiles deletes the working files, records the edit log line and
   }
 });
 
+test("Disk Cleanup leaves every upload folder alone, and the channel's upload folder is not a video", async () => {
+  const w = createDiskWorld();
+  try {
+    const main = await w.channelOf(w.alice, "Daily");
+    const dir = main.video("ep 1");
+    layoutVideo(dir);
+    const videoUpload = path.join(dir, "upload");
+    write(path.join(videoUpload, "logo.png"), "logo");
+    write(path.join(videoUpload, "deep/inner.txt"), "inner");
+    write(path.join(videoUpload, ".part-like"), "hidden");
+    const channelUpload = path.join(main.dir, "upload");
+    write(path.join(channelUpload, "channel.png"), "channel");
+
+    const use = await w.call(w.alice, "getDiskUse");
+    assert.deepEqual(
+      use.videos.map((/** @type {any} */ v) => v.folderName),
+      ["ep 1"],
+    );
+    await w.call(w.alice, "cleanWorkingFiles", { videoId: `${main.channel.id}/ep 1` });
+    assert.deepEqual(fs.readdirSync(path.join(dir, "CLAUDE_VE")), []);
+    assert.equal(fs.readFileSync(path.join(videoUpload, "logo.png"), "utf8"), "logo");
+    assert.equal(fs.readFileSync(path.join(videoUpload, "deep/inner.txt"), "utf8"), "inner");
+    assert.equal(fs.readFileSync(path.join(videoUpload, ".part-like"), "utf8"), "hidden");
+    assert.equal(fs.readFileSync(path.join(channelUpload, "channel.png"), "utf8"), "channel");
+
+    // `upload` is never an id Disk Cleanup accepts: it is not a video.
+    await rejectsCode(
+      w.call(w.alice, "cleanWorkingFiles", { videoId: `${main.channel.id}/upload` }),
+      "notFound",
+    );
+    assert.equal(fs.readFileSync(path.join(channelUpload, "channel.png"), "utf8"), "channel");
+  } finally {
+    w.cleanup();
+  }
+});
+
 test("the edit log line shows the size with one decimal from MB up", async () => {
   const w = createDiskWorld();
   try {

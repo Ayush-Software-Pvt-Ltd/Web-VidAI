@@ -1,7 +1,8 @@
 // The smoke scenario: the whole path of a video through the real server, in a browser.
-// An administrator makes an account, the user adds a channel, edits a video (the fake Claude
-// Code), reviews it on the timeline and asks for the final render (the real renderer, when it
-// can run here).
+// An administrator makes an account and gives a folder on the server to that user as a channel;
+// the user uploads files into the video's and the channel's upload folder, edits the video (the
+// fake Claude Code), reviews it on the timeline and asks for the final render (the real renderer,
+// when it can run here).
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -24,17 +25,8 @@ export async function run(ctx) {
 
   await ctx.step("admin signs in", () => signIn(page, base, ADMIN_EMAIL, ADMIN_PASSWORD));
 
-  await ctx.step("admin opens Admin and allows the storage folder", async () => {
-    await page.getByRole("button", { name: "Admin", exact: true }).click();
-    await page.getByRole("button", { name: "Storage", exact: true }).click();
-    await page.getByLabel("Full path of a folder to add").fill(world.storage);
-    await page.getByRole("button", { name: "Add Folder" }).click();
-    await expect(
-      page.getByRole("button", { name: `Remove ${world.storage}`, exact: true }),
-    ).toBeVisible();
-  });
-
   await ctx.step("admin creates the user", async () => {
+    await page.getByRole("button", { name: "Admin", exact: true }).click();
     await page.getByRole("button", { name: "Users", exact: true }).click();
     await page.getByRole("button", { name: "New User" }).click();
     const dialog = page.getByRole("dialog", { name: "New user" });
@@ -44,38 +36,46 @@ export async function run(ctx) {
     await expect(page.getByRole("button", { name: `Edit ${USER_EMAIL}` })).toBeVisible();
   });
 
+  await ctx.step("admin gives the folder to the user as a channel", async () => {
+    // Channels are made on the Admin, Channels page, reached through the admin navigation.
+    await page
+      .getByRole("navigation", { name: "Admin", exact: true })
+      .getByRole("button", { name: "Channels", exact: true })
+      .click();
+    await page.getByRole("button", { name: "New Channel", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "New Channel" });
+    await dialog.getByLabel("Name").fill(CHANNEL_NAME);
+    await dialog.getByRole("combobox", { name: "Owner" }).click();
+    await page.getByRole("option", { name: USER_EMAIL, exact: true }).click();
+    await dialog.getByRole("button", { name: "Choose…" }).click();
+    // The picker browses the whole server: go to the folder the world prepared by its path.
+    const picker = page.getByRole("dialog", { name: "Choose the channel's folder" });
+    await picker.getByRole("button", { name: "Type a path" }).click();
+    await picker.getByLabel("Path").fill(world.storage);
+    await picker.getByLabel("Path").press("Enter");
+    await picker.getByRole("option", { name: CHANNEL_NAME }).click();
+    await picker.getByRole("button", { name: `Choose "${CHANNEL_NAME}"` }).click();
+    await expect(picker).toBeHidden();
+    await expect(dialog.getByTestId("channel-folder")).toContainText(world.channelDir);
+    await dialog.getByRole("button", { name: "Create Channel" }).click();
+    await expect(dialog).toBeHidden();
+    const entry = page.getByTestId("channel-row").filter({ hasText: CHANNEL_NAME });
+    await expect(entry).toContainText(USER_EMAIL);
+    await expect(entry).toContainText("1 video");
+    await expect(entry).toContainText(world.channelDir);
+  });
+
   await ctx.step("admin signs out", async () => {
     await page.getByRole("button", { name: "Done" }).click();
     await signOut(page, ADMIN_EMAIL);
   });
 
-  await ctx.step("user signs in", () => signIn(page, base, USER_EMAIL, USER_PASSWORD));
-
-  await ctx.step("user adds the channel from the storage folder", async () => {
-    await page
-      .getByRole("navigation", { name: "Channels" })
-      .getByRole("button", { name: "New Channel", exact: true })
-      .click();
-    await page
-      .getByRole("main")
-      .getByRole("button", { name: "New Channel", exact: true })
-      .first()
-      .click();
-    const dialog = page.getByRole("dialog", { name: "New Channel" });
-    await dialog.getByLabel("Channel name").fill(CHANNEL_NAME);
-    await dialog.getByRole("radio", { name: "Existing folder" }).click();
-    await dialog.getByRole("button", { name: "Choose Folder…" }).click();
-    const picker = page.getByRole("dialog", { name: "Choose the channel's folder" });
-    // The place is named after the folder (the admin added the storage folder by its path).
-    await picker
-      .getByRole("navigation", { name: "Places" })
-      .getByRole("button", { name: path.basename(world.storage), exact: true })
-      .click();
-    await picker.getByRole("option", { name: CHANNEL_NAME }).click();
-    await picker.getByRole("button", { name: `Choose "${CHANNEL_NAME}"` }).click();
-    await dialog.getByRole("button", { name: "Create Channel" }).click();
-    await expect(page.getByRole("listitem").filter({ hasText: CHANNEL_NAME })).toBeVisible();
-    await page.getByRole("button", { name: "Done" }).click();
+  await ctx.step("user signs in and sees the channel but cannot make one", async () => {
+    await signIn(page, base, USER_EMAIL, USER_PASSWORD);
+    const sidebar = page.getByRole("navigation", { name: "Channels" });
+    await expect(sidebar.getByText(CHANNEL_NAME, { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "New Channel" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "New Video" })).toHaveCount(0);
   });
 
   const row = page.getByRole("list", { name: "Videos" }).getByRole("listitem");
@@ -83,6 +83,51 @@ export async function run(ctx) {
   await ctx.step("the library lists the video as not edited", async () => {
     await expect(row.getByRole("button", { name: VIDEO_FOLDER, exact: true })).toBeVisible();
     await expect(row.getByText("Not edited")).toBeVisible();
+  });
+
+  /**
+   * Uploads one small file through the open Upload Files dialog and checks the list and the disk.
+   * @param {string} fileName
+   * @param {string} folder The `upload` folder the file must land in.
+   */
+  async function uploadThroughDialog(fileName, folder) {
+    const dialog = page.getByRole("dialog", { name: "Upload Files" });
+    await expect(dialog.getByText("Files in the folder")).toBeVisible();
+    const source = path.join(world.root, "to-upload", fileName);
+    fs.mkdirSync(path.dirname(source), { recursive: true });
+    fs.writeFileSync(source, `end-to-end upload ${fileName}\n`);
+    await dialog.getByLabel("Files to upload").setInputFiles(source);
+    await expect(
+      dialog
+        .getByRole("region", { name: "Files in the folder" })
+        .getByText(fileName, { exact: true }),
+    ).toBeVisible();
+    const onDisk = path.join(folder, fileName);
+    if (!fs.existsSync(onDisk)) throw new Error(`the upload is missing on disk: ${onDisk}`);
+    if (fs.readFileSync(onDisk, "utf8") !== `end-to-end upload ${fileName}\n`) {
+      throw new Error(`the uploaded file has other content: ${onDisk}`);
+    }
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(dialog).toBeHidden();
+  }
+
+  await ctx.step("user uploads a file into the video's upload folder", async () => {
+    await row.getByRole("button", { name: `More for ${VIDEO_FOLDER}` }).click();
+    await page.getByRole("menuitem", { name: "Upload Files" }).click();
+    const dialog = page.getByRole("dialog", { name: "Upload Files" });
+    await expect(dialog.getByText(`The upload folder of ${VIDEO_FOLDER}`)).toBeVisible();
+    await uploadThroughDialog("notes-e2e.txt", path.join(world.videoDir, "upload"));
+  });
+
+  await ctx.step("user uploads a file into the channel's upload folder", async () => {
+    await page
+      .getByRole("navigation", { name: "Channels" })
+      .getByRole("button", { name: `More for ${CHANNEL_NAME}` })
+      .click();
+    await page.getByRole("menuitem", { name: "Upload Files" }).click();
+    const dialog = page.getByRole("dialog", { name: "Upload Files" });
+    await expect(dialog.getByText(`The upload folder of ${CHANNEL_NAME}`)).toBeVisible();
+    await uploadThroughDialog("logo-e2e.png", path.join(world.channelDir, "upload"));
   });
 
   await ctx.step("user starts the edit", async () => {

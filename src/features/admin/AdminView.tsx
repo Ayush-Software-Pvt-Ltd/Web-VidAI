@@ -1,6 +1,6 @@
 /**
- * The admin area (SPEC section 16): Users, Harness and Model, Queues and Limits, Storage, Queue
- * and System, with their own section navigation in the frame of Settings. Done and Esc return to
+ * The admin area (SPEC section 16): Users, Channels, Harness and Model, Queues and Limits,
+ * Storage, Queue and System, with their own section navigation in the frame of Settings. Done and Esc return to
  * the video list. The section is the one of the address (`/admin/<section>`, kept in the store as
  * `adminSection`), and every way out - another section, Done, Esc, the browser's Back, closing or
  * reloading the tab - goes through the unsaved-changes guard of the page that has a draft.
@@ -8,7 +8,7 @@
  * Only an admin sees it (the shell does not open it for anybody else, and the server refuses every
  * admin function anyway); anybody else who reaches this component gets one sentence.
  */
-import { Activity, Cpu, Gauge, HardDrive, ListOrdered, Users } from "lucide-react";
+import { Activity, Cpu, Gauge, HardDrive, ListOrdered, Tv, Users } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { pathOf } from "@/app/route";
 import { WindowFrame } from "@/app/WindowFrame";
@@ -19,6 +19,7 @@ import { hasOpenLayer, isEditableTarget } from "@/lib/keyboard";
 import { isShortcut } from "@/lib/platform";
 import type { AdminSection } from "@/lib/store";
 import { GuardProvider, useGuard } from "@/features/settings";
+import { ChannelsPage } from "./ChannelsPage";
 import { HarnessPage } from "./harness";
 import { QueuePage } from "./QueuePage";
 import { QueuesLimitsPage } from "./QueuesLimitsPage";
@@ -30,6 +31,7 @@ export const NOT_ADMIN = "Only an admin can open this.";
 
 const SECTIONS: { id: AdminSection; label: string; icon: ReactNode }[] = [
   { id: "users", label: "Users", icon: <Users /> },
+  { id: "channels", label: "Channels", icon: <Tv /> },
   { id: "harness", label: "Harness and Model", icon: <Cpu /> },
   { id: "limits", label: "Queues and Limits", icon: <Gauge /> },
   { id: "storage", label: "Storage", icon: <HardDrive /> },
@@ -181,6 +183,9 @@ function AdminScreen() {
   switch (section) {
     case "users":
       body = <UsersPage />;
+      break;
+    case "channels":
+      body = <ChannelsPage />;
       break;
     case "harness":
       body = <HarnessPage />;

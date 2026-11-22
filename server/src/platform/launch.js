@@ -7,9 +7,11 @@
 // shapes (docs/SPEC.md sections 2 and 8):
 //
 // - `claude.exe` (native installer, WinGet, or the binary of the npm package): started directly.
-// - An npm `.cmd` shim (`%APPDATA%\npm\claude.cmd`): never run through `cmd.exe`, whose quoting
-//   rules make arguments such as JSON unsafe. The shim is read and its target is started
-//   instead: the `.exe` it points to, or `node <script>` for a JavaScript target.
+// - A `.cmd` shim (npm's `%APPDATA%\npm\claude.cmd`, or the `opencode2.cmd` of the OpenCode 2
+//   installer): never run through `cmd.exe`, whose quoting rules make arguments such as JSON
+//   unsafe. The shim is read and its target is started instead: the `.exe` it points to, or
+//   `node <script>` for a JavaScript target. The target is the last quoted path that starts with
+//   the shim's own folder (`%dp0%\x`, `%~dp0\x` or `%~dp0x`, the backslash being optional).
 // - A JavaScript file: `node <file>`.
 // - A script whose `#!` line names Python (`#!/usr/bin/env -S python3 -I`, the fake OpenCode 2
 //   of the tests): run with the machine's Python, with the flags of the line, because Git Bash
@@ -18,7 +20,7 @@
 //   wrapper): run with Git Bash. Git Bash is an MSYS2 program, which splits its command line by
 //   its own rules (and expands `{}`, `*`, `~` and `@file` in words that are not quoted), so
 //   every argument is passed fully quoted in the form MSYS2 reads back literally (`msysQuote`).
-// - A batch file that is not an npm shim: refused. Node cannot start batch files without
+// - A batch file that is not such a shim: refused. Node cannot start batch files without
 //   `cmd.exe` (and its quoting is exactly what is not safe for JSON).
 // - Anything else is handed to Windows as is.
 //
@@ -51,8 +53,11 @@ const win = path.win32;
  * @property {() => string | null} python
  */
 
-/** The most of an npm shim that is read. */
+/** The most of a shim that is read. */
 const SHIM_BYTES = 64 * 1024;
+
+/** The start of a quoted shim path: the shim's own folder, with an optional backslash. */
+const SHIM_DIR_PREFIX = /^(?:%dp0%|%~dp0)\\?/i;
 
 /**
  * `arg` quoted for the command line of an MSYS2 program started from a Windows program: inside
@@ -92,11 +97,13 @@ function isJavascript(file) {
 }
 
 /**
- * The program an npm `.cmd` shim starts: the last quoted `%dp0%\...` (or `%~dp0\...`) path in
- * it, resolved against the shim's folder `dir`; `null` when there is none.
+ * The program a `.cmd` shim starts: the last quoted path in it that starts with the shim's own
+ * folder (`%dp0%` or `%~dp0`, with or without a backslash after it), resolved against the
+ * shim's folder `dir`; `null` when there is none.
  *
  * npm writes shims like `"%_prog%"  "%dp0%\node_modules\@anthropic-ai\claude-code\cli.js" %*`
- * (a Node.js script) or `"%dp0%\node_modules\@anthropic-ai\claude-code\bin\claude.exe"   %*`.
+ * (a Node.js script) or `"%dp0%\node_modules\@anthropic-ai\claude-code\bin\claude.exe"   %*`;
+ * the OpenCode 2 installer writes `"%~dp0opencode.exe" %*` (no backslash).
  * @param {string} text
  * @param {string} dir
  * @returns {string | null}
@@ -112,11 +119,8 @@ export function npmShimTarget(text, dir) {
     const end = after.indexOf('"');
     if (end < 0) break;
     const quoted = after.slice(0, end);
-    const relative = quoted.startsWith("%dp0%\\")
-      ? quoted.slice(6)
-      : quoted.startsWith("%~dp0\\")
-        ? quoted.slice(6)
-        : null;
+    const prefix = SHIM_DIR_PREFIX.exec(quoted);
+    const relative = prefix === null ? null : quoted.slice(prefix[0].length);
     if (relative !== null && relative !== "" && !relative.includes("%")) {
       let resolved = dir;
       for (const part of relative.split("\\")) {
@@ -183,7 +187,7 @@ export function resolveWindowsLaunch(program, deps) {
     }
     if (target !== null && isJavascript(target)) return withNode(deps.node(dir), target);
     throw launchError(
-      `${program} is a batch file, which cannot be started safely. Use the claude.exe of Claude Code or its npm shim.`,
+      `${program} is a batch file, which cannot be started safely. Use the program's .exe or its npm shim.`,
     );
   }
   if (isJavascript(program)) return withNode(deps.node(null), program);

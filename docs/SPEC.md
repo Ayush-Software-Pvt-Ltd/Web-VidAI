@@ -18,7 +18,9 @@ Decisions of the product owner (2026-11-22), all settled:
 3. Accounts are created only by an admin, with an email and a password.
 4. The admin chooses the harness (the setup, which decides Claude Code or OpenCode 2), the API details and the model for everybody.
 5. Every user has several channels; a channel is a directory with one folder per video, its own prompts and styles; a user sees only their own channels and videos.
-6. Video files arrive both ways: they already lie in a folder the server can reach (its own disk or a network share), or the user uploads them in the browser.
+   Only the admin creates, changes and removes channels: the admin gives each channel to one user and chooses its directory anywhere on the server, on an internal or an external drive.
+6. The footage of a video is put into its video folder outside VidAI; users edit only footage that is already there.
+   In the browser a user can upload extra files (pictures, music, documents) into the `upload` folder of a channel or of a video, and nowhere else; a prompt that names such a file makes the edit use it.
 7. The result of an edit is a HyperFrames project, not a Final Cut Pro or Premiere Pro file.
 8. Review happens on a timeline in the browser: play, scrub, edit by hand (trim, move, delete, split) and ask for changes by circling an area of a frame and typing what to change.
 9. A change asked for on the timeline is sent to editing at once and only that part is changed; a motion graphic is re-created on its own and replaced in place.
@@ -57,7 +59,6 @@ Only one server may use a data directory (a lock file with the process id; a sta
 | `logs/<jobId>.jsonl` | job logs |
 | `server.log` | server log, rotated at 10 MB, 5 files kept |
 | `toolkit/` | the editing toolkit, its Python environment and lessons file (section 7) |
-| `media/` | the default storage folder (section 6) |
 | `projects/<videoKey>/` | timeline revisions and change-request pictures of one video (section 11) |
 | `cache/proxy/` | preview copies of heavy video files (section 11) |
 | `cache/render/` | frame caches and temporary files of renders |
@@ -109,7 +110,7 @@ Tests never use the real data directory.
 | `server/src/http/` | TLS, router, static UI, SSE, body reading, security headers, errors |
 | `server/src/auth/` | passwords, sessions, login throttle, first-admin setup |
 | `server/src/rpc/` | the RPC functions of section 14, one file per area |
-| `server/src/storage/` | storage folders, path safety, folder browsing, uploads, file serving with Range |
+| `server/src/storage/` | path safety, the admin's folder browsing, uploads, file serving with Range |
 | `server/src/library/` | scanner, media probing, outputs, video actions |
 | `server/src/agents/` | `harness.js`, `claude/`, `opencode/`, setups, readiness |
 | `server/src/jobs/` | manager, the three queues, keep-going, retry, progress, prompts, logs, errors |
@@ -235,11 +236,14 @@ An unrecognized report of the program stays "Claude Code reported an error: <fir
 
 The OpenCode 2 program:
 
-- It is `opencode2` (2.x), belongs to the setups `opencodeGo` and `openaiApi`, and is driven as section 8, "Driving OpenCode 2", says.
-- Finding it (`agents/opencode/locate.js`): `VIDAI_OPENCODE2_BIN` is the only candidate when set; otherwise the candidates are every `opencode2`, then every `opencode`, each on the `PATH` and then in the folders the installers use (`~/.opencode/bin`, Homebrew's two `bin` folders, `~/.local/bin`; on Windows also with `PATHEXT` and in `%LOCALAPPDATA%\Microsoft\WinGet\Links`, `%USERPROFILE%\.opencode\bin`, `%APPDATA%\npm`, `%USERPROFILE%\scoop\shims`).
+- It is OpenCode 2 (2.x, as `opencode2` or `opencode`), belongs to the setups `opencodeGo` and `openaiApi`, and is driven as section 8, "Driving OpenCode 2", says.
+- Finding it (`agents/opencode/locate.js`): `VIDAI_OPENCODE2_BIN` is the only candidate when set; otherwise the candidates are every `opencode2`, then every `opencode`, each on the `PATH` and then in the folders the installers use (`~/.opencode/bin`, Homebrew's two `bin` folders, `~/.local/bin`).
+  On Windows the program is called `opencode` only (WinGet and npm's `.exe` have no `opencode2`; the bash installer adds an `opencode2.cmd` shim), each name is tried with `PATHEXT` (and always `.exe` and `.cmd`), and the folders are `%LOCALAPPDATA%\Microsoft\WinGet\Links`, every `Anomaly.OpenCode_*` folder in `%LOCALAPPDATA%\Microsoft\WinGet\Packages`, the same two under `%ProgramFiles%\WinGet` (machine scope), `%USERPROFILE%\.opencode\bin`, `%APPDATA%\npm` and `%USERPROFILE%\scoop\shims`.
+  The package folders matter because WinGet adds only that folder to the user's `PATH` when it cannot make a link, and a server started earlier does not see the change.
+  A `.cmd` shim is never run through `cmd.exe`: the launcher (`platform/launch.js`) reads it and starts its target, the quoted path that begins with the shim's own folder (`%dp0%\x`, `%~dp0\x` or `%~dp0x`), so both npm's shims and the installer's `opencode2.cmd` (`"%~dp0opencode.exe" %*`) work; any other batch file is refused.
   The first candidate that reports a 2.x version is the program, so a 2.x `opencode` needs no shim, and a stale `opencode2` shim over an older binary does not hide a 2.x program elsewhere.
-  When no candidate reports 2.x, an `opencode2` counts as found but not supported, with the version it reports; a 1.x `opencode` alone means OpenCode 2 is not installed.
-  The version is what `--version` prints (with auto-update off, at most 45 seconds).
+  When no candidate reports 2.x, an `opencode2` counts as found but not supported, with the version it reports, and so does the first `opencode` that did not say its version (its path is shown and the System page says it did not say which version it is); a 1.x `opencode` alone means OpenCode 2 is not installed.
+  The version is what `--version` prints on standard output or, when that has none, on standard error (with auto-update off, at most 45 seconds).
 - The environment of its server is the server's own minus `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `OPENCODE_PASSWORD`, `OPENCODE_SERVER_PASSWORD`, `OPENCODE_SERVER_USERNAME`, `OPENCODE_CONFIG_CONTENT`, `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, `OPENCODE_API_KEY`, `VIDAI_API_KEY` and `OPENCODE_FLAGS`, plus the key variable of the option, `OPENCODE_SERVER_PASSWORD` (a new random password per run), `OPENCODE_DISABLE_AUTOUPDATE=1`, and `OPENCODE_CONFIG_CONTENT`, the run configuration.
 - The run configuration has OpenCode's own keys and is merged above every configuration file of the OS user and below an administrator's managed settings: `formatter` and `lsp` off, `snapshots` false (the video folder holds gigabytes of footage), `share` disabled, `instructions` naming the `CLAUDE.md` of the working directory and `~/.claude/CLAUDE.md` (OpenCode does not read `CLAUDE.md` by itself; a file that does not exist is skipped), and VidAI's own provider `vidai` with the model.
 - How address and model become OpenCode's `provider/model`: on `opencodeGo` the default Go address is OpenCode's provider `opencode-go` and the pay-as-you-go address `opencode` (each knows the protocol, limits and price of every model of its catalog); any other address is `vidai`, Anthropic's API at `<address>/v1` through `@ai-sdk/anthropic`, with the key `{env:OPENCODE_API_KEY}`.
@@ -330,36 +334,48 @@ A per-edit value above the total is stored as typed and never refused; a job get
 
 ### Storage (section 6)
 
-`storageRoots`: the folders on the server (or on shares it has mounted) inside which users may place channels; the default storage folder `<data dir>/media` is always one of them and can never be removed.
-A change that drops a folder in which channels lie is refused (`conflict`), comparing real paths (a folder of a share that cannot be reached counts by its written path): "1 channel of 1 user is in <folder>. Move or remove it first." or "3 channels of 2 users are in <folder>. Move or remove them first.".
 `maxUploadGb` (1 to 2000, default 200): the largest single file a user may upload.
 `proxyCacheGb` (1 to 2000, default 50): the size at which the oldest preview copies are deleted.
 
 ### System page
 
-Shows, each with a state and a hint how to fix it: Claude Code (path, version, login), OpenCode 2 (path, version), ffmpeg and ffprobe (path, version, hardware encoders found), Python (path, version), toolkit environment, HyperFrames (version) and its browser, speech model, free disk space of the data directory and each storage folder, the addresses of the server, the certificate (names, end date, SHA-256 fingerprint).
+Shows, each with a state and a hint how to fix it: Claude Code (path, version, login), OpenCode 2 (path, version), ffmpeg and ffprobe (path, version, hardware encoders found), Python (path, version), toolkit environment, HyperFrames (version) and its browser, speech model, free disk space of the data directory, the addresses of the server, the certificate (names, end date, SHA-256 fingerprint).
 "Prepare" runs the toolkit preparation of section 7 and shows its log.
 
 ## 6. Storage, channels and videos
 
-### Storage folders and path safety
+### Folders on the server
 
-Every path a user gives is resolved to its real path (links followed) and must lie inside a storage folder; otherwise `forbidden`.
-A channel directory must be a directory, must not be a storage folder itself, must not lie inside the data directory except under `media/`, and must not be the same as, inside, or around a channel directory of any user (`conflict`: "This folder already belongs to a channel.").
-The in-page folder picker (`fsPlaces`, `fsList`, `fsCreateFolder`) only shows storage folders and what is inside them; hidden entries (leading dot) are not listed.
-Each user has a personal folder `<data dir>/media/<user id>/`, created on demand, offered as the first place.
+Only an admin chooses folders: `fsPlaces`, `fsList` and `fsCreateFolder` answer `forbidden` to everybody else.
+The admin's folder picker shows the server's whole file system, so a channel can lie on any internal, external or network drive the server can reach.
+`fsPlaces` lists the home folder of the account the server runs as (`home`), then the drives (`drive`): on a Mac the root `/` named after the startup volume, on Windows every drive letter that exists (fixed, removable and network drives); on a Mac every volume in `/Volumes` follows (`volume`), except the link to the startup volume.
+A place that cannot be read right now is listed with `available: false`.
+`fsList` lists the folders inside one folder (files never), in natural order, with hidden ones left out (a leading dot, and on Windows the hidden or system attribute); a folder that does not exist or cannot be read answers `notFound`.
+Every path is resolved to its real path (links followed) before it is checked or stored.
+A channel directory must be an existing directory, must not be, lie inside or contain the server's data directory (`invalidInput`: "This folder belongs to VidAI's own data." with `field: "dir"`), and must not be the same as, inside, or around the directory of another channel (`conflict`: "This folder already belongs to a channel.").
+Users never send a path: every user function names channels and videos by id and files by a checked name (no separators, no `..`).
 VidAI never deletes or overwrites a file in a channel directory, with exactly two exceptions: Disk Cleanup (section 13) and its own files inside `<video>/output/<video>.hf/` (section 10).
 
 ### Channels
 
-A channel belongs to one user and has a name (1 to 60 characters, unique for that user), a directory, a video type (`auto`, `long`, `short`) and two profiles (Long and Short), each with exactly 5 prompt slots and 5 style slots.
+A channel belongs to one user and has a name (1 to 60 characters, unique for that user), a directory chosen by the admin, a video type (`auto`, `long`, `short`) and two profiles (Long and Short), each with exactly 5 prompt slots and 5 style slots.
 Each profile has exactly 5 prompt slots and 5 style slots (`{ name, text }`), and slot 0 is always named "Default".
 Other slot names are 1 to 40 characters after trimming; an empty name is "Prompt 2" to "Prompt 5" or "Style 2" to "Style 5".
 A saved profile that does not have exactly 5 prompts and 5 styles, or a name outside those limits, is refused with `invalidInput`; slot 0 is always saved as "Default".
 Each video remembers which prompt slot and which style slot (0 to 4) it uses; starting is refused with `invalidInput` when the chosen prompt is empty (the message names the slot and Long or Short) or a slot index is outside 0 to 4.
 A new channel gets the text of `toolkit/default_prompt.md` in prompt slot 0 of Long and of Short and everything else empty; when `<channel>/Style/STYLE.md` exists, its text (the file is only read) is copied once into style slot 0 of both.
-A channel name is 1 to 60 characters, has no control characters and is unique for the user; a folder is accepted as a channel only when it exists, is a directory, is not inside the server's data directory, is not a storage folder itself or a user's personal folder itself, and does not overlap another channel.
-Creating a channel either makes a new folder (in the personal folder or a chosen place) or links an existing one.
+A channel name is 1 to 60 characters, has no control characters and is unique for its user without regard to letter case (`conflict`: "This user already has a channel with that name." with `field: "name"`); its directory follows "Folders on the server".
+
+Only an admin creates, changes and removes channels (`adminListChannels`, `adminCreateChannel`, `adminUpdateChannel`, `adminRemoveChannel`); users have no function for it.
+`adminListChannels` lists every user's channels ordered by owner email, then name, each with its owner, folder, whether it can be reached, its number of video folders and `busy` (a job of one of its videos waits, runs or is paused).
+`adminCreateChannel({ name, userId, dir, videoType })` gives the channel to an existing user (`notFound` otherwise) and puts it last in that user's order; the directory must exist already (the picker's New Folder makes one).
+`adminUpdateChannel` changes the name, the owner, the directory and the video type; the owner and the directory cannot change while the channel is busy (`conflict`: "Stop the running edits of this channel's videos first.").
+A new owner gets the channel last in their order, with its videos, their inputs, revisions and change requests; finished jobs and edit log entries keep the user who made them, and unfinished uploads into the channel are cancelled.
+A new directory keeps the video rows: a row belongs to the folder of the same name, so videos whose folders lie in the new directory too keep their inputs, revisions and change requests; rows whose folder is not there stay in the database unlisted, like those of any video folder that disappeared (an archived one leaves the archive), and come back when the folder does.
+A new directory also cancels the unfinished uploads into the channel.
+Every change sends `workspace-changed` and `library-changed` to the owner (and to the old owner when it changed).
+The owner changes only the video type, the prompts and the styles (`updateChannel`), and the order of their channels.
+`importChannels` updates the user's channels of the same name (without regard to letter case) and makes none; the other names of the file come back in `skipped`.
 Removing a channel removes only the row and its videos' rows (with their jobs, change requests, revisions and unfinished uploads, whose partial files are deleted) and the server's own folder of each of those videos (`<data dir>/projects/<videoKey>/`); the channel directory and everything in it stay, and so do the edit log's entries.
 Deleting a user removes those folders of all the user's videos the same way, and at start the server removes every folder under `<data dir>/projects/` that belongs to no video (logged with the count).
 While a job of one of its videos waits, runs or is paused the removal is refused (`conflict`): "Stop the running edits of this channel's videos first.".
@@ -369,14 +385,14 @@ Channels can be reordered; the order is per user.
 
 A video is a folder directly inside a channel directory.
 Its id is `<channelId>/<folder name>`.
-Never a video: a name that starts with `.` or `CLAUDE_VE`, and the asset folders `Style`, `sample`, `samples`, `images`, `pictures`, `host images` and `host pictures` (compared ignoring case); `CLAUDE_VE*` is the working folder of an edit.
+Never a video: a name that starts with `.` or `CLAUDE_VE`, the channel's `upload` folder, and the asset folders `Style`, `sample`, `samples`, `images`, `pictures`, `host images` and `host pictures` (compared ignoring case); `CLAUDE_VE*` is the working folder of an edit.
 A-roll files are regular files directly in the video folder with the extension `mp4`, `mov`, `m4v`, `mkv`, `mts`, `m2ts`, `avi` or `webm` (ignoring case); the main A-roll is the largest one, and a tie goes to the smaller name.
 The B-roll folder is the first subfolder (in natural order) whose name matches `b-roll`, `b_roll`, `b roll` or `broll`, with an optional `s` and in any case; when there is none it is `Broll`.
 Videos are listed newest first: the natural order of their folder names, descending, where runs of digits compare as numbers, letters ignore case and digits come before letters.
 `createdAt` is the creation time of the video folder, and its modified time on a file system that keeps no creation time.
 A link is followed only when it leads to a place inside the channel directory, and a video folder that is itself a link is not a video.
 A channel directory that is missing or unreadable gives no videos and is marked unavailable, so nobody concludes from it that a video was deleted.
-`createVideo(channelId, name)` makes a new folder (name 1 to 120 characters, no path separators, not reserved, not existing).
+Video folders and their footage are put into the channel directory outside VidAI; VidAI never makes a video folder.
 
 Outputs of a video, found in `<video>/output/`:
 
@@ -399,13 +415,17 @@ The library is rescanned after job events, uploads and channel changes, and ever
 
 ### Uploads
 
-A user uploads files into a video folder or its B-roll folder (created as `Broll` when missing).
-Allowed: video (`mp4 mov m4v mkv mts m2ts avi webm`), audio (`wav mp3 m4a aac flac`), pictures (`png jpg jpeg webp gif`), text (`txt md srt`).
-`createUpload({ videoId, folder: "video" | "broll", name, size })` checks the name (no separators, no leading dot, allowed extension), the size (`maxUploadGb`, free disk space plus 1 GB) and that no file of that name exists, and returns an upload id.
+A user uploads files into exactly two kinds of folders and nowhere else: the `upload` folder of one of their videos (`<video folder>/upload/`) and the `upload` folder of one of their channels (`<channel directory>/upload/`).
+The folder is made when the first upload into it starts; an existing folder whose name is `upload` in another letter case is used as it is.
+Every file type is accepted.
+Uploaded files are only stored: an edit is not told about them, and uses one only when the video's prompt or a change request names it (the agent knows `MAIN_FOLDER` and `CHANNEL_FOLDER`, section 8).
+`listUploads({ target })` lists the files directly in that folder (hidden ones and unfinished uploads left out) in natural order with size and modified time; a folder that does not exist yet gives an empty list.
+`createUpload({ target, name, size })`, where `target` is `{ kind: "video", videoId }` or `{ kind: "channel", channelId }` of the user's own, checks the name (1 to 200 characters, no path separators, no control characters, no leading dot, no trailing dot or space, not a name Windows reserves such as `CON` or `LPT1`), the size (`maxUploadGb`, free disk space plus 1 GB) and that no file of that name exists, and returns an upload id.
 The browser then sends the bytes in order with `PUT /api/upload/<id>?offset=<n>` (raw body, at most 32 MB per request); the server appends only when `offset` equals what it already has and answers with the new offset, so a broken upload continues from `GET /api/upload/<id>`.
-Bytes are written to `.<name>.<id>.part` in the target folder (hidden from the scanner); when the last byte arrives the file is renamed to its name, failing with `conflict` if the name was taken meanwhile.
+Bytes are written to `.<name>.<id>.part` in the target folder (hidden from the scanner and from `listUploads`); when the last byte arrives the file is renamed to its name, failing with `conflict` if the name was taken meanwhile.
 `cancelUpload(id)` deletes the part file; part files untouched for 24 hours are deleted on start and hourly.
-A video with an upload in progress does not offer Start Editing.
+A video with an upload in progress into its own `upload` folder does not offer Start Editing; uploads into a channel's folder block nothing.
+Disk Cleanup never touches an `upload` folder.
 
 ## 7. Toolkit
 
@@ -1040,15 +1060,15 @@ Disk Cleanup is offered in a video's menu and as a page listing all of the user'
 RPC functions (`admin*` need the admin role):
 
 - Account: `getSession`, `login`, `logout`, `changePassword`, `setupAdmin`.
-- Admin: `adminListUsers`, `adminCreateUser`, `adminUpdateUser`, `adminDeleteUser`, `adminGetSettings`, `adminUpdateSettings`, `adminGetHarness`, `adminSetSetup`, `adminSetApiBaseUrl`, `adminSetApiKey`, `adminClearApiKey`, `adminSetApiModel`, `adminSetApiEffort`, `adminSetModelSelection`, `adminGetApiModels`, `adminTestApi`, `adminGetSystem`, `adminPrepareToolkit`, `adminGetQueue`, `adminSetJobUrgent`, `adminStartJobNow`.
-- Workspace: `getWorkspace` (the user's channels, public settings, readiness), `getHarness` (the setup, program, model and effort in use, read-only), `getReadiness`, `getOpencodeUsage`, `createChannel`, `updateChannel`, `removeChannel`, `reorderChannels`, `getDefaultPrompt`, `exportChannels`, `importChannels`.
-- Library: `getLibrary`, `createVideo`, `setVideoTypeOverride`, `getVideoInputs`, `setVideoInputs`, `archiveVideo`, `unarchiveVideo`, `getArchived`, `getEditLog`.
+- Admin: `adminListUsers`, `adminCreateUser`, `adminUpdateUser`, `adminDeleteUser`, `adminListChannels`, `adminCreateChannel`, `adminUpdateChannel`, `adminRemoveChannel`, `adminGetSettings`, `adminUpdateSettings`, `adminGetHarness`, `adminSetSetup`, `adminSetApiBaseUrl`, `adminSetApiKey`, `adminClearApiKey`, `adminSetApiModel`, `adminSetApiEffort`, `adminSetModelSelection`, `adminGetApiModels`, `adminTestApi`, `adminGetSystem`, `adminPrepareToolkit`, `adminGetQueue`, `adminSetJobUrgent`, `adminStartJobNow`.
+- Workspace: `getWorkspace` (the user's channels, public settings, readiness), `getHarness` (the setup, program, model and effort in use, read-only), `getReadiness`, `getOpencodeUsage`, `updateChannel`, `reorderChannels`, `getDefaultPrompt`, `exportChannels`, `importChannels`.
+- Library: `getLibrary`, `setVideoTypeOverride`, `getVideoInputs`, `setVideoInputs`, `archiveVideo`, `unarchiveVideo`, `getArchived`, `getEditLog`.
 - Jobs: `startEdit`, `reEdit`, `pauseJob`, `continueJob`, `stopJob`, `getJobLog`, `getQueue`, `getUsage`.
 - Timeline: `openTimeline`, `getTimeline`, `editTimeline`, `undoTimeline`, `redoTimeline`, `listRevisions`, `restoreRevision`, `addTimelineNote`, `deleteTimelineNote`, `retryTimelineNote`, `renderFinal`.
-- Storage: `fsPlaces`, `fsList`, `fsCreateFolder`, `createUpload`, `cancelUpload`.
+- Storage: `fsPlaces`, `fsList`, `fsCreateFolder` (admin only), `listUploads`, `createUpload`, `cancelUpload`.
 - Disk: `getDiskUse`, `cleanWorkingFiles`.
 
-Events: `library-changed`, `job-updated`, `job-log`, `queue-changed`, `settings-changed`, `timeline-changed`, `note-updated`, `preview-copies-changed`, `usage-updated`, `system-changed`, `disk-use-changed`, `session-ended`.
+Events: `library-changed`, `workspace-changed`, `job-updated`, `job-log`, `queue-changed`, `settings-changed`, `timeline-changed`, `note-updated`, `preview-copies-changed`, `usage-updated`, `system-changed`, `disk-use-changed`, `session-ended`.
 `getEditLog({ before, limit })` returns the signed-in user's entries newest first in pages (100 by default, at most 500); an admin may ask for one user's or everybody's.
 The words of a job's entries: "Started (Claude Code)" for an edit, "Re-Edit started (Claude Code)" and "Change request started (Claude Code)" (with "OpenCode 2" when that program does the job), "Finished (Claude Code)", "Needs attention: <reason>", "Stopped", "Paused" and "Continued"; a render names no program: "Render started" and "Render finished".
 A job's closing entry is written before the job's new state is announced (`job-updated`), so a page that reloads the log on that event always finds it.
@@ -1071,7 +1091,7 @@ Tables (ids are random 16 byte hex strings unless stated; times are milliseconds
 - `jobs`: id, video_id, user_id, kind, queue, state, urgent, joined_at, started_at, ended_at, setup, harness, model, effort, request (JSON), progress (JSON), error (JSON), retries; a partial unique index allows only one active job per video.
 - `notes`: id, video_id, user_id, frame, shape (JSON), element_id, prompt, state, job_id, created_at.
 - `revisions`: video_id, n, label, user_id (or null for a job), job_id, created_at, undone.
-- `uploads`: id, user_id, video_id, folder, name, size, received, created_at, touched_at.
+- `uploads`: id, user_id, channel_id, video_id (null for an upload into the channel's folder), name, size, received, created_at, touched_at.
 - `edit_log`: id, at, user_id (emptied when the user is deleted), user_email, video_label, event, message (the newest 20000 kept).
 - `progress_history`: kind, video_type, seconds, finished_at.
 - `launches`: queue, at (for the start delay).
@@ -1080,20 +1100,22 @@ Job logs are files (`logs/<jobId>.jsonl`), not rows.
 
 ## 16. User interface
 
-The main screens are: the sidebar with the user's channels, the video list with its rows and actions, the activity panel with the job log and outputs, the Start Editing, Re-Edit and Stop sheets, channel settings with prompt and style slots, history (archive, edit log), the in-page folder picker.
+The main screens are: the sidebar with the user's channels, the video list with its rows and actions, the activity panel with the job log and outputs, the Start Editing, Re-Edit and Stop sheets, channel settings with prompt and style slots, history (archive, edit log), the admin's folder picker.
 Theme and text size are kept per browser (local storage), not on the server.
 
 Also:
 
 - Sign in page; first-admin setup page; account menu (email, change password, sign out).
-- New Video (name, then an upload area for the A-roll and B-roll with progress, pause, resume and cancel per file); uploads also from a video's menu.
+- Upload Files, on a video's menu and on a channel's menu in the sidebar: a dialog that names the folder (`upload` of that video or channel), lists the files already in it, and takes files from Choose Files or by dropping them, each with progress, pause, resume and cancel.
+- Channel settings (the user): the video type, prompts and styles of each channel and the order of the channels; no New Channel, no rename, no remove; without channels the page says "No channels yet. An admin adds channels for you."
 - Start Editing and Re-Edit: the Urgent checkbox with the hint "Starts before the other waiting videos, after those already being edited and earlier urgent ones."
 - A waiting video shows its position; the sidebar status shows the server's readiness and how many edits run and wait.
 - Timeline screen (section 11): player with play, pause, frame steps, time code, speed, volume, full screen; tracks with zoom, a ruler, a playhead, selection, drag to trim and move with snapping, Delete, Split, Undo, Redo, revisions; "Ask for a change" (draw the ellipse, type, Send); the list of change requests with their state, each jumping to its frame; Render Final with its progress and the finished videos.
 - Disk Cleanup page and menu entry (section 13).
 - Edit log: an admin chooses "Whose edits" (My edits, Everybody, or one user); the email column shows when other users' entries are listed; the choice stays for Refresh and older entries and is reset at sign-out.
 - Queues and Limits: a per-edit CPU or GPU value above its total shows "Limited by the total: an edit gets at most N%." beside the field.
-- Admin section: Users, Harness and Model, Queues and Limits, Storage, Queue (all jobs), System.
+- Admin section: Users, Channels, Harness and Model, Queues and Limits, Storage (the upload size and the preview cache), Queue (all jobs), System.
+- Admin Channels page: every channel with its name, owner, folder, number of videos and whether it can be reached; New Channel, Edit and Remove; the channel dialog has the name, the owner, the video type and the folder, chosen with the folder picker over the whole server (with New Folder).
 
 The page fills the browser tab and its title is `VidAI`; the platform (fonts, wording, shortcut keys) is the one of the browser's operating system (`src/lib/platform.ts`).
 The layout never gets less than 980 x 620 CSS px (`MIN_LAYOUT_SIZE` in `src/app/appearance.ts`).
@@ -1113,7 +1135,7 @@ Several tabs may be open at once; all get every event.
 - `npm run check` runs everything: Prettier, ESLint (UI and server, zero warnings), TypeScript (UI, and the server's JavaScript with `checkJs`), UI tests (`vitest`), server tests (`node --test`), toolkit tests (`python -m unittest`).
 - Engine tests drive the real job engine against the fake agent programs in `server/test/support/` (`fake-claude.sh`, `fake-opencode2.py`, `fake-hyperframes.mjs`) with shortened timers.
 - `npm run e2e:server` (`scripts/e2e-server/`) starts the real server with a temporary data directory and the fake programs and drives it in Chromium: sign in, admin pages, channels, upload, start, queue order with Urgent, pause, continue, stop, timeline play, hand edits, change request, render, Disk Cleanup, two users at once.
-  The first scenario, `smoke`, covers sign in, the admin making a user, the admin's storage folder, the user's channel, an edit with the fake Claude Code, the timeline and a real final render; the others are still to be written.
+  The first scenario, `smoke`, covers sign in, the admin making a user and a channel for that user in a folder on the server, an upload into a video's `upload` folder and one into a channel's, an edit with the fake Claude Code, the timeline and a real final render; the others are still to be written.
 - Every rule of section 4 that keeps users apart has a test that tries to cross it.
 - Windows code paths (`server/src/platform/`) are written and unit tested where they can be on a Mac; what could not be run on a real Windows machine is listed in the README.
 

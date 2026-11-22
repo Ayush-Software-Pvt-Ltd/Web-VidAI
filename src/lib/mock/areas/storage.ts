@@ -1,40 +1,34 @@
 /**
- * The storage area: the in-page folder picker's three functions (`fsPlaces`, `fsList`,
- * `fsCreateFolder`) with the rules and sentences of `server/src/storage/browse.js` and `paths.js`.
- * The mock disk is `world.fs` (see `seed/storage.ts`): folders only, `/` paths.
+ * The storage area: the admin's folder picker (`fsPlaces`, `fsList`, `fsCreateFolder`) over the
+ * mock server's whole file system (`fsModel.ts`, seeded by `seed/storage.ts`), and `listUploads`
+ * lives in the uploads area. Every function answers `forbidden` to a user (SPEC section 6,
+ * "Folders on the server"); a folder that does not exist or lies in an unavailable place answers
+ * `notFound`.
  */
 import type { Api } from "../../api";
 import type { FsEntry, FsListing, FsPlace } from "../../types";
 import type { MockCtx } from "../ctx";
-import type { MockUser, World } from "../world";
-import { MEDIA_ROOT, personalFolder } from "./workspace";
+import {
+  basename,
+  dirname,
+  diskFolders,
+  driveRootOf,
+  isInside,
+  placeOf,
+  realPath,
+} from "../fsModel";
 
-export const PERSONAL_NAME = "My folder";
-export const MEDIA_NAME = "Server storage";
 export const TAKEN_MESSAGE = "This folder already belongs to a channel.";
-export const OUTSIDE_MESSAGE = "This folder is outside the storage folders the admin allows.";
-const NO_ACCESS_MESSAGE = "You do not have access to this folder.";
+export const DATA_MESSAGE = "This folder belongs to VidAI's own data.";
+export const MISSING_MESSAGE = "This folder does not exist or cannot be read.";
 /** Names the picker makes are at most this long (`guard.safeName(name, { maxChars: 120 })`). */
 const MAX_NAME_CHARS = 120;
 const MAX_NAME_BYTES = 200;
 
-// ---- paths -----------------------------------------------------------------------------------
-
-function isInside(parent: string, child: string): boolean {
-  return child === parent || child.startsWith(parent === "/" ? "/" : `${parent}/`);
-}
-
-function dirname(path: string): string {
-  const cut = path.lastIndexOf("/");
-  return cut <= 0 ? "/" : path.slice(0, cut);
-}
-
-function basename(path: string): string {
-  return path.slice(path.lastIndexOf("/") + 1);
-}
+// ---- names -----------------------------------------------------------------------------------
 
 /** Natural order of `server/src/storage/names.js`: numbers by value, letters without case. */
-function naturalCompare(a: string, b: string): number {
+export function naturalCompare(a: string, b: string): number {
   const chunks = (text: string) => text.match(/\d+|\D+/g) ?? [];
   const left = chunks(a);
   const right = chunks(b);
@@ -80,56 +74,11 @@ function nameProblem(name: string): string | null {
   return null;
 }
 
-// ---- the disk --------------------------------------------------------------------------------
-
-interface Root {
-  name: string;
-  path: string;
-  available: boolean;
-}
-
-/** The storage folders in the order the picker shows them: the default one, then the admin's. */
-function rootsOf(world: World): Root[] {
-  const roots: Root[] = [{ name: MEDIA_NAME, path: MEDIA_ROOT, available: true }];
-  for (const configured of world.adminSettings.storageRoots) {
-    if (roots.some((root) => root.path === configured)) continue;
-    roots.push({
-      name: basename(configured) || configured,
-      path: configured,
-      available: world.fs.some((folder) => folder.path === configured),
-    });
-  }
-  return roots;
-}
-
-/** Every folder that exists with its video count: the records, the channels and what is above. */
-function knownFolders(world: World): Map<string, number> {
-  const known = new Map<string, number>();
-  const add = (path: string, videoCount: number | null) => {
-    for (let at = path; ; at = dirname(at)) {
-      if (!known.has(at)) known.set(at, 0);
-      if (at === path && videoCount !== null) known.set(at, videoCount);
-      if (at === "/") return;
-    }
-  };
-  for (const folder of world.fs) add(folder.path, folder.videoCount);
-  for (const channel of world.channels) add(channel.dir, null);
-  return known;
-}
-
-function ensurePersonal(world: World, user: MockUser): string {
-  const path = personalFolder(user.id);
-  if (!world.fs.some((folder) => folder.path === path)) {
-    world.fs.push({ path, name: user.id, videoCount: 0, children: [] });
-  }
-  return path;
-}
-
 export function storageArea(ctx: MockCtx): Partial<Api> {
   const { world } = ctx;
 
-  /** A path a user gave, made safe: inside a reachable storage folder, not another's folder. */
-  function resolveFor(input: string, user: MockUser): string {
+  /** A path the admin gave, made real: absolute, without `..`. */
+  function resolve(input: string): string {
     if (input.includes("\0")) {
       throw ctx.errors.invalidInput("A folder path cannot contain a NUL character.");
     }
@@ -138,74 +87,42 @@ export function storageArea(ctx: MockCtx): Partial<Api> {
         "Give the full path of the folder, starting at the top of the disk.",
       );
     }
-    const names = input.split("/").filter((name) => name !== "" && name !== ".");
-    if (names.includes("..")) throw ctx.errors.forbidden(OUTSIDE_MESSAGE);
-    const real = `/${names.join("/")}`;
-    if (!rootsOf(world).some((root) => root.available && isInside(root.path, real))) {
-      throw ctx.errors.forbidden(OUTSIDE_MESSAGE);
-    }
-    if (real !== MEDIA_ROOT && isInside(MEDIA_ROOT, real)) {
-      const first = real.slice(MEDIA_ROOT.length + 1).split("/")[0];
-      if (world.users.some((other) => other.id === first && other.id !== user.id)) {
-        throw ctx.errors.forbidden(NO_ACCESS_MESSAGE);
-      }
-    }
-    return real;
+    return realPath(input);
   }
 
   return {
     fsPlaces: () =>
       ctx.run((): FsPlace[] => {
-        const user = ctx.requireUser();
-        return [
-          {
-            name: PERSONAL_NAME,
-            path: ensurePersonal(world, user),
-            kind: "personal",
-            available: true,
-          },
-          ...rootsOf(world).map((root): FsPlace => ({
-            name: root.name,
-            path: root.path,
-            kind: "storage",
-            available: root.available,
-          })),
-        ];
+        ctx.requireAdmin();
+        return world.fsPlaces.map((place) => ({ ...place }));
       }),
 
     fsList: (input) =>
       ctx.run((): FsListing => {
-        const user = ctx.requireUser();
-        const asked = input?.path ?? ensurePersonal(world, user);
-        const real = resolveFor(asked, user);
+        ctx.requireAdmin();
+        const asked = input?.path ?? world.fsPlaces.find((p) => p.kind === "home")?.path ?? "/";
+        const real = resolve(asked);
+        const known = diskFolders(world);
+        if (!known.has(real)) throw ctx.errors.notFound(MISSING_MESSAGE);
         const dirs = world.channels.map((channel) => channel.dir);
-        const own = world.channels.filter((c) => c.userId === user.id).map((c) => c.dir);
-        // Inside a channel of this user is theirs to look at; a stranger's is not.
-        if (dirs.some((dir) => isInside(dir, real)) && !own.some((dir) => isInside(dir, real))) {
-          throw ctx.errors.conflict(TAKEN_MESSAGE);
-        }
-        const known = knownFolders(world);
-        if (!known.has(real)) throw ctx.errors.invalidInput("This folder does not exist.");
-
         const entries: FsEntry[] = [];
         for (const path of known.keys()) {
           if (path === real || dirname(path) !== real) continue;
           const name = basename(path);
           if (name.startsWith(".")) continue;
-          if (real === MEDIA_ROOT && name !== user.id && world.users.some((u) => u.id === name)) {
-            continue;
-          }
           entries.push({
             name,
             path,
-            taken: dirs.some((dir) => isInside(dir, path) || isInside(path, dir)),
+            taken:
+              dirs.some((dir) => isInside(dir, path) || isInside(path, dir)) ||
+              isInside(world.dataDir, path),
           });
         }
         entries.sort((a, b) => naturalCompare(a.name, b.name));
-        const root = rootsOf(world).find((r) => r.available && isInside(r.path, real));
+        const top = driveRootOf(world, real);
         return {
           path: real,
-          parent: root === undefined || root.path === real ? null : dirname(real),
+          parent: top === null || top === real ? null : dirname(real),
           videoCount: known.get(real) ?? 0,
           entries,
         };
@@ -213,22 +130,18 @@ export function storageArea(ctx: MockCtx): Partial<Api> {
 
     fsCreateFolder: ({ parent, name }) =>
       ctx.run(() => {
-        const user = ctx.requireUser();
-        const real = resolveFor(parent, user);
+        ctx.requireAdmin();
+        const real = resolve(parent);
         const problem = nameProblem(name);
         if (problem !== null) throw ctx.errors.invalidInput(problem);
-        if (world.channels.some((channel) => isInside(channel.dir, real))) {
-          throw ctx.errors.conflict(TAKEN_MESSAGE);
-        }
-        const known = knownFolders(world);
-        if (!known.has(real)) {
-          throw ctx.errors.invalidInput("The folder to put it in does not exist.");
-        }
+        const known = diskFolders(world);
+        if (!known.has(real)) throw ctx.errors.notFound("The folder to put it in does not exist.");
         const path = `${real === "/" ? "" : real}/${name}`;
         if (known.has(path)) {
           throw ctx.errors.conflict("A folder with this name already exists here.");
         }
-        world.fs.push({ path, name, videoCount: 0, children: [] });
+        if (placeOf(world, path)?.available === false) throw ctx.errors.notFound(MISSING_MESSAGE);
+        world.fs.push({ path, name, videoCount: 0 });
         return { path };
       }),
   };

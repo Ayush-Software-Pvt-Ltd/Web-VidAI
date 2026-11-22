@@ -162,6 +162,50 @@ export function createChannelsRepo(db, { clock = systemClock } = {}) {
     },
 
     /**
+     * The admin's change of a channel: name, owner, directory and video type, in one step. A new
+     * owner gets the channel last in their order; the videos' rows follow because they hang on
+     * the channel (jobs, notes and revisions keep who made them).
+     * @param {string} id
+     * @param {{ name?: string, userId?: string, dir?: string, videoType?: ChannelVideoType }} patch
+     * @throws {import("../errors.js").AppError} `conflict` when the name or the directory is taken.
+     */
+    adminUpdate(id, patch) {
+      db.transaction(() => {
+        const current = this.byId(id);
+        if (!current) return;
+        let position = current.position;
+        if (patch.userId !== undefined && patch.userId !== current.userId) {
+          const last = db.get(
+            "SELECT MAX(position) AS last FROM channels WHERE user_id = ?",
+            patch.userId,
+          );
+          position = last && last.last !== null ? Number(last.last) + 1 : 0;
+        }
+        try {
+          db.run(
+            "UPDATE channels SET name = ?, user_id = ?, dir = ?, video_type = ?, position = ? WHERE id = ?",
+            patch.name ?? current.name,
+            patch.userId ?? current.userId,
+            patch.dir ?? current.dir,
+            patch.videoType ?? current.videoType,
+            position,
+            id,
+          );
+        } catch (error) {
+          if (/UNIQUE constraint failed: channels\.dir/.test(constraint(error))) {
+            throw conflict("This folder already belongs to a channel.");
+          }
+          if (
+            /UNIQUE constraint failed: channels\.user_id, channels\.name/.test(constraint(error))
+          ) {
+            throw conflict("This user already has a channel with that name.", "name");
+          }
+          throw error;
+        }
+      });
+    },
+
+    /**
      * Gives the user's channels the order of `ids`, which must be all of them.
      * @param {string} userId
      * @param {string[]} ids

@@ -86,12 +86,7 @@ const count = (messages, event) => messages.filter((m) => m.event === event).len
 
 test("library-changed: the owner only", async () => {
   const seen = await during(
-    () =>
-      alice.client.rpc("createChannel", {
-        name: "Another",
-        videoType: "auto",
-        location: { kind: "new", parent: null, folderName: "Another" },
-      }),
+    () => w.adminCreateChannel(alice, { name: "Another", dir: w.channelDir("another") }),
     { until: (s) => count(s.alice, "library-changed") > 0 },
   );
   assert.ok(count(seen.alice, "library-changed") > 0);

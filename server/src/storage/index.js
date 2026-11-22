@@ -1,17 +1,16 @@
-// The storage module (docs/SPEC.md sections 3 and 6): storage folders and path safety, folder
-// browsing, channels, video folders and uploads. `createStorageModule(deps)` is plugged into the
+// The storage module (docs/SPEC.md sections 3 and 6): path safety, the admin's folder picker,
+// channels, video folders and uploads. `createStorageModule(deps)` is plugged into the
 // composition root with one line: `rpc` into `rpc.register`, `routes` into the HTTP server,
 // `start()` and `stop()` into the server's life.
 
 import { createChannelsRepo } from "../db/channels.js";
 import { createUploadsRepo } from "../db/uploads.js";
 import { createChannelsService } from "../channels.js";
+import { createPlaces } from "../platform/places.js";
 import { storageFunctions } from "../rpc/storage.js";
 import { workspaceFunctions } from "../rpc/workspace.js";
 import { createBrowser } from "./browse.js";
 import { createPathGuard } from "./paths.js";
-import { createRootsRemoval } from "./removal.js";
-import { createStorageRoots } from "./roots.js";
 import { createStorageRoutes } from "./routes.js";
 import { createUploads } from "./uploads.js";
 import { createVideoFolders } from "./videoFolder.js";
@@ -29,8 +28,10 @@ import { createVideoFolders } from "./videoFolder.js";
  * @property {(channelId: string) => unknown} [onChannelRemoved] Called after a channel's row
  *   (and with it its videos' rows) is gone; the composition root removes their timeline folders.
  * @property {string} [platform] Only tests pass it (default: the running system).
+ * @property {import("../platform/places.js").PlacesOptions} [placesOptions] Only tests pass it:
+ *   the home folder and, on a Mac, the root and volumes folders the picker reads.
  * @property {string[]} [defaultPromptPaths]
- * @property {Omit<Parameters<typeof createUploads>[0], "repo" | "folders" | "guard" | "settings" | "events" | "clock" | "log" | "platform">} [uploadOptions]
+ * @property {Omit<Parameters<typeof createUploads>[0], "repo" | "folders" | "settings" | "events" | "clock" | "log" | "platform">} [uploadOptions]
  *   Test seams and timings of the uploads (`statfs`, `hooks`, `idleMs`, `staleMs`...).
  */
 
@@ -47,19 +48,19 @@ export function createStorageModule({
   hasActiveJobs,
   onChannelRemoved,
   platform = process.platform,
+  placesOptions = {},
   defaultPromptPaths,
   uploadOptions = {},
 }) {
-  const roots = createStorageRoots({ settings, dataDir, platform });
-  const guard = createPathGuard({ roots, platform });
+  const guard = createPathGuard({ dataDir, platform });
+  const places = createPlaces({ platform, ...placesOptions });
   const channelsRepo = createChannelsRepo(db, { clock });
   const uploadsRepo = createUploadsRepo(db, { clock });
   const folders = createVideoFolders({ channels: channelsRepo, guard, platform });
-  const browser = createBrowser({ roots, guard, channels: channelsRepo, platform });
+  const browser = createBrowser({ guard, channels: channelsRepo, places, platform });
   const uploads = createUploads({
     repo: uploadsRepo,
     folders,
-    guard,
     settings,
     events,
     clock,
@@ -67,13 +68,10 @@ export function createStorageModule({
     platform,
     ...uploadOptions,
   });
-  const removal = createRootsRemoval({ settings, channels: channelsRepo, dataDir, platform });
   const channels = createChannelsService({
     db,
     channels: channelsRepo,
-    roots,
     guard,
-    folders,
     uploads,
     events,
     clock,
@@ -94,30 +92,27 @@ export function createStorageModule({
 
     /**
      * Hooks (`rpc/index.js` `Hooks`): the user's unfinished uploads end with their hidden part
-     * files (channel rows follow with the account, files never), and a storage folder that holds
-     * channels cannot be taken out of the list.
+     * files (channel rows follow with the account, files never).
      */
     hooks: {
       /** @param {string} userId */
       onUserRemoved: (userId) => uploads.cancelAllForUser(userId),
       /** @param {string} userId */
       onUserDisabled: (userId) => uploads.cancelAllForUser(userId),
-      /** @param {Partial<import("../../../src/lib/wire.ts").AdminSettings>} clean */
-      beforeSettingsChange: async (clean) => {
-        if (clean.storageRoots) await removal.check(clean.storageRoots);
-      },
     },
 
     /** What other modules (library, jobs, timeline) build on. */
     api: {
-      roots,
       guard,
       folders,
       uploads,
       channels,
       channelsRepo,
+      /** The directory rule for a channel (`checkChannelDir` of the channels service). */
+      checkChannelDir: channels.checkChannelDir,
       /**
-       * How many uploads of a video are not complete: a video with one does not offer Start Editing.
+       * How many uploads into the video's own `upload` folder are not complete: a video with one does not
+       * offer Start Editing (uploads into the channel's folder block nothing).
        * @param {string} channelId
        * @param {string} folderName
        */

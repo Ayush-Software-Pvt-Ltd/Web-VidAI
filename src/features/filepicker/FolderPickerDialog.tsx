@@ -1,11 +1,14 @@
 /**
- * The in-page folder picker: a dialog in which a person chooses one folder among the folders the
- * admin allows on the server (SPEC section 6, "Storage folders and path safety"). It shows the
- * places (the personal folder and the storage folders), the path, the folders of one folder and a
- * New Folder button, all through the server's `fsPlaces`, `fsList` and `fsCreateFolder`.
+ * The admin's in-page folder picker: a dialog in which the admin chooses one folder anywhere on the
+ * server (SPEC section 6, "Folders on the server"). It shows the places (home, drives and, on a
+ * Mac, volumes), the path, the folders of one folder and a New Folder button, all through the
+ * server's `fsPlaces`, `fsList` and `fsCreateFolder`. A folder that cannot become a channel
+ * (`taken`: it belongs to a channel or to VidAI's own data) is greyed and cannot be chosen, but it
+ * can be opened, as it may hold folders that are free. A place that cannot be reached right now
+ * (an unplugged drive) is greyed too.
  *
  * It is controlled and has no state of its own between openings: the dialog content mounts when
- * `open` becomes true and starts again at `startPath` (or the personal folder).
+ * `open` becomes true and starts again at `startPath` (or the home folder).
  */
 import {
   ArrowUp,
@@ -43,7 +46,7 @@ export interface FolderPickerDialogProps {
   title?: string;
   /** The text of the button that chooses. Default: `Choose "<name of the folder>"`. */
   confirmLabel?: string;
-  /** The folder to open first. Default (or when it cannot be shown): the personal folder. */
+  /** The folder to open first. Default (or when it cannot be shown): the home folder. */
   startPath?: string | null;
 }
 
@@ -65,7 +68,7 @@ export function FolderPickerDialog({ open, onOpenChange, ...rest }: FolderPicker
 
 function placeIcon(place: FsPlace) {
   if (!place.available) return Unplug;
-  return place.kind === "personal" ? House : HardDrive;
+  return place.kind === "home" ? House : HardDrive;
 }
 
 function videoFilesText(count: number): string {
@@ -105,8 +108,9 @@ function PickerContent({
   const entries = listing?.entries ?? [];
   const selectedEntry = entries.find((entry) => entry.path === selected);
   const place = location === null ? null : browser.placeOf(location);
-  const crumbs = location === null ? [] : crumbsBelow(location, rootCrumb(place));
-  const example = browser.places.find((p) => p.kind === "storage")?.path ?? "/srv/footage";
+  const crumbs =
+    location === null ? [] : crumbsBelow(location, rootCrumb(browser.driveOf(location)));
+  const example = browser.places.find((p) => p.kind === "home")?.path ?? "/srv/footage";
 
   const focusList = () => {
     listRef.current?.focus();
@@ -114,7 +118,11 @@ function PickerContent({
 
   // ---- choosing ----------------------------------------------------------------------------
 
-  const primaryDisabled = error !== null || shown === null || selectedEntry?.taken === true;
+  // What would be chosen: the selected folder, else the one shown.
+  const chosenIsTaken = selectedEntry
+    ? selectedEntry.taken
+    : shown !== null && browser.isTaken(shown.path);
+  const primaryDisabled = error !== null || shown === null || chosenIsTaken;
   const primaryLabel =
     confirmLabel ??
     `Choose "${selectedEntry ? selectedEntry.name : location === null ? "" : leafName(shown?.path ?? location)}"`;
@@ -192,7 +200,7 @@ function PickerContent({
             if (item.available) void go(item.path);
             else {
               browser.say({
-                text: `"${item.name}" cannot be reached right now. Ask the admin to check it.`,
+                text: `"${item.name}" cannot be reached right now. Check that the drive is connected.`,
                 tone: "error",
               });
             }
@@ -301,7 +309,7 @@ function PickerContent({
       <div className="flex min-h-0 flex-1 border-t border-separator">
         <nav
           aria-label="Places"
-          className="w-[176px] shrink-0 overflow-y-auto border-r border-separator bg-subtle/60 p-2"
+          className="w-[200px] shrink-0 overflow-y-auto border-r border-separator bg-subtle/60 p-2"
         >
           <ul className="space-y-0.5">{browser.places.map(placeButton)}</ul>
         </nav>
@@ -361,7 +369,7 @@ function PickerContent({
                         void go(location);
                       }}
                     >
-                      Try again
+                      Try Again
                     </Button>
                   }
                 />
@@ -378,10 +386,20 @@ function PickerContent({
               </p>
             )}
           </div>
-          {shown !== null && shown.videoCount > 0 && (
-            <p className="shrink-0 border-t border-separator px-4 py-1.5 text-sm text-fg-subtle">
-              {videoFilesText(shown.videoCount)}
+          {chosenIsTaken ? (
+            <p
+              role="status"
+              className="shrink-0 border-t border-separator px-4 py-1.5 text-sm text-fg-muted"
+            >
+              {TAKEN_HINT} Choose another folder.
             </p>
+          ) : (
+            shown !== null &&
+            shown.videoCount > 0 && (
+              <p className="shrink-0 border-t border-separator px-4 py-1.5 text-sm text-fg-subtle">
+                {videoFilesText(shown.videoCount)}
+              </p>
+            )
           )}
         </div>
       </div>
@@ -396,14 +414,14 @@ function PickerContent({
               setFolderError(null);
             }}
           >
-            New folder
+            New Folder
           </Button>
         </div>
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="primary"
           disabled={primaryDisabled}
-          title={selectedEntry?.taken ? TAKEN_HINT : primaryLabel}
+          title={chosenIsTaken ? TAKEN_HINT : primaryLabel}
           className="max-w-[300px]"
           onClick={choose}
         >

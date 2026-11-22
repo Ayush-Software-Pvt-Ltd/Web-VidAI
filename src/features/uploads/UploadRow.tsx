@@ -1,12 +1,12 @@
-import { CircleCheck, FileVideo, Pause, Play, TriangleAlert, X } from "lucide-react";
+import { CircleCheck, File, Pause, Play, TriangleAlert, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { Button, ConfirmDialog, IconButton, ProgressBar, TruncatedText } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useUploads } from "./env";
-import { FOLDER_LABELS, percentOf, statusText } from "./summary";
+import { percentOf, statusText } from "./summary";
 import { canRetry, needsCancelConfirm, type UploadItem } from "./uploadStore";
 
-/** One file of the upload area, in every state. */
+/** One file of the Upload Files dialog, in every state. */
 export function UploadRow({ item }: { item: UploadItem }) {
   const controller = useUploads();
   const [confirming, setConfirming] = useState(false);
@@ -35,12 +35,9 @@ export function UploadRow({ item }: { item: UploadItem }) {
         ) : failed ? (
           <TriangleAlert className="size-4 shrink-0 text-danger" aria-hidden />
         ) : (
-          <FileVideo className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+          <File className="size-4 shrink-0 text-fg-subtle" aria-hidden />
         )}
         <TruncatedText text={item.name} className="min-w-0 text-base font-medium text-fg" />
-        <span className="shrink-0 rounded bg-neutral-soft px-1.5 py-px text-xs text-fg-muted">
-          {FOLDER_LABELS[item.folder]}
-        </span>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {(phase === "waiting" || phase === "sending") && (
             <IconButton

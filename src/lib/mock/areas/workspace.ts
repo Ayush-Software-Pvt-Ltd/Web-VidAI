@@ -1,6 +1,8 @@
 /**
  * The workspace area: the settings the screens need, the harness and readiness reads, and the
- * channels (create, change, remove, order, export and import) with the server's rules and refusals.
+ * user's own channel functions: the video type, prompts and styles (`updateChannel`), the order,
+ * export and import (which only updates channels of the same name). Making, renaming, moving and
+ * removing channels is the admin's (`adminChannels.ts`).
  */
 import type { Api } from "../../api";
 import type {
@@ -9,43 +11,18 @@ import type {
   ChannelsDocument,
   ChannelsDocumentEntry,
   ChannelVideoType,
+  ImportResult,
 } from "../../types";
 import type { MockCtx } from "../ctx";
 import { CHANNEL_SLOTS, MAX_IMPORTED_CHANNELS, checkChannelName, profileProblem } from "../rules";
-import { isActiveState } from "../rules";
 import { emitLibrary } from "./library";
-import { nextId, type MockChannel, type World } from "../world";
+import type { MockChannel, World } from "../world";
 
-/** Where a user's own channel folders are made when the person does not choose a parent. */
-export const MEDIA_ROOT = "/var/lib/vidai/media";
 const VIDEO_TYPES: readonly ChannelVideoType[] = ["auto", "long", "short"];
 const FORMAT = "vidai-channels";
 
 export function channelOf({ userId: _owner, ...channel }: MockChannel): Channel {
   return channel;
-}
-
-/** The server's sentence for a path outside every storage folder (`storage/paths.js`). */
-const OUTSIDE_MESSAGE = "This folder is outside the storage folders the admin allows.";
-
-/** Whether `inner` lies below `outer` (not the same folder). */
-function isInside(outer: string, inner: string): boolean {
-  return inner.startsWith(`${outer}/`);
-}
-
-export function personalFolder(userId: string): string {
-  return `${MEDIA_ROOT}/${userId}`;
-}
-
-/** A name as a folder name: no separators, no leading dot. */
-export function folderNameFor(name: string): string {
-  const cleaned = name
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/^\.+/, "");
-  return cleaned === "" ? "Channel" : cleaned;
 }
 
 /** The profile of a new channel: the default prompt in slot 1, the rest empty. */
@@ -109,11 +86,6 @@ export function workspaceArea(ctx: MockCtx): Partial<Api> {
     if (!found) throw ctx.errors.notFound("That channel was not found.");
     return found;
   };
-  const nameTaken = (userId: string, name: string, exceptId: string | null) =>
-    world.channels.some(
-      (c) =>
-        c.userId === userId && c.id !== exceptId && c.name.toLowerCase() === name.toLowerCase(),
-    );
   const changed = (userId: string) => emitLibrary(ctx, userId);
 
   return {
@@ -139,76 +111,10 @@ export function workspaceArea(ctx: MockCtx): Partial<Api> {
         return user.role === "admin" ? world.readinessAdmin : world.readinessUser;
       }),
 
-    createChannel: (input) =>
-      ctx.run(() => {
-        const user = ctx.requireUser();
-        const checked = checkChannelName(input.name);
-        if ("error" in checked) throw ctx.errors.invalidInput(checked.error);
-        if (!VIDEO_TYPES.includes(input.videoType)) {
-          throw ctx.errors.invalidInput("The video type must be auto, long or short.");
-        }
-        if (nameTaken(user.id, checked.name, null)) {
-          throw ctx.errors.conflict("You already have a channel with this name.");
-        }
-        // The server's rules (`server/src/channels.js` `assertUsableDirectory`, `storage/paths.js`).
-        const roots = [MEDIA_ROOT, ...world.adminSettings.storageRoots];
-        const within = (dir: string) => roots.some((root) => dir === root || isInside(root, dir));
-        let dir: string;
-        if (input.location.kind === "link") {
-          dir = input.location.dir.replace(/\/+$/, "");
-          if (!within(dir)) throw ctx.errors.forbidden(OUTSIDE_MESSAGE);
-        } else {
-          const parent = (input.location.parent ?? personalFolder(user.id)).replace(/\/+$/, "");
-          if (!within(parent)) throw ctx.errors.forbidden(OUTSIDE_MESSAGE);
-          const given = input.location.folderName?.trim();
-          dir = `${parent}/${given ? folderNameFor(given) : folderNameFor(checked.name)}`;
-          if (world.channels.some((c) => c.dir === dir)) {
-            throw ctx.errors.conflict("A folder with this name already exists there.");
-          }
-        }
-        // A storage folder, or somebody's personal folder in the media folder, is never a channel.
-        const personal =
-          isInside(MEDIA_ROOT, dir) && !dir.slice(MEDIA_ROOT.length + 1).includes("/");
-        if (roots.includes(dir) || personal) {
-          throw ctx.errors.invalidInput(
-            "A storage folder cannot be a channel itself. Choose or make a folder inside it.",
-          );
-        }
-        // Not the same as, inside or around a channel of anybody.
-        if (
-          world.channels.some((c) => c.dir === dir || isInside(c.dir, dir) || isInside(dir, c.dir))
-        ) {
-          throw ctx.errors.conflict("This folder already belongs to a channel.");
-        }
-        const profile = defaultProfile(world);
-        const channel: MockChannel = {
-          id: nextId(world, "c0ffee").padEnd(32, "0"),
-          userId: user.id,
-          name: checked.name,
-          dir,
-          videoType: input.videoType,
-          long: structuredClone(profile),
-          short: structuredClone(profile),
-          available: true,
-        };
-        world.channels.push(channel);
-        changed(user.id);
-        return channelOf(channel);
-      }),
-
     updateChannel: ({ id, update }) =>
       ctx.run(() => {
         const user = ctx.requireUser();
         const channel = own(user.id, id);
-        let name = channel.name;
-        if (update.name !== null) {
-          const checked = checkChannelName(update.name);
-          if ("error" in checked) throw ctx.errors.invalidInput(checked.error);
-          if (nameTaken(user.id, checked.name, id)) {
-            throw ctx.errors.conflict("You already have a channel with this name.");
-          }
-          name = checked.name;
-        }
         if (update.videoType !== null && !VIDEO_TYPES.includes(update.videoType)) {
           throw ctx.errors.invalidInput("The video type must be auto, long or short.");
         }
@@ -219,37 +125,11 @@ export function workspaceArea(ctx: MockCtx): Partial<Api> {
           const problem = profile === null ? null : profileProblem(profile);
           if (problem) throw ctx.errors.invalidInput(`The ${field}: ${problem}`);
         }
-        channel.name = name;
         if (update.videoType !== null) channel.videoType = update.videoType;
         if (update.long !== null) channel.long = structuredClone(update.long);
         if (update.short !== null) channel.short = structuredClone(update.short);
         changed(user.id);
         return channelOf(channel);
-      }),
-
-    removeChannel: ({ id }) =>
-      ctx.run(() => {
-        const user = ctx.requireUser();
-        own(user.id, id);
-        const active = world.jobs.some(
-          (job) => job.view.videoId.startsWith(`${id}/`) && isActiveState(job.view.state),
-        );
-        if (active) {
-          throw ctx.errors.conflict("Stop the running edits of this channel's videos first.");
-        }
-        world.channels = world.channels.filter((c) => c.id !== id);
-        const gone = new Set(
-          world.jobs.filter((job) => job.view.videoId.startsWith(`${id}/`)).map((j) => j.view.id),
-        );
-        world.jobs = world.jobs.filter((job) => !gone.has(job.view.id));
-        world.jobLogs = Object.fromEntries(
-          Object.entries(world.jobLogs).filter(([jobId]) => !gone.has(jobId)),
-        );
-        world.videos = world.videos.filter((v) => v.channelId !== id);
-        world.archived = world.archived.filter((a) => a.channelId !== id);
-        world.uploads = world.uploads.filter((u) => !u.videoId.startsWith(`${id}/`));
-        changed(user.id);
-        return null;
       }),
 
     reorderChannels: ({ ids }) =>
@@ -290,40 +170,26 @@ export function workspaceArea(ctx: MockCtx): Partial<Api> {
       }),
 
     importChannels: ({ document }) =>
-      ctx.run(() => {
+      ctx.run((): ImportResult => {
         const user = ctx.requireUser();
         const entries = parseDocument(ctx, document);
         let updated = 0;
-        let created = 0;
+        const skipped: string[] = [];
         for (const entry of entries) {
           const current = world.channels.find(
             (c) => c.userId === user.id && c.name.toLowerCase() === entry.name.toLowerCase(),
           );
-          if (current) {
-            current.videoType = entry.videoType;
-            current.long = structuredClone(entry.long);
-            current.short = structuredClone(entry.short);
-            updated += 1;
+          if (!current) {
+            skipped.push(entry.name);
             continue;
           }
-          let dir = `${personalFolder(user.id)}/${folderNameFor(entry.name)}`;
-          for (let n = 2; world.channels.some((c) => c.dir === dir); n += 1) {
-            dir = `${personalFolder(user.id)}/${folderNameFor(entry.name)} ${n}`;
-          }
-          world.channels.push({
-            id: nextId(world, "c0ffee").padEnd(32, "0"),
-            userId: user.id,
-            name: entry.name,
-            dir,
-            videoType: entry.videoType,
-            long: structuredClone(entry.long),
-            short: structuredClone(entry.short),
-            available: true,
-          });
-          created += 1;
+          current.videoType = entry.videoType;
+          current.long = structuredClone(entry.long);
+          current.short = structuredClone(entry.short);
+          updated += 1;
         }
-        changed(user.id);
-        return { updated, created };
+        if (updated > 0) changed(user.id);
+        return { updated, skipped };
       }),
   };
 }

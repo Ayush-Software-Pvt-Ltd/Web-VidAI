@@ -126,6 +126,8 @@ export function createEmptyWorld(now: number): World {
     launches: {},
     failJobsWith: null,
 
+    dataDir: "/Users/vidai/VidAI Data",
+    fsPlaces: [],
     fs: [],
     uploads: [],
 
@@ -141,7 +143,6 @@ export function createEmptyWorld(now: number): World {
       cpuTotalPercent: 100,
       gpuPerEditPercent: 50,
       gpuTotalPercent: 100,
-      storageRoots: [],
       maxUploadGb: 50,
       proxyCacheGb: 20,
     },

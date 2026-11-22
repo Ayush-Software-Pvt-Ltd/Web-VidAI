@@ -3,7 +3,8 @@
  * the page (a folder can hold thousands of entries). Keyboard: arrows, Home, End, Page Up and
  * Down move the selection, letters jump by the first letters of a name, Enter opens the selected
  * folder, Backspace and Cmd/Ctrl+Up go up. A folder that belongs to a channel is dimmed and
- * labelled; it can be selected and opened (it may hold folders that are free) but not chosen.
+ * labelled "In use"; it can be selected and opened (it may hold folders that are free) but not
+ * chosen.
  */
 import { Folder } from "lucide-react";
 import {
@@ -27,8 +28,8 @@ const OVERSCAN = 8;
 const FALLBACK_HEIGHT = 560;
 const TYPE_AHEAD_MS = 800;
 
-/** The sentence for a folder of a channel (the server's own). */
-export const TAKEN_HINT = "This folder already belongs to a channel.";
+/** Why a `taken` folder cannot be chosen: it is, holds or lies inside a channel or VidAI's data. */
+export const TAKEN_HINT = "Belongs to a channel or to VidAI's own data.";
 
 export interface FolderListProps {
   id: string;
@@ -255,9 +256,7 @@ export function FolderList({
                   aria-hidden
                 />
                 <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-                {entry.taken && (
-                  <span className="shrink-0 text-sm text-fg-subtle">Used by a channel</span>
-                )}
+                {entry.taken && <span className="shrink-0 text-sm text-fg-subtle">In use</span>}
               </div>
             );
           })}

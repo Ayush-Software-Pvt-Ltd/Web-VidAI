@@ -288,22 +288,15 @@ describe("mock admin area: settings", () => {
     expect((await backend.adminGetSettings()).maxEdits).toBe(3);
   });
 
-  it("cleans storage folders: full paths only, no duplicates, no trailing slash", async () => {
+  it("has no storage folders setting any more", async () => {
     const backend = make();
-    const after = await backend.adminUpdateSettings({
-      storageRoots: ["/srv/media/", "/srv/other", " /srv/media ", "/srv/x/../other"],
-    });
-    expect(after.storageRoots).toEqual(["/srv/media", "/srv/other"]);
+    expect(await backend.adminGetSettings()).not.toHaveProperty("storageRoots");
     await expect(
-      backend.adminUpdateSettings({ storageRoots: ["relative/dir"] }),
+      backend.adminUpdateSettings({ storageRoots: ["/srv/media"] } as never),
     ).rejects.toMatchObject({
       code: "invalidInput",
-      message: '"relative/dir" is not a full folder path.',
+      message: 'There is no setting called "storageRoots".',
     });
-    await expect(backend.adminUpdateSettings({ storageRoots: [""] })).rejects.toMatchObject({
-      code: "invalidInput",
-    });
-    expect((await backend.adminGetSettings()).storageRoots).toEqual(["/srv/media", "/srv/other"]);
   });
 
   it("announces the public settings to everybody and plans the queues again", async () => {

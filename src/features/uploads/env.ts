@@ -3,12 +3,18 @@
  * uploads controller that belongs to that store, so the dialog, the rows and `UploadsHost` all see
  * the same running uploads.
  */
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useStore } from "zustand";
 import type { Api } from "@/lib/api";
 import { useAppEnv } from "@/lib/appEnv";
 import type { AppStore } from "@/lib/store";
-import { createUploadsController, type UploadItem, type UploadsController } from "./uploadStore";
+import type { UploadTarget } from "@/lib/types";
+import {
+  createUploadsController,
+  sameTarget,
+  type UploadItem,
+  type UploadsController,
+} from "./uploadStore";
 
 const controllers = new WeakMap<AppStore, UploadsController>();
 
@@ -16,7 +22,7 @@ const controllers = new WeakMap<AppStore, UploadsController>();
 export function uploadsFor(api: Api, store: AppStore): UploadsController {
   let controller = controllers.get(store);
   if (!controller) {
-    controller = createUploadsController(api, store);
+    controller = createUploadsController(api);
     controllers.set(store, controller);
   }
   return controller;
@@ -27,23 +33,22 @@ export function useUploads(): UploadsController {
   return uploadsFor(api, store);
 }
 
-/** The uploads of one video (in the order they were added). */
-export function useVideoUploads(videoId: string): UploadItem[] {
+/** The uploads into one folder (in the order they were added). */
+export function useTargetUploads(target: UploadTarget): UploadItem[] {
   const controller = useUploads();
   const items = useStore(controller.state, (s) => s.items);
-  return useMemo(() => items.filter((item) => item.videoId === videoId), [items, videoId]);
+  const kind = target.kind;
+  const id = target.kind === "video" ? target.videoId : target.channelId;
+  return useMemo(
+    () =>
+      items.filter((item) =>
+        sameTarget(item.target, kind === "video" ? { kind, videoId: id } : { kind, channelId: id }),
+      ),
+    [items, kind, id],
+  );
 }
 
-/**
- * The handler the main window gives to `NewVideoProvider` of the library: the toolbar's New Video
- * button calls it with the selected channel (`null` for All Channels).
- */
-export function useOpenNewVideo(): (channelId: string | null) => void {
-  const controller = useUploads();
-  return useCallback(
-    (channelId: string | null) => {
-      controller.openNewVideo(channelId);
-    },
-    [controller],
-  );
+/** The uploads of one video (in the order they were added). */
+export function useVideoUploads(videoId: string): UploadItem[] {
+  return useTargetUploads({ kind: "video", videoId });
 }

@@ -97,6 +97,15 @@ const WINDOWS_FORBIDDEN = /[<>:"|?*]/;
 const WINDOWS_DEVICE =
   /^(con|prn|aux|nul|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])(\..*)?$/i;
 
+/**
+ * Whether Windows reserves `name` for a device (`CON`, `NUL.txt`, `LPT1`...), on any system: a file
+ * that is uploaded here may be opened on a Windows computer later.
+ * @param {string} name
+ */
+export function isWindowsDeviceName(name) {
+  return WINDOWS_DEVICE.test(name);
+}
+
 /** The longest name, in bytes of UTF-8; leaves room for the hidden `.<name>.<id>.part` of an upload. */
 export const MAX_NAME_BYTES = 200;
 

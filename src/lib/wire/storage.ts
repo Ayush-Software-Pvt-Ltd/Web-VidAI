@@ -1,17 +1,19 @@
-// Wire types of the storage area (docs/SPEC.md section 6, "Storage folders and path safety" and
-// "Uploads"): the in-page folder picker and uploads. Pure declarations; every field is always
-// present (`null` when empty).
+// Wire types of the storage area (docs/SPEC.md section 6, "Folders on the server" and
+// "Uploads"): the admin's folder picker over the server's whole file system, and uploads.
+// Pure declarations; every field is always present (`null` when empty).
 
 /** Where a place in the folder picker comes from. */
 export type FsPlaceKind =
-  /** The user's own folder, `<data dir>/media/<user id>/`; always the first place. */
-  | "personal"
-  /** A storage folder of the admin's list, or the default `<data dir>/media`. */
-  | "storage";
+  /** The home folder of the account the server runs as; always the first place. */
+  | "home"
+  /** A drive: the file system's root `/` on a Mac, each drive letter (`C:`) on Windows. */
+  | "drive"
+  /** A mounted volume on a Mac (`/Volumes/<name>`): internal, external and network drives. */
+  | "volume";
 
-/** One entry of the folder picker's sidebar (`fsPlaces`). */
+/** One entry of the admin's folder picker sidebar (`fsPlaces`). */
 export interface FsPlace {
-  /** What the picker shows, e.g. "My folder" or the last part of the storage folder. */
+  /** What the picker shows, e.g. "Home", "Macintosh HD", "Backup SSD" or "D:". */
   name: string;
   /** Absolute real path on the server. */
   path: string;
@@ -26,8 +28,8 @@ export interface FsEntry {
   /** Absolute path, ready to send back to `fsList`. */
   path: string;
   /**
-   * True when this folder is, contains or lies inside a channel directory (of any user, the
-   * answer never says whose), so it cannot become a channel; the picker greys it out.
+   * True when this folder is, contains or lies inside a channel directory, or lies inside the
+   * server's data directory, so it cannot become a channel; the picker greys it out.
    */
   taken: boolean;
 }
@@ -36,7 +38,7 @@ export interface FsEntry {
 export interface FsListing {
   /** The folder that was listed (its real path). */
   path: string;
-  /** The folder above it, `null` at the top of a storage folder. */
+  /** The folder above it, `null` at the top of a drive. */
   parent: string | null;
   /** How many video files lie directly in this folder (a hint for choosing the right folder). */
   videoCount: number;
@@ -50,8 +52,17 @@ export interface FsCreatedFolder {
   path: string;
 }
 
-/** Which folder of a video an upload goes to. */
-export type UploadFolder = "video" | "broll";
+/** The folder an upload goes to: `<video folder>/upload/` or `<channel directory>/upload/`. */
+export type UploadTarget =
+  { kind: "video"; videoId: string } | { kind: "channel"; channelId: string };
+
+/** A file in an `upload` folder (`listUploads`). */
+export interface UploadedFile {
+  name: string;
+  size: number;
+  /** Milliseconds since 1970. */
+  modifiedAt: number;
+}
 
 /** What `createUpload` answers: the id to send the bytes to (`PUT /api/upload/<id>`). */
 export interface UploadTicket {

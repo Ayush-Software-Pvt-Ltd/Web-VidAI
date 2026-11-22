@@ -1,9 +1,10 @@
-// Uploads (docs/SPEC.md section 6, "Uploads"). A user uploads files into a video folder or its
-// B-roll folder. `create` checks the name, the size and that no such file exists; the browser then
-// sends the bytes in order with `PUT /api/upload/<id>?offset=<n>`. Bytes go to the hidden
-// `.<name>.<id>.part` file of the target folder (hidden from the scanner); when the last byte has
-// arrived the file gets its name by a link that fails if the name is taken, so an existing file
-// is never overwritten, not even one that appeared while the upload ran.
+// Uploads (docs/SPEC.md section 6, "Uploads"). A user uploads files of any type into the `upload`
+// folder of one of their videos or of one of their channels, and nowhere else. `create` checks
+// the name, the size and that no such file exists; the browser then sends the bytes in order with
+// `PUT /api/upload/<id>?offset=<n>`. Bytes go to the hidden `.<name>.<id>.part` file of the target
+// folder (hidden from the scanner and from `list`); when the last byte has arrived the file gets
+// its name by a link that fails if the name is taken, so an existing file is never overwritten,
+// not even one that appeared while the upload ran.
 //
 // What the browser can count on: the part file's size is the truth (the row only mirrors it), a
 // request that breaks off keeps what arrived, a wrong offset changes nothing, and one upload has
@@ -13,9 +14,11 @@ import { constants } from "node:fs";
 import fsp from "node:fs/promises";
 import { AppError, conflict, invalidInput, notFound } from "../errors.js";
 import { foldName, pathApi } from "../platform/fsnames.js";
-import { brollFolderName } from "./names.js";
+import { checkUploadName, naturalCompare } from "./names.js";
 
 /** @typedef {import("../../../src/lib/wire/storage.ts").UploadTicket} UploadTicket */
+/** @typedef {import("../../../src/lib/wire/storage.ts").UploadTarget} UploadTarget */
+/** @typedef {import("../../../src/lib/wire/storage.ts").UploadedFile} UploadedFile */
 /** @typedef {import("../../../src/lib/wire/storage.ts").UploadState} UploadState */
 /** @typedef {import("../../../src/lib/wire/storage.ts").UploadProgress} UploadProgress */
 /** @typedef {import("../db/uploads.js").UploadRecord} UploadRecord */
@@ -30,30 +33,8 @@ export const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 /** A body that sends nothing for this long counts as broken off (the HTTP layer sets no request timeout for uploads). */
 export const IDLE_MS = 60 * 1000;
 
-/** Video, audio, pictures, text (SPEC section 6). */
-export const ALLOWED_EXTENSIONS = [
-  "mp4",
-  "mov",
-  "m4v",
-  "mkv",
-  "mts",
-  "m2ts",
-  "avi",
-  "webm",
-  "wav",
-  "mp3",
-  "m4a",
-  "aac",
-  "flac",
-  "png",
-  "jpg",
-  "jpeg",
-  "webp",
-  "gif",
-  "txt",
-  "md",
-  "srt",
-];
+/** The folder uploads go to, compared ignoring letter case (an existing `Upload` is used as it is). */
+export const UPLOAD_FOLDER = "upload";
 
 /** A `PUT` whose offset is not where the upload is; `received` is where it is. */
 export class OffsetConflict extends AppError {
@@ -75,7 +56,6 @@ export class OffsetConflict extends AppError {
  * @param {{
  *   repo: import("../db/uploads.js").UploadsRepo,
  *   folders: import("./videoFolder.js").VideoFolders,
- *   guard: import("./paths.js").PathGuard,
  *   settings: { getAll(): { maxUploadGb: number } },
  *   events: { emit(event: { event: string, payload: unknown, userId: string | null, admins: boolean }): void },
  *   clock: import("../db/open.js").Clock,
@@ -93,7 +73,6 @@ export class OffsetConflict extends AppError {
 export function createUploads({
   repo,
   folders,
-  guard,
   settings,
   events,
   clock,
@@ -123,47 +102,64 @@ export function createUploads({
   const codeOf = (error) => /** @type {{ code?: string }} */ (error).code;
 
   /**
-   * The folder an upload's bytes go to.
-   * @param {import("./videoFolder.js").ResolvedVideo} video
-   * @param {"video" | "broll"} folder
-   * @param {boolean} create Make the B-roll folder when it is missing.
-   * @returns {Promise<string>} A real path directly inside the video folder (or the video folder).
+   * The `upload` folder directly inside `parent` (a real folder of a video or channel). An existing
+   * folder in another letter case is used as it is; a link, or a file, with that name is not.
+   * @param {string} parent
+   * @param {boolean} create Make the folder when it is missing.
+   * @returns {Promise<string | null>} Its path, or null when it is missing and not made.
+   * @throws {AppError} `conflict` when the name is taken by something that is not a folder.
    */
-  async function targetFolder(video, folder, create) {
-    if (folder === "video") return video.dir;
-    const items = await fsp.readdir(video.dir, { withFileTypes: true });
-    const names = items.filter((item) => item.isDirectory()).map((item) => item.name);
-    const name = brollFolderName(names);
-    const wanted = api.join(video.dir, name);
-    if (create && !names.includes(name)) {
-      try {
-        await fsp.mkdir(wanted);
-      } catch (error) {
-        if (codeOf(error) !== "EEXIST") {
-          throw new AppError("io", "The server cannot make the B-roll folder.", { cause: error });
-        }
+  async function uploadFolder(parent, create) {
+    const unusable = () => conflict("The upload folder here cannot be used.");
+    /** @type {import("node:fs").Dirent[]} */
+    let items;
+    try {
+      items = await fsp.readdir(parent, { withFileTypes: true });
+    } catch (error) {
+      throw new AppError("io", "The server cannot read this folder.", { cause: error });
+    }
+    const same = items.filter((item) => item.name.toLowerCase() === UPLOAD_FOLDER);
+    const folders = same
+      .filter((item) => item.isDirectory())
+      .map((item) => item.name)
+      .sort(naturalCompare);
+    const existing = folders.includes(UPLOAD_FOLDER) ? UPLOAD_FOLDER : folders[0];
+    if (existing !== undefined) return api.join(parent, existing);
+    if (same.length > 0) throw unusable();
+    if (!create) return null;
+    const wanted = api.join(parent, UPLOAD_FOLDER);
+    try {
+      await fsp.mkdir(wanted);
+    } catch (error) {
+      if (codeOf(error) !== "EEXIST") {
+        throw new AppError("io", "The server cannot make the upload folder.", { cause: error });
       }
     }
-    const real = await guard.resolveInside(wanted).catch(() => null);
-    const unusable = conflict("The B-roll folder of this video cannot be used.");
-    if (real === null) throw unusable;
-    // A B-roll folder that is a link elsewhere is not inside this video.
-    if (!guard.isSame(api.dirname(real), video.dir)) throw unusable;
-    const stat = await fsp.stat(real).catch(() => null);
-    if (!stat?.isDirectory()) {
-      if (create || stat) throw unusable;
-      throw notFound("The B-roll folder of this video was not found.");
-    }
-    return real;
+    // Made a moment ago (or by someone else just now): it must be a real folder, not a link.
+    if (!(await fsp.lstat(wanted).catch(() => null))?.isDirectory()) throw unusable();
+    return wanted;
+  }
+
+  /**
+   * The real folder that holds an upload's `upload` folder.
+   * @param {UploadRecord} row
+   * @param {boolean} scoped Resolve through the uploading user's own channels (the default); the
+   *   server's own clean-up of a channel whose owner changed passes false.
+   * @returns {Promise<string>}
+   */
+  async function parentOf(row, scoped) {
+    if (!scoped) return (await folders.locate(row.channelId, row.folderName)).dir;
+    if (row.folderName === null) return (await folders.channelDir(row.userId, row.channelId)).dir;
+    return (await folders.resolveVideo(row.userId, `${row.channelId}/${row.folderName}`)).dir;
   }
 
   /**
    * @param {UploadRecord} row
-   * @param {boolean} [create]
+   * @param {boolean} [scoped]
    */
-  async function locate(row, create = false) {
-    const video = await folders.resolveVideo(row.userId, `${row.channelId}/${row.folderName}`);
-    const target = await targetFolder(video, row.folder, create);
+  async function locate(row, scoped = true) {
+    const target = await uploadFolder(await parentOf(row, scoped), false);
+    if (target === null) throw notFound("The upload folder was not found.");
     return {
       target,
       part: api.join(target, `.${row.name}.${row.id}.part`),
@@ -269,7 +265,7 @@ export function createUploads({
       await writer.finished;
     }
     try {
-      const { part } = await locate(row);
+      const { part } = await locate(row, false);
       if ((await sizeOf(part)) !== null) await fsp.unlink(part);
     } catch (error) {
       // The folder may be gone; the row goes either way.
@@ -281,50 +277,92 @@ export function createUploads({
 
   const uploads = {
     /**
+     * Where an upload or a listing goes: the user's own video or channel, never anybody else's.
+     * @param {string} userId
+     * @param {UploadTarget} target
+     * @returns {Promise<{ channelId: string, folderName: string | null, parent: string }>}
+     * @throws {AppError} `notFound` for a foreign or missing video or channel.
+     */
+    async resolveTarget(userId, target) {
+      if (target.kind === "channel") {
+        const { channel, dir } = await folders.channelDir(userId, target.channelId);
+        return { channelId: channel.id, folderName: null, parent: dir };
+      }
+      const video = await folders.resolveVideo(userId, target.videoId);
+      return { channelId: video.channel.id, folderName: video.folderName, parent: video.dir };
+    },
+
+    /**
+     * The files directly in a target's `upload` folder, in natural order; hidden files and
+     * unfinished uploads are left out, and a folder that does not exist yet gives no files.
+     * @param {{ id: string }} user
+     * @param {UploadTarget} target
+     * @returns {Promise<UploadedFile[]>}
+     */
+    async list(user, target) {
+      const { parent } = await uploads.resolveTarget(user.id, target);
+      const folder = await uploadFolder(parent, false);
+      if (folder === null) return [];
+      /** @type {import("node:fs").Dirent[]} */
+      let items;
+      try {
+        items = await fsp.readdir(folder, { withFileTypes: true });
+      } catch (error) {
+        throw new AppError("io", "The server cannot read the upload folder.", { cause: error });
+      }
+      /** @type {UploadedFile[]} */
+      const files = [];
+      for (const item of items) {
+        if (item.name.startsWith(".") || !item.isFile()) continue;
+        const stat = await fsp.stat(api.join(folder, item.name)).catch(() => null);
+        if (stat?.isFile()) {
+          files.push({ name: item.name, size: stat.size, modifiedAt: Math.round(stat.mtimeMs) });
+        }
+      }
+      return files.sort((a, b) => naturalCompare(a.name, b.name));
+    },
+
+    /**
      * Starts an upload.
      * @param {{ id: string }} user
-     * @param {{ videoId: string, folder: "video" | "broll", name: string, size: number }} input
+     * @param {{ target: UploadTarget, name: string, size: number }} input
      * @returns {Promise<UploadTicket>}
      */
-    async create(user, { videoId, folder, name, size }) {
-      const safe = guard.safeName(name);
-      const extension = safe.includes(".")
-        ? safe.slice(safe.lastIndexOf(".") + 1).toLowerCase()
-        : "";
-      if (!ALLOWED_EXTENSIONS.includes(extension)) {
-        throw invalidInput(
-          "This kind of file cannot be uploaded. Videos, audio, pictures and text files (txt, md, srt) can.",
-        );
-      }
+    async create(user, { target, name, size }) {
+      const safe = checkUploadName(name, platform);
       if (!Number.isSafeInteger(size) || size < 1) throw invalidInput("That file is empty.");
       const maxGb = settings.getAll().maxUploadGb;
       if (size > maxGb * GB) {
         throw new AppError("tooLarge", `A file can be at most ${maxGb} GB.`);
       }
 
-      const video = await folders.resolveVideo(user.id, videoId);
-      const target = await targetFolder(video, folder, true);
-      const final = api.join(target, safe);
-      if (
-        await fsp.lstat(final).then(
-          () => true,
-          () => false,
-        )
-      ) {
-        throw conflict("A file with this name already exists in this folder.");
+      const where = await uploads.resolveTarget(user.id, target);
+      const folder = await uploadFolder(where.parent, false);
+      if (folder !== null) {
+        const final = api.join(folder, safe);
+        if (
+          await fsp.lstat(final).then(
+            () => true,
+            () => false,
+          )
+        ) {
+          throw conflict("A file with this name already exists in this folder.");
+        }
       }
       const wanted = foldName(safe, platform);
-      for (const other of repo.listForTarget(video.channel.id, video.folderName, folder)) {
+      for (const other of repo.listForTarget(where.channelId, where.folderName)) {
         if (foldName(other.name, platform) !== wanted) continue;
-        const { part } = await locate(other).catch(() => ({ part: null }));
+        const { part } = await locate(other, false).catch(() => ({ part: null }));
         const unfinished =
           other.received < other.size || (part !== null && (await sizeOf(part)) !== null);
-        if (unfinished) throw conflict("A file with this name is already being uploaded.");
+        if (unfinished) {
+          throw conflict("A file with this name is already being uploaded.");
+        }
         repo.delete(other.id);
       }
 
       try {
-        const free = await statfs(target);
+        const free = await statfs(folder ?? where.parent);
         const available = Number(free.bavail) * Number(free.bsize);
         if (size + FREE_SPACE_MARGIN > available) {
           throw new AppError(
@@ -337,11 +375,11 @@ export function createUploads({
         if (error instanceof AppError) throw error;
       }
 
+      await uploadFolder(where.parent, true);
       const row = repo.create({
         userId: user.id,
-        channelId: video.channel.id,
-        folderName: video.folderName,
-        folder,
+        channelId: where.channelId,
+        folderName: where.folderName,
         name: safe,
         size,
       });
@@ -411,7 +449,11 @@ export function createUploads({
       await cancelRow(row);
     },
 
-    /** @param {string} channelId */
+    /**
+     * Stops every unfinished upload into the channel's `upload` folder and into the `upload`
+     * folders of its videos, whoever started them, and deletes their part files.
+     * @param {string} channelId
+     */
     async cancelAllForChannel(channelId) {
       for (const row of repo.listForChannel(channelId)) await cancelRow(row);
     },

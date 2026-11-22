@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { JobState, VideoAction } from "../types";
 import {
   checkChannelName,
-  checkVideoName,
   computeActions,
   isActiveState,
-  isReservedChannelEntry,
+  isNeverAVideo,
   resolveVideoType,
+  uploadNameProblem,
   type ActionFacts,
 } from "./rules";
 
@@ -112,21 +112,56 @@ describe("names", () => {
     expect(checkChannelName("bad\u0007name")).toHaveProperty("error");
   });
 
-  it("refuses video names that are paths, hidden or reserved", () => {
-    expect(checkVideoName(" Good Name ")).toEqual({ name: "Good Name" });
+  it("knows which folders of a channel directory are never videos", () => {
+    for (const name of [
+      ".hidden",
+      "CLAUDE_VE",
+      "CLAUDE_VE_ALL",
+      "upload",
+      "Upload",
+      "UPLOAD",
+      "Style",
+      "samples",
+      "Host Pictures",
+    ]) {
+      expect(isNeverAVideo(name), name).toBe(true);
+    }
+    for (const name of ["Holiday", "uploads", "my upload", "Day 1"]) {
+      expect(isNeverAVideo(name), name).toBe(false);
+    }
+  });
+
+  it("accepts any file name an upload may have", () => {
+    for (const name of [
+      "a.mp4",
+      "notes.pdf",
+      "no extension",
+      "Report 2026.final.zip",
+      "x".repeat(200),
+    ]) {
+      expect(uploadNameProblem(name), name).toBeNull();
+    }
+  });
+
+  it("refuses upload names with separators, control characters, dots, spaces and Windows names", () => {
     for (const bad of [
       "",
-      "..",
-      "a/b",
-      "a:b",
+      "x".repeat(201),
+      "a/b.mp4",
+      "a\\b.mp4",
+      "a\u0007b.mp4",
       ".hidden",
-      "CLAUDE_VE_ALL",
-      "Style",
-      "x".repeat(121),
+      "..",
+      "name.",
+      "name ",
+      "CON",
+      "con.txt",
+      "LPT1",
+      "nul.tar.gz",
     ]) {
-      expect(checkVideoName(bad)).toHaveProperty("error");
+      expect(uploadNameProblem(bad), JSON.stringify(bad)).toEqual(expect.any(String));
     }
-    expect(isReservedChannelEntry("CLAUDE_VE")).toBe(true);
-    expect(isReservedChannelEntry("Holiday")).toBe(false);
+    expect(uploadNameProblem("console.txt")).toBeNull();
+    expect(uploadNameProblem("COM10")).toBeNull();
   });
 });

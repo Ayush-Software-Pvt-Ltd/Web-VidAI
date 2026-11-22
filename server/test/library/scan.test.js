@@ -56,6 +56,7 @@ test("reserved names, hidden entries, plain files and links are not videos", asy
       "CLAUDE_VE_extra",
       "Prompts",
       "Brand Assets",
+      "upload",
     ]) {
       fs.mkdirSync(path.join(dir.dir, name));
     }
@@ -65,7 +66,14 @@ test("reserved names, hidden entries, plain files and links are not videos", asy
     const scan = await scanChannelDirectory(dir.dir);
     const names = scan.videos.map((v) => v.folderName);
     assert.ok(names.includes("001 Real"));
-    for (const name of [".hidden", "CLAUDE_VE", "CLAUDE_VE_extra", "notes.txt", "linked"]) {
+    for (const name of [
+      ".hidden",
+      "CLAUDE_VE",
+      "CLAUDE_VE_extra",
+      "upload",
+      "notes.txt",
+      "linked",
+    ]) {
       assert.ok(!names.includes(name), name);
       assert.ok(!scan.folderNames.includes(name), name);
     }
@@ -141,6 +149,24 @@ test("the B-roll folder: a matching name is used, else the default name", async 
       (await scanVideoFolder(path.join(dir.dir, "without"), "without", dir.dir))?.brollFolder,
       "Broll",
     );
+  } finally {
+    dir.cleanup();
+  }
+});
+
+test("a video's own `upload` folder is not B-roll and its files are not A-roll", async () => {
+  const dir = tempFolder();
+  try {
+    write(path.join(dir.dir, "v", "main.mp4"), "12345");
+    write(path.join(dir.dir, "v", "upload", "big.mp4"), "1234567890");
+    write(path.join(dir.dir, "v", "upload", "note.txt"));
+    const scanned = await scanVideoFolder(path.join(dir.dir, "v"), "v", dir.dir);
+    assert.equal(scanned?.brollFolder, "Broll");
+    assert.deepEqual(
+      scanned?.arollFiles.map((file) => file.name),
+      ["main.mp4"],
+    );
+    assert.equal(scanned?.mainAroll?.name, "main.mp4");
   } finally {
     dir.cleanup();
   }

@@ -1,6 +1,7 @@
 // The world of one run: a throwaway data folder (seeded so edits can start without the network),
-// a storage folder with one channel folder and one video folder holding a short A-roll, the fake
-// Claude Code, and the real server started on a free port.
+// a folder outside the data folder with one channel folder and one video folder holding a short
+// A-roll (the admin gives it to the user in the UI), the fake Claude Code, and the real server
+// started on a free port.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";

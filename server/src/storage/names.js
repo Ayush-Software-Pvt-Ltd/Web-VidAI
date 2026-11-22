@@ -1,7 +1,12 @@
 // Folder naming rules (docs/SPEC.md section 6, "Videos"): reserved names inside a channel, the B-roll folder and the natural
-// order of names. Shared by video creation, uploads and the library.
+// order of names, and the rule for the name of an uploaded file. Shared by uploads, the file routes
+// and the library.
+
+import { invalidInput } from "../errors.js";
+import { isWindowsDeviceName, nameProblem } from "../platform/fsnames.js";
 
 const CHANNEL_ASSET_FOLDERS = [
+  "upload",
   "style",
   "sample",
   "samples",
@@ -13,7 +18,7 @@ const CHANNEL_ASSET_FOLDERS = [
 
 /**
  * A name inside a channel directory that is never a video: hidden names, names starting with
- * `CLAUDE_VE`, and the asset folders (compared ignoring case).
+ * `CLAUDE_VE`, the channel's `upload` folder and the asset folders (compared ignoring case).
  * @param {string} name
  */
 export function isReservedChannelEntry(name) {
@@ -83,4 +88,34 @@ export function naturalCompare(a, b) {
   }
   if (left.length !== right.length) return left.length < right.length ? -1 : 1;
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Why `name` is not an allowed name for an uploaded file, or `null` (docs/SPEC.md section 6,
+ * "Uploads"): 1 to 200 characters, no path separators, no control characters, no leading dot, no
+ * trailing dot or space, and not a name Windows reserves (`CON`, `LPT1`...). The last two rules
+ * hold on every system, so a file put in a folder on a Mac can be opened on a Windows computer.
+ * @param {string} name
+ * @param {string} [platform]
+ * @returns {string | null} A sentence for the user.
+ */
+export function uploadNameProblem(name, platform = process.platform) {
+  const problem = nameProblem(name, { platform });
+  if (problem) return problem;
+  if (name.endsWith(".")) return "A file name cannot end with a dot.";
+  if (isWindowsDeviceName(name)) return "This name is reserved by Windows.";
+  return null;
+}
+
+/**
+ * @param {unknown} name
+ * @param {string} [platform]
+ * @returns {string} The name, unchanged.
+ * @throws {import("../errors.js").AppError} `invalidInput` with `field: "name"`.
+ */
+export function checkUploadName(name, platform = process.platform) {
+  if (typeof name !== "string") throw invalidInput("A file name must be text.", "name");
+  const problem = uploadNameProblem(name, platform);
+  if (problem) throw invalidInput(problem, "name");
+  return name;
 }

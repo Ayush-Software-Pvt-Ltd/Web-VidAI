@@ -7,7 +7,6 @@ import type {
   Timeline,
   TimelineNote,
   TimelineOp,
-  VideoRef,
   VideoType,
   VideoView,
 } from "../types";
@@ -29,7 +28,6 @@ export interface CommandActions {
   adminSetJobUrgent: (jobId: string, urgent: boolean) => Promise<JobView>;
   /** Admin: skips the start delay for one waiting edit. */
   adminStartJobNow: (jobId: string) => Promise<JobView>;
-  createVideo: (channelId: string, name: string) => Promise<VideoRef>;
   setVideoTypeOverride: (videoId: string, videoType: VideoType | null) => Promise<VideoView>;
   editTimeline: (videoId: string, revision: number, op: TimelineOp) => Promise<Timeline>;
   undoTimeline: (videoId: string) => Promise<Timeline>;
@@ -88,11 +86,6 @@ export function createCommandsSlice({ api, get, call }: SliceContext): CommandsS
     renderFinal: (input) => job(() => api.renderFinal(input)),
     adminSetJobUrgent: (jobId, urgent) => job(() => api.adminSetJobUrgent({ jobId, urgent })),
     adminStartJobNow: (jobId) => job(() => api.adminStartJobNow({ jobId })),
-    async createVideo(channelId, name) {
-      const ref = await call(() => api.createVideo({ channelId, name }));
-      await get().refreshLibrary();
-      return ref;
-    },
     async setVideoTypeOverride(videoId, videoType) {
       const video = await call(() => api.setVideoTypeOverride({ videoId, videoType }));
       get().applyVideo(video);

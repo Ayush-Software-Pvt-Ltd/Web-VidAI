@@ -2,7 +2,6 @@
 // stored one row per key. The harness part is only `setup` for now; the API address, key, model
 // and efforts are added with their own settings later.
 
-import { isAbsolute, resolve } from "node:path";
 import { SETUPS } from "./agents/harness.js";
 import { invalidInput } from "./errors.js";
 
@@ -10,13 +9,11 @@ import { invalidInput } from "./errors.js";
 /** @typedef {import("../../src/lib/wire.ts").PublicSettings} PublicSettings */
 
 const PERCENT_STEP = 5;
-const MAX_STORAGE_ROOTS = 100;
 
 /**
  * @typedef {{ kind: "int", min: number, max: number, default: number }
  *   | { kind: "percent", default: number }
- *   | { kind: "setup", default: import("../../src/lib/wire.ts").Setup }
- *   | { kind: "paths", default: string[] }} Definition
+ *   | { kind: "setup", default: import("../../src/lib/wire.ts").Setup }} Definition
  */
 
 /** @type {{ [K in keyof AdminSettings]: Definition }} */
@@ -32,7 +29,6 @@ export const DEFINITIONS = {
   cpuTotalPercent: { kind: "percent", default: 100 },
   gpuPerEditPercent: { kind: "percent", default: 100 },
   gpuTotalPercent: { kind: "percent", default: 100 },
-  storageRoots: { kind: "paths", default: [] },
   maxUploadGb: { kind: "int", min: 1, max: 2000, default: 200 },
   proxyCacheGb: { kind: "int", min: 1, max: 2000, default: 50 },
 };
@@ -48,7 +44,7 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
  * @param {string} key
  * @param {Definition} definition
  * @param {unknown} value
- * @returns {number | string | string[]}
+ * @returns {number | string}
  */
 function sanitize(key, definition, value) {
   switch (definition.kind) {
@@ -66,27 +62,6 @@ function sanitize(key, definition, value) {
       const setup = SETUPS.find((candidate) => candidate === value);
       if (!setup) throw invalidInput(`The setting "${key}" must be one of ${SETUPS.join(", ")}.`);
       return setup;
-    }
-    case "paths": {
-      if (!Array.isArray(value))
-        throw invalidInput(`The setting "${key}" must be a list of folders.`);
-      if (value.length > MAX_STORAGE_ROOTS) {
-        throw invalidInput(`There can be at most ${MAX_STORAGE_ROOTS} storage folders.`);
-      }
-      /** @type {Set<string>} */
-      const folders = new Set();
-      for (const entry of /** @type {unknown[]} */ (value)) {
-        if (typeof entry !== "string") {
-          throw invalidInput(`The setting "${key}" must be a list of folders.`);
-        }
-        const trimmed = entry.trim();
-        if (trimmed === "" || trimmed.includes("\0") || !isAbsolute(trimmed)) {
-          throw invalidInput(`"${entry}" is not a full folder path.`);
-        }
-        // resolve() drops a trailing separator and `..`, so "/a/b/" and "/a/b" are one folder.
-        folders.add(resolve(trimmed));
-      }
-      return [...folders];
     }
   }
 }
@@ -118,7 +93,7 @@ export function createSettings({ repo }) {
 
     /**
      * Checks a partial change the way `update` does and returns what would be stored (numbers
-     * clamped, folders cleaned), without writing anything.
+     * clamped), without writing anything.
      * @param {unknown} patch
      * @returns {Partial<AdminSettings>}
      */

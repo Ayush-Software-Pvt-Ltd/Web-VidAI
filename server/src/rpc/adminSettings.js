@@ -17,7 +17,7 @@ export function adminSettingsFunctions({ settings, events, hooks }) {
       access: "admin",
       // The input is the change itself, e.g. `{ maxEdits: 3 }`; unknown keys are refused.
       async handler(input) {
-        // The modules may refuse the checked change (a storage folder that still holds channels).
+        // The modules may refuse the checked change (a module that cannot allow it right now).
         await hooks?.beforeSettingsChange?.(settings.check(input));
         const all = settings.update(input);
         // Every signed-in page shows the public part (setup, limits); admins' own pages use the answer.

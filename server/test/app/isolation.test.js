@@ -35,13 +35,31 @@ test("a user cannot see, open or download anything of another user", async () =>
       ["getJobLog", { jobId: started.json.id }],
       ["pauseJob", { jobId: started.json.id }],
       ["stopJob", { jobId: started.json.id }],
-      ["updateChannel", { id: video.channelId, update: { name: "Mine now" } }],
-      ["removeChannel", { id: video.channelId }],
+      ["updateChannel", { id: video.channelId, update: { videoType: "short" } }],
     ];
     for (const [name, input] of calls) {
       const reply = await b.client.rpc(/** @type {string} */ (name), input);
       assert.equal(reply.status, 404, `${name}: ${reply.status} ${reply.text}`);
     }
+    // Channels belong to the admin: a plain user cannot make, change, list or remove any, not even
+    // their own (forbidden: the functions exist for the admin, so nothing is hidden by the name).
+    const adminCalls = [
+      [
+        "adminCreateChannel",
+        { name: "Mine", userId: b.id, dir: video.channelDir, videoType: "auto" },
+      ],
+      ["adminUpdateChannel", { id: video.channelId, update: { userId: b.id } }],
+      ["adminRemoveChannel", { id: video.channelId }],
+      ["adminListChannels", {}],
+    ];
+    for (const [name, input] of adminCalls) {
+      const reply = await b.client.rpc(/** @type {string} */ (name), input);
+      assert.equal(reply.status, 403, `${name}: ${reply.status} ${reply.text}`);
+    }
+    const stillMine = await w.admin.rpc("adminListChannels");
+    const channelRow = stillMine.json.find((/** @type {any} */ c) => c.id === video.channelId);
+    assert.equal(channelRow?.userId, a.id, "the channel is still A's");
+
     const listing = await b.client.rpc("getLibrary");
     assert.ok(!JSON.stringify(listing.json).includes(video.videoId), "B's library is empty of A's");
 

@@ -12,16 +12,23 @@
 // in the folders the installers use (`wellKnownDirs`). The first that reports a 2.x version is
 // the program: an `opencode2` usually, or an `opencode` that is 2.x. An `opencode2` shim left
 // behind after the v1 installer replaced the binary next to it reports 1.x and is passed over;
-// when nothing is 2.x such a shim is reported as found but not supported, with its version, while
-// a 1.x `opencode` alone means OpenCode 2 is not installed.
+// when nothing is 2.x such a shim is reported as found but not supported, with its version, and
+// so is an `opencode` that did not say its version (its path is shown and the version is `null`),
+// while a 1.x `opencode` alone means OpenCode 2 is not installed.
 //
-// On Windows the official installer is bash-only, so OpenCode 2 comes from WinGet
-// (`winget install --id Anomaly.OpenCode --exact`, which puts a link in
-// `%LOCALAPPDATA%\Microsoft\WinGet\Links`), an older manual install in `%USERPROFILE%\.opencode\bin`,
-// npm's global folder (`%APPDATA%\npm`, `.cmd` shims) or scoop (`%USERPROFILE%\scoop\shims`). Each
-// name is looked for with `PATHEXT` (always `.exe` and `.cmd` too) on `PATH` and then in those
-// folders (`windowsDirs`). A `.cmd` shim is never run through `cmd.exe` by hand:
-// `platform/launch.js` (behind `runHelper`) reads npm's shim and starts the program it points to.
+// On Windows the program is called `opencode` only (WinGet and npm's `.exe` have no `opencode2`;
+// the official bash installer adds an `opencode2.cmd` shim). OpenCode 2 comes from WinGet
+// (`winget install --id Anomaly.OpenCode --exact`: the program is in
+// `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Anomaly.OpenCode_*` and linked from
+// `%LOCALAPPDATA%\Microsoft\WinGet\Links`; without the right to make links WinGet only adds the
+// package folder to the user's `PATH` in the registry, which a server started earlier does not
+// see, so the package folder is searched too; a machine-wide install uses the same two folders
+// under `%ProgramFiles%\WinGet`), the bash installer or an older manual install in
+// `%USERPROFILE%\.opencode\bin`, npm's global folder (`%APPDATA%\npm`, `.cmd` shims) or scoop
+// (`%USERPROFILE%\scoop\shims`). Each name is looked for with `PATHEXT` (always `.exe` and `.cmd`
+// too) on `PATH` and then in those folders (`windowsDirs`). A `.cmd` shim is never run through
+// `cmd.exe` by hand: `platform/launch.js` (behind `runHelper`) reads the shim and starts the
+// program it points to.
 //
 // The version comes from `--version` (auto-update off), which 2.x prints as `opencode v2.2.6`.
 // VidAI drives the v2 API of OpenCode 2.x.
@@ -81,23 +88,56 @@ export function wellKnownDirs(arch) {
   return ["~/.opencode/bin", ...brew, "~/.local/bin"];
 }
 
+/** The prefix (lowercase) of the folder name WinGet gives the package `Anomaly.OpenCode`. */
+const WINGET_PACKAGE_PREFIX = "anomaly.opencode_";
+
 /**
- * The folders Windows installs of OpenCode 2 use, searched after `PATH`, in order: WinGet's links
- * (the official way), the older manual install, npm's global folder, scoop's shims and
- * `~\.local\bin`. `env` is the child environment (names ignore letter case); a missing
- * `LOCALAPPDATA` or `APPDATA` falls back to the usual place inside `USERPROFILE`.
- * @param {Readonly<Record<string, string | undefined>>} env
+ * The names in a folder, `[]` when it cannot be listed.
+ * @param {string} dir
  * @returns {string[]}
  */
-export function windowsDirs(env) {
+function listDirOnDisk(dir) {
+  try {
+    return fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The folders Windows installs of OpenCode 2 use, searched after `PATH`, in order: WinGet's links
+ * (the official way), the package folders WinGet unpacks the program into (the `PATH` entry of a
+ * link-less install is one of them), the same two under `%ProgramFiles%\WinGet` (machine scope),
+ * the older manual install, npm's global folder, scoop's shims and `~\.local\bin`. `env` is the
+ * child environment (names ignore letter case); a missing `LOCALAPPDATA` or `APPDATA` falls back
+ * to the usual place inside `USERPROFILE`.
+ * @param {Readonly<Record<string, string | undefined>>} env
+ * @param {(dir: string) => string[]} [listDir] The names in a folder, `[]` when it cannot be
+ *   listed. Default: none, so the function stays pure; `findOpencode2` passes the real one.
+ * @returns {string[]}
+ */
+export function windowsDirs(env, listDir = () => []) {
   const win = path.win32;
   const profile = getVar(env, "USERPROFILE");
   /** @param {...string} parts @returns {string | null} */
   const underProfile = (...parts) => (profile === null ? null : win.join(profile, ...parts));
   const local = getVar(env, "LOCALAPPDATA") ?? underProfile("AppData", "Local");
   const roaming = getVar(env, "APPDATA") ?? underProfile("AppData", "Roaming");
+  /** @param {string | null} base The folder that holds `WinGet`. @returns {string[]} */
+  const wingetDirs = (base) => {
+    if (base === null) return [];
+    const root = win.join(base, "WinGet");
+    const packages = win.join(root, "Packages");
+    const own = listDir(packages)
+      .filter((name) => name.toLowerCase().startsWith(WINGET_PACKAGE_PREFIX))
+      .sort()
+      .map((name) => win.join(packages, name));
+    return [win.join(root, "Links"), ...own];
+  };
+  const programFiles = getVar(env, "ProgramFiles");
   return [
-    local === null ? null : win.join(local, "Microsoft", "WinGet", "Links"),
+    ...wingetDirs(local === null ? null : win.join(local, "Microsoft")),
+    ...wingetDirs(programFiles),
     underProfile(".opencode", "bin"),
     roaming === null ? null : win.join(roaming, "npm"),
     underProfile("scoop", "shims"),
@@ -241,7 +281,8 @@ export function parseVersion(text) {
 
 /**
  * The version `--version` prints, for example "1.18.31" (1.x) or "2.2.6" (2.x prints
- * "opencode v2.2.6"), or `null` when it fails, does not start, times out or prints no version.
+ * "opencode v2.2.6"; read from standard error when standard output has none), or `null` when it
+ * fails, does not start, times out or prints no version.
  * Auto-update is switched off for the call, so checking never upgrades the program.
  * @param {string} bin
  * @param {Readonly<Record<string, string | undefined>>} env The environment to run it in.
@@ -257,7 +298,7 @@ export async function version(bin, env, options = {}) {
       timeoutMs: options.timeoutMs ?? VERSION_TIMEOUT_MS,
     });
     if (result.timedOut || result.code !== 0) return null;
-    return parseVersion(result.stdout);
+    return parseVersion(result.stdout) ?? parseVersion(result.stderr);
   } catch {
     return null;
   }
@@ -269,6 +310,8 @@ export async function version(bin, env, options = {}) {
  * @typedef {object} Machine
  * @property {(file: string) => boolean} [isFile] Whether a file exists and can be started.
  * @property {(file: string) => string} [realpath] Where a link ends.
+ * @property {(dir: string) => string[]} [listDir] The names in a folder, `[]` when it cannot be
+ *   listed (Windows: WinGet's package folders).
  * @property {NodeJS.Platform} [platform]
  * @property {string} [arch]
  * @property {string | null} [home]
@@ -284,8 +327,9 @@ export async function version(bin, env, options = {}) {
  *   candidate: found when it can be started, with whatever version it reports (even one that
  *   is not 2.x), `null` when it cannot.
  * - Otherwise the first 2.x of `opencode2` then `opencode` (see the file comment); when none is
- *   2.x, an `opencode2` counts as found (with its version, not supported), a 1.x `opencode`
- *   alone as not installed.
+ *   2.x, an `opencode2` counts as found (with its version, not supported), and so does the first
+ *   `opencode` that did not say its version (version `null`); a 1.x `opencode` alone counts as
+ *   not installed.
  * @param {Readonly<Record<string, string | undefined>>} env The environment the program will
  *   run in.
  * @param {Machine} [machine]
@@ -298,9 +342,16 @@ export async function findOpencode2(env, machine = {}) {
       ? machine.home
       : (getVar(env, platform === "win32" ? "USERPROFILE" : "HOME") ?? os.homedir());
   const isFile = machine.isFile ?? ((/** @type {string} */ f) => isExecutable(f, platform));
-  const versionOf =
+  const askVersion =
     machine.versionOf ??
     ((/** @type {string} */ file) => version(file, env, { timeoutMs: machine.timeoutMs }));
+  /** What each file said, so a file is asked once. @type {Map<string, string | null>} */
+  const said = new Map();
+  const versionOf = async (/** @type {string} */ file) => {
+    const answer = await askVersion(file);
+    said.set(file, answer);
+    return answer;
+  };
   const override = getVar(env, OVERRIDE_VAR)?.trim();
   if (override) {
     const bin = expandHome(override, home);
@@ -313,7 +364,7 @@ export async function findOpencode2(env, machine = {}) {
           platform,
           path: getVar(env, "PATH"),
           home,
-          dirs: windowsDirs(env),
+          dirs: windowsDirs(env, machine.listDir ?? listDirOnDisk),
           pathext: getVar(env, "PATHEXT"),
         }
       : {
@@ -327,9 +378,12 @@ export async function findOpencode2(env, machine = {}) {
   const all = candidates(["opencode2", "opencode"], folders, files);
   const found = await firstSupported(all, versionOf);
   if (found === null) return null;
-  // Nothing is 2.x: only an `opencode2` counts as a (wrong) OpenCode 2, never a 1.x `opencode`.
-  const usable = found.version !== null && supported(found.version);
-  return usable || shims.includes(found.path) ? found : null;
+  if (found.version !== null && supported(found.version)) return found;
+  // Nothing is 2.x: an `opencode2` counts as a (wrong) OpenCode 2, and so does an `opencode` that
+  // did not say its version (it may well be 2.x), but never a 1.x `opencode`.
+  if (shims.includes(found.path)) return found;
+  const silent = all.find((file) => said.get(file) === null);
+  return silent === undefined ? null : { path: silent, version: null };
 }
 
 /**

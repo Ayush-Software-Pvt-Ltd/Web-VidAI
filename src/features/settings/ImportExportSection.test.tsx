@@ -112,7 +112,7 @@ describe("Export", () => {
 });
 
 describe("Import", () => {
-  it("sends a good file and says what changed", async () => {
+  it("updates the same-named channels and lists the names that are not the user's", async () => {
     const { user, backend, store } = await setup();
     const document = await backend.exportChannels();
     const first = document.channels[0];
@@ -124,12 +124,14 @@ describe("Import", () => {
     });
     await user.upload(fileInput(), file);
     expect(await screen.findByText("Channels imported")).toBeInTheDocument();
-    expect(screen.getByText("1 channel added and 1 channel updated.")).toBeInTheDocument();
-    // The channel list and the library follow.
+    expect(
+      screen.getByText("1 channel updated. Not in your channels: Brand New Channel."),
+    ).toBeInTheDocument();
+    // An import never makes a channel: only an admin does.
     await waitFor(() => {
       const names = store.getState().workspace.data?.channels.map((c) => c.name) ?? [];
-      expect(names).toContain("Brand New Channel");
-      expect(names).toHaveLength(before + 1);
+      expect(names).not.toContain("Brand New Channel");
+      expect(names).toHaveLength(before);
     });
   });
 
@@ -188,12 +190,14 @@ describe("Import", () => {
 
 describe("describeImport", () => {
   it("names what happened", () => {
-    expect(describeImport({ created: 2, updated: 0 })).toBe("2 channels added.");
-    expect(describeImport({ created: 0, updated: 1 })).toBe("1 channel updated.");
-    expect(describeImport({ created: 1, updated: 3 })).toBe(
-      "1 channel added and 3 channels updated.",
+    expect(describeImport({ updated: 1, skipped: [] })).toBe("1 channel updated.");
+    expect(describeImport({ updated: 3, skipped: ["A", "B"] })).toBe(
+      "3 channels updated. Not in your channels: A, B.",
     );
-    expect(describeImport({ created: 0, updated: 0 })).toBe(
+    expect(describeImport({ updated: 0, skipped: ["A"] })).toBe(
+      "No channel was updated. Not in your channels: A.",
+    );
+    expect(describeImport({ updated: 0, skipped: [] })).toBe(
       "The file had no channels, so nothing changed.",
     );
   });

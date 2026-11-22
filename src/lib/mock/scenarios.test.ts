@@ -97,7 +97,7 @@ describe("scenarios", () => {
     expect(waiting[0]?.startsAt).not.toBeNull();
   });
 
-  it("unreachable-channel reports a channel without videos and refuses a new one in it", async () => {
+  it("unreachable-channel reports a channel without videos and refuses an upload into it", async () => {
     const backend = make(["unreachable-channel"]);
     const { channels } = await backend.getLibrary();
     const lostEntries = channels.filter((c) => !c.available);
@@ -108,7 +108,11 @@ describe("scenarios", () => {
     const lost = workspace.channels.find((c) => !c.available);
     expect(lost?.name).toBe("Tech Reviews");
     await expect(
-      backend.createVideo({ channelId: lost?.id ?? "", name: "New" }),
+      backend.createUpload({
+        target: { kind: "channel", channelId: lost?.id ?? "" },
+        name: "a.png",
+        size: 5,
+      }),
     ).rejects.toMatchObject({
       code: "conflict",
       message: "This channel's folder cannot be reached right now.",

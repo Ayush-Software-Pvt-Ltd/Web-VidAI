@@ -1,7 +1,6 @@
-// Path safety (docs/SPEC.md section 6, "Storage folders and path safety"): every path a user gives
-// is resolved to its real path, links followed, and must lie inside a storage folder, otherwise
-// `forbidden`. Nothing else in the server joins a user's text to a folder without going through
-// `resolveInside` (or `resolveFor`) and `safeName`.
+// Path safety (docs/SPEC.md section 6, "Folders on the server"): every path the admin gives is
+// resolved to its real path, links followed, before it is checked or stored. Users never send a
+// path. Nothing else in the server joins text to a folder without going through `safeName`.
 //
 // The checks that need a file system are in `createPathGuard`; `isInside`, `isSame` and `safeName`
 // are pure and take the platform, so the Windows and macOS rules are tested on any computer.
@@ -14,14 +13,18 @@ import {
   isFullPath,
   nameProblem,
   pathApi,
-  pathSegments,
   segmentProblem,
   withoutNamespacePrefix,
 } from "../platform/fsnames.js";
-import { USER_ID_PATTERN } from "./roots.js";
 
-/** The one sentence for every refused place, so an answer never tells which rule it was. */
-export const OUTSIDE_MESSAGE = "This folder is outside the storage folders the admin allows.";
+/** The sentence for a path that is refused outright: a `..` in it, or a link that loops or leads nowhere. */
+export const REFUSED_MESSAGE = "This path cannot be used.";
+
+/** Said when a folder is, holds or lies inside the channel directory of a channel. */
+export const TAKEN_MESSAGE = "This folder already belongs to a channel.";
+
+/** The sentence for a folder that is, holds or lies inside the server's data directory. */
+export const DATA_DIR_MESSAGE = "This folder belongs to VidAI's own data.";
 
 /**
  * Whether `child` is `parent` or lies inside it. Both must be full paths (`/x`, `C:\x`,
@@ -81,22 +84,12 @@ export function safeName(name, options = {}) {
 const codeOf = (error) => /** @type {{ code?: string }} */ (error).code;
 
 /**
- * Whether two `stat` results (with `bigint`) are the same file. A file system with no ids is trusted.
- * @param {import("node:fs").BigIntStats} a
- * @param {import("node:fs").BigIntStats} b
- */
-function sameIdentity(a, b) {
-  if (a.ino === 0n && b.ino === 0n) return true;
-  return a.dev === b.dev && a.ino === b.ino;
-}
-
-/**
  * @param {{
- *   roots: { realPaths(): Promise<string[]>, mediaPath(): Promise<string> },
+ *   dataDir: string,
  *   platform?: string,
  * }} deps
  */
-export function createPathGuard({ roots, platform = process.platform }) {
+export function createPathGuard({ dataDir, platform = process.platform }) {
   const api = pathApi(platform);
 
   /**
@@ -112,7 +105,7 @@ export function createPathGuard({ roots, platform = process.platform }) {
       throw invalidInput("Give the full path of the folder, starting at the top of the disk.");
     }
     // `..` is refused, not resolved: with links the system resolves it differently from text.
-    if (hasDotDot(input, platform)) throw forbidden(OUTSIDE_MESSAGE);
+    if (hasDotDot(input, platform)) throw forbidden(REFUSED_MESSAGE);
 
     let current = api.resolve(withoutNamespacePrefix(input, platform));
     /** @type {string[]} */
@@ -128,7 +121,7 @@ export function createPathGuard({ roots, platform = process.platform }) {
       } catch (error) {
         if (error instanceof AppError) throw error;
         const code = codeOf(error);
-        if (code === "ELOOP") throw forbidden(OUTSIDE_MESSAGE);
+        if (code === "ELOOP") throw forbidden(REFUSED_MESSAGE);
         if (code === "ENAMETOOLONG") throw invalidInput("A name in this path is too long.");
         if (code !== "ENOENT" && code !== "ENOTDIR") {
           throw new AppError("io", "The server cannot open this folder.", { cause: error });
@@ -139,87 +132,46 @@ export function createPathGuard({ roots, platform = process.platform }) {
           () => true,
           () => false,
         );
-        if (isLink) throw forbidden(OUTSIDE_MESSAGE);
+        if (isLink) throw forbidden(REFUSED_MESSAGE);
         const parent = api.dirname(current);
-        if (parent === current) throw forbidden(OUTSIDE_MESSAGE);
+        if (parent === current) throw forbidden(REFUSED_MESSAGE);
         tail.unshift(api.basename(current));
         current = parent;
       }
     }
   }
 
-  /**
-   * Whether the first `count` names of `real` are the same folder as `root`, by file identity,
-   * so that `/data/MEDIA` is not mistaken for `/data/media` on a case-sensitive disk.
-   * @param {string} root
-   * @param {string} real
-   */
-  async function sameFolderAsRoot(root, real) {
-    let prefix = real;
-    const depth = pathSegments(root, platform).length;
-    while (pathSegments(prefix, platform).length > depth) prefix = api.dirname(prefix);
-    try {
-      const [a, b] = await Promise.all([
-        fsp.stat(root, { bigint: true }),
-        fsp.stat(prefix, { bigint: true }),
-      ]);
-      return sameIdentity(a, b);
-    } catch {
-      return false;
-    }
-  }
-
   const guard = {
     /**
-     * The real path of a path a user gave, which must lie inside a storage folder (or be one).
+     * The real path of a path the admin gave. Where it may lie is the caller's rule (a channel
+     * directory: `checkChannelDir`; a folder to make: `fsCreateFolder`).
      * @param {unknown} input An absolute path; it may be one that does not exist yet.
      * @returns {Promise<string>} The real path.
-     * @throws {AppError} `invalidInput` for text that is not a full path, `forbidden` for a place
-     *   outside the storage folders.
+     * @throws {AppError} `invalidInput` for text that is not a full path, `forbidden` for a path
+     *   with `..` in it or a link that loops or leads nowhere.
      */
-    async resolveInside(input) {
-      const real = await realPathOf(input);
-      if (!(await guard.rootOf(real))) throw forbidden(OUTSIDE_MESSAGE);
-      return real;
-    },
+    resolve: realPathOf,
+
+    /** The real path of the data directory. @returns {Promise<string>} */
+    dataPath: () => fsp.realpath(dataDir),
 
     /**
-     * `resolveInside` for one user: a personal folder of another account is refused too.
-     * @param {unknown} input
-     * @param {string} userId
-     * @returns {Promise<string>}
-     */
-    async resolveFor(input, userId) {
-      const real = await guard.resolveInside(input);
-      await guard.assertNotPrivateToOthers(real, userId);
-      return real;
-    },
-
-    /**
-     * @param {string} real A real path.
-     * @param {string} userId
-     * @throws {AppError} `forbidden` inside `<data dir>/media/<another user's id>/`. The answer
-     *   does not say whose it is.
-     */
-    async assertNotPrivateToOthers(real, userId) {
-      const media = await roots.mediaPath();
-      if (!isInside(media, real, platform) || isSame(media, real, platform)) return;
-      const first = pathSegments(api.relative(media, real), platform)[0] ?? "";
-      if (USER_ID_PATTERN.test(first) && first !== userId) {
-        throw forbidden("You do not have access to this folder.");
-      }
-    },
-
-    /**
-     * The storage folder (real path) a real path lies in, or null.
+     * Whether a real path is, holds or lies inside the data directory.
      * @param {string} real
-     * @returns {Promise<string | null>}
+     * @returns {Promise<boolean>}
      */
-    async rootOf(real) {
-      for (const root of await roots.realPaths()) {
-        if (isInside(root, real, platform) && (await sameFolderAsRoot(root, real))) return root;
-      }
-      return null;
+    async touchesData(real) {
+      const data = await guard.dataPath();
+      return isInside(data, real, platform) || isInside(real, data, platform);
+    },
+
+    /**
+     * Whether a real path is the data directory or lies inside it.
+     * @param {string} real
+     * @returns {Promise<boolean>}
+     */
+    async insideData(real) {
+      return isInside(await guard.dataPath(), real, platform);
     },
 
     /**

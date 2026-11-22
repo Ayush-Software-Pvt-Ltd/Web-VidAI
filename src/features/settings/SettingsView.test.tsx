@@ -28,8 +28,14 @@ async function setup(open?: SettingsTarget, agent = WINDOWS) {
 
 const nav = () => screen.getByRole("navigation", { name: "Settings" });
 const NAME = "Travel Diary";
-const EDITED = `${NAME}edited`;
-const draft = () => screen.getByRole("textbox", { name: "Channel name" });
+/** A field the person can edit: the first Long 16:9 style of the channel. */
+const draft = () => screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Long 16:9 style" });
+let original = "";
+/** Types into the field and remembers what it said before. */
+async function edit(user: ReturnType<typeof userEvent.setup>) {
+  original = draft().value;
+  await user.type(draft(), "edited");
+}
 const question = () => screen.findByRole("dialog", { name: `Save changes to “${NAME}”?` });
 
 describe("Settings frame", () => {
@@ -42,7 +48,7 @@ describe("Settings frame", () => {
       "aria-current",
       "page",
     );
-    expect(draft()).toHaveValue(NAME);
+    expect(screen.getByRole("heading", { name: NAME })).toBeInTheDocument();
     expect(store.getState().settingsSection).toBe("channels");
   });
 
@@ -114,7 +120,7 @@ describe("Settings frame", () => {
 describe("Settings frame: the unsaved-changes guard", () => {
   async function dirty() {
     const ctx = await setup({ section: "channels" });
-    await ctx.user.type(draft(), "edited");
+    await edit(ctx.user);
     return ctx;
   }
 
@@ -123,10 +129,10 @@ describe("Settings frame: the unsaved-changes guard", () => {
     await user.click(within(nav()).getByRole("button", { name: "Appearance" }));
     await question();
     expect(
-      screen.getByText("You changed the name. They are lost unless you save them."),
+      screen.getByText("You changed the Long 16:9 style. They are lost unless you save them."),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Stay" }));
-    expect(draft()).toHaveValue(EDITED);
+    expect(draft()).toHaveValue(`${original}edited`);
     expect(store.getState().settingsSection).toBe("channels");
   });
 
@@ -139,7 +145,7 @@ describe("Settings frame: the unsaved-changes guard", () => {
     expect(store.getState().settingsSection).toBe("importExport");
     // Back in Channels the draft is gone.
     await user.click(within(nav()).getByRole("button", { name: "Channels" }));
-    expect(draft()).toHaveValue(NAME);
+    expect(draft()).toHaveValue(original);
   });
 
   it("Save saves, then switches", async () => {
@@ -161,7 +167,7 @@ describe("Settings frame: the unsaved-changes guard", () => {
     await question();
     await user.click(screen.getByRole("button", { name: "Stay" }));
     expect(store.getState().settingsSection).toBe("channels");
-    expect(draft()).toHaveValue(EDITED);
+    expect(draft()).toHaveValue(`${original}edited`);
   });
 
   it("guards a new target while a draft is open", async () => {
@@ -172,7 +178,7 @@ describe("Settings frame: the unsaved-changes guard", () => {
     await question();
     await user.click(screen.getByRole("button", { name: "Discard Changes" }));
     expect(screen.getByRole("textbox", { name: "Short 9:16 prompt" })).toBeInTheDocument();
-    expect(draft()).toHaveValue(NAME);
+    expect(draft()).toHaveValue(original);
   });
 
   it("guards Esc, Done and Ctrl+, from leaving Settings", async () => {
@@ -229,7 +235,7 @@ describe("Settings frame: the unsaved-changes guard", () => {
 
     it("asks first, keeps the address, and goes after Discard", async () => {
       const { user } = await setup({ section: "channels" });
-      await user.type(draft(), "edited");
+      await edit(user);
       await back();
       await question();
       // The shell (a listener after the guard) has not been told, and the address is back.
@@ -242,13 +248,13 @@ describe("Settings frame: the unsaved-changes guard", () => {
 
     it("Stay leaves everything as it was", async () => {
       const { user } = await setup({ section: "channels" });
-      await user.type(draft(), "edited");
+      await edit(user);
       await back();
       await question();
       await user.click(screen.getByRole("button", { name: "Stay" }));
       expect(seen).toEqual([]);
       expect(window.location.pathname).toBe("/settings/channels");
-      expect(draft()).toHaveValue(EDITED);
+      expect(draft()).toHaveValue(`${original}edited`);
     });
   });
 
@@ -257,7 +263,7 @@ describe("Settings frame: the unsaved-changes guard", () => {
     const clean = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(clean);
     expect(clean.defaultPrevented).toBe(false);
-    await user.type(draft(), "edited");
+    await edit(user);
     const unsaved = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(unsaved);
     expect(unsaved.defaultPrevented).toBe(true);

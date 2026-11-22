@@ -13,6 +13,9 @@
 /* eslint-disable @typescript-eslint/no-invalid-void-type -- `| void` makes the input of a function optional */
 import type {
   AddNoteInput,
+  AdminChannel,
+  AdminChannelCreate,
+  AdminChannelUpdate,
   AdminQueueView,
   AdminSettings,
   ApiModels,
@@ -20,7 +23,6 @@ import type {
   ApiTest,
   ArchivedVideo,
   Channel,
-  ChannelCreate,
   ChannelsDocument,
   ChannelUpdate,
   CleanResult,
@@ -60,13 +62,13 @@ import type {
   TimelineChangedPayload,
   TimelineNote,
   TimelineOp,
-  UploadFolder,
+  UploadedFile,
+  UploadTarget,
   UploadTicket,
   UsageUpdate,
   UsageView,
   UserAccount,
   VideoInputs,
-  VideoRef,
   VideoType,
   VideoView,
   Workspace,
@@ -128,6 +130,12 @@ export interface RpcMethods {
   adminGetQueue: Rpc<void, AdminQueueView>;
   adminSetJobUrgent: Rpc<{ jobId: string; urgent: boolean }, JobView>;
   adminStartJobNow: Rpc<JobIdInput, JobView>;
+  /** Every user's channels, ordered by owner email, then name. */
+  adminListChannels: Rpc<void, AdminChannel[]>;
+  adminCreateChannel: Rpc<AdminChannelCreate, AdminChannel>;
+  adminUpdateChannel: Rpc<{ id: string; update: AdminChannelUpdate }, AdminChannel>;
+  /** Removes the channel's rows only; its directory and every file in it stay. */
+  adminRemoveChannel: Rpc<{ id: string }, null>;
 
   // ---- Workspace ----
   /** `readiness` of the answer is always `null`: ask `getReadiness`. */
@@ -135,9 +143,7 @@ export interface RpcMethods {
   getHarness: Rpc<void, HarnessPublicView>;
   getReadiness: Rpc<void, Readiness>;
   getOpencodeUsage: Rpc<{ refresh?: boolean | null } | void, OpencodeUsage>;
-  createChannel: Rpc<ChannelCreate, Channel>;
   updateChannel: Rpc<{ id: string; update: ChannelUpdate }, Channel>;
-  removeChannel: Rpc<{ id: string }, null>;
   reorderChannels: Rpc<{ ids: string[] }, Channel[]>;
   getDefaultPrompt: Rpc<void, string>;
   exportChannels: Rpc<void, ChannelsDocument>;
@@ -145,7 +151,6 @@ export interface RpcMethods {
 
   // ---- Library ----
   getLibrary: Rpc<void, Library>;
-  createVideo: Rpc<{ channelId: string; name: string }, VideoRef>;
   /** `videoType: null` removes the override. The answer is the video's new `VideoView`. */
   setVideoTypeOverride: Rpc<{ videoId: string; videoType: VideoType | null }, VideoView>;
   getVideoInputs: Rpc<{ videoId: string }, VideoInputs>;
@@ -182,14 +187,15 @@ export interface RpcMethods {
   renderFinal: Rpc<RenderFinalInput, JobView>;
 
   // ---- Storage ----
+  /** Admin only: the drives and volumes of the server. */
   fsPlaces: Rpc<void, FsPlace[]>;
-  /** `path: null` (or left out) lists the top; folders only. */
+  /** Admin only. `path: null` (or left out) lists the home folder; folders only. */
   fsList: Rpc<{ path?: string | null } | void, FsListing>;
+  /** Admin only. */
   fsCreateFolder: Rpc<{ parent: string; name: string }, FsCreatedFolder>;
-  createUpload: Rpc<
-    { videoId: string; folder: UploadFolder; name: string; size: number },
-    UploadTicket
-  >;
+  /** The files in an `upload` folder (none when it does not exist yet), in natural order. */
+  listUploads: Rpc<{ target: UploadTarget }, UploadedFile[]>;
+  createUpload: Rpc<{ target: UploadTarget; name: string; size: number }, UploadTicket>;
   cancelUpload: Rpc<{ id: string }, null>;
 
   // ---- Disk ----
@@ -231,21 +237,22 @@ export const RPC_NAMES = [
   "adminGetQueue",
   "adminSetJobUrgent",
   "adminStartJobNow",
+  "adminListChannels",
+  "adminCreateChannel",
+  "adminUpdateChannel",
+  "adminRemoveChannel",
   // Workspace
   "getWorkspace",
   "getHarness",
   "getReadiness",
   "getOpencodeUsage",
-  "createChannel",
   "updateChannel",
-  "removeChannel",
   "reorderChannels",
   "getDefaultPrompt",
   "exportChannels",
   "importChannels",
   // Library
   "getLibrary",
-  "createVideo",
   "setVideoTypeOverride",
   "getVideoInputs",
   "setVideoInputs",
@@ -278,6 +285,7 @@ export const RPC_NAMES = [
   "fsPlaces",
   "fsList",
   "fsCreateFolder",
+  "listUploads",
   "createUpload",
   "cancelUpload",
   // Disk
@@ -324,6 +332,8 @@ export type SettingsChangedPayload = PublicSettings & { harness?: HarnessPublicV
 export interface EventPayloads {
   /** `null` means "something changed, ask `getLibrary`" (channel and upload changes). */
   "library-changed": Library | null;
+  /** An admin made, changed or removed one of the user's channels: ask `getWorkspace`. */
+  "workspace-changed": null;
   /** Admins also get the jobs of everybody; check `job.userId`. */
   "job-updated": JobView;
   "job-log": JobLog;
@@ -347,6 +357,7 @@ export type EventName = keyof EventPayloads;
 
 export const EVENT_NAMES = [
   "library-changed",
+  "workspace-changed",
   "job-updated",
   "job-log",
   "queue-changed",

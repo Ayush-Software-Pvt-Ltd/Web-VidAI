@@ -8,16 +8,7 @@
  * move between rows, Tab reaches the row's type badge, action buttons and menu, and Enter opens the
  * activity panel (Esc closes it; the panel handles that for the whole window).
  */
-import {
-  CircleAlert,
-  FolderOpen,
-  FolderPlus,
-  FolderX,
-  ListFilter,
-  Plus,
-  RefreshCw,
-  Search,
-} from "lucide-react";
+import { CircleAlert, FolderOpen, FolderX, ListFilter, RefreshCw, Search } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -34,7 +25,6 @@ import { useAppState } from "@/lib/appEnv";
 import { findChannel, selectChannels } from "@/lib/store";
 import type { Library } from "@/lib/types";
 import { buildListModel, FILTER_OPTIONS, type LibraryFilter, type ListModel } from "./model";
-import { useNewVideoHandler } from "./newVideoContext";
 import { unavailableText } from "./presentation";
 import { ROW_HEIGHT, SkeletonRow, VideoRow } from "./VideoRow";
 import { useLibraryView } from "./viewStore";
@@ -80,36 +70,6 @@ function RetryButton({ small = false }: { small?: boolean }) {
       onClick={() => void refresh()}
     >
       Try Again
-    </Button>
-  );
-}
-
-function NewChannelButton() {
-  const openSettings = useAppState((s) => s.openSettings);
-  return (
-    <Button
-      icon={<FolderPlus />}
-      onClick={() => {
-        openSettings({ section: "channels" });
-      }}
-    >
-      New Channel
-    </Button>
-  );
-}
-
-/** The button that starts a new video, only where the uploads feature provides its handler. */
-function NewVideoButton({ channelId }: { channelId: string | null }) {
-  const onNewVideo = useNewVideoHandler();
-  if (!onNewVideo) return null;
-  return (
-    <Button
-      icon={<Plus />}
-      onClick={() => {
-        onNewVideo(channelId);
-      }}
-    >
-      New Video
     </Button>
   );
 }
@@ -427,8 +387,7 @@ export function VideoList() {
       <CenteredState
         icon={<FolderOpen />}
         title="No channels yet"
-        description="A channel is a folder with one folder per video. Add one in Settings to see its videos here."
-        action={<NewChannelButton />}
+        description="An admin adds channels for you."
       />
     );
   } else if (channel && unreachable) {
@@ -445,8 +404,7 @@ export function VideoList() {
       <CenteredState
         icon={<FolderOpen />}
         title={channel ? `No videos in ${channel.name}` : "No videos yet"}
-        description="A video is a folder with its A-roll in it. New videos show up here as soon as they are in their channel."
-        action={<NewVideoButton channelId={selectedChannelId} />}
+        description="A video is a folder with its A-roll in it. It shows up here as soon as it is in the channel's folder."
       />
     );
   } else if (model.videos.length === 0) {

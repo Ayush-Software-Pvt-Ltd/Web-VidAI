@@ -1,6 +1,6 @@
 /**
  * The admin area (done): accounts (`adminListUsers`, `adminCreateUser`, `adminUpdateUser`,
- * `adminDeleteUser`), the queue and storage settings (`adminGetSettings`, `adminUpdateSettings`)
+ * `adminDeleteUser`), the queue, upload and cache settings (`adminGetSettings`, `adminUpdateSettings`)
  * and the admin's queue (`adminGetQueue`, `adminSetJobUrgent`, `adminStartJobNow`). Every function
  * answers `forbidden` to a user. It behaves like `server/src/rpc/adminUsers.js`, `adminSettings.js`
  * and `queue.js`:
@@ -22,7 +22,6 @@ import type { MockCtx } from "../ctx";
 import { QUEUES, viewOf } from "../queue";
 import { isActiveState } from "../rules";
 import { nextId, type MockUser } from "../world";
-import { MEDIA_ROOT } from "./workspace";
 import { adminQueue, adminSetJobUrgent, adminStartJobNow } from "./queue";
 import { kick } from "./jobs";
 import { validateEmail, validatePassword } from "./session";
@@ -39,13 +38,9 @@ export const LAST_ADMIN_DISABLE =
 const SETUPS: readonly Setup[] = ["claudeSubscription", "opencodeGo", "anthropicApi", "openaiApi"];
 const ROLES: readonly Role[] = ["admin", "user"];
 const PERCENT_STEP = 5;
-const MAX_STORAGE_ROOTS = 100;
 
 type Definition =
-  | { kind: "int"; min: number; max: number }
-  | { kind: "percent" }
-  | { kind: "setup" }
-  | { kind: "paths" };
+  { kind: "int"; min: number; max: number } | { kind: "percent" } | { kind: "setup" };
 
 /** The ranges of SPEC section 5, as `server/src/settings.js` has them. */
 export const DEFINITIONS: Record<keyof AdminSettings, Definition> = {
@@ -60,33 +55,11 @@ export const DEFINITIONS: Record<keyof AdminSettings, Definition> = {
   cpuTotalPercent: { kind: "percent" },
   gpuPerEditPercent: { kind: "percent" },
   gpuTotalPercent: { kind: "percent" },
-  storageRoots: { kind: "paths" },
   maxUploadGb: { kind: "int", min: 1, max: 2000 },
   proxyCacheGb: { kind: "int", min: 1, max: 2000 },
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-
-/** `resolve()` of a full path: no trailing slash, no `.` or `..` parts, one slash between parts. */
-function cleanPath(path: string): string {
-  const windows = /^[A-Za-z]:[\\/]/.test(path);
-  const separator = windows ? "\\" : "/";
-  const parts: string[] = [];
-  for (const part of path.split(/[\\/]+/)) {
-    if (part === "" || part === ".") continue;
-    if (part === "..") {
-      // The drive stays in front of a Windows path.
-      if (parts.length > (windows ? 1 : 0)) parts.pop();
-      continue;
-    }
-    parts.push(part);
-  }
-  return windows
-    ? parts.join(separator) + (parts.length === 1 ? separator : "")
-    : `/${parts.join("/")}`;
-}
-
-const isFullPath = (path: string) => path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path);
 
 function sanitize(ctx: MockCtx, key: string, definition: Definition, value: unknown): unknown {
   switch (definition.kind) {
@@ -106,26 +79,6 @@ function sanitize(ctx: MockCtx, key: string, definition: Definition, value: unkn
         throw ctx.errors.invalidInput(`The setting "${key}" must be one of ${SETUPS.join(", ")}.`);
       }
       return setup;
-    }
-    case "paths": {
-      if (!Array.isArray(value)) {
-        throw ctx.errors.invalidInput(`The setting "${key}" must be a list of folders.`);
-      }
-      if (value.length > MAX_STORAGE_ROOTS) {
-        throw ctx.errors.invalidInput(`There can be at most ${MAX_STORAGE_ROOTS} storage folders.`);
-      }
-      const folders = new Set<string>();
-      for (const entry of value as unknown[]) {
-        if (typeof entry !== "string") {
-          throw ctx.errors.invalidInput(`The setting "${key}" must be a list of folders.`);
-        }
-        const trimmed = entry.trim();
-        if (trimmed === "" || trimmed.includes("\0") || !isFullPath(trimmed)) {
-          throw ctx.errors.invalidInput(`"${entry}" is not a full folder path.`);
-        }
-        folders.add(cleanPath(trimmed));
-      }
-      return [...folders];
     }
   }
 }
@@ -147,34 +100,6 @@ function accountOf(ctx: MockCtx, user: MockUser): UserAccount {
 
 const enabledAdmins = (ctx: MockCtx) =>
   ctx.world.users.filter((user) => user.role === "admin" && !user.disabled).length;
-
-/** Whether `path` is `folder` or lies inside it. */
-const isInside = (folder: string, path: string) => path === folder || path.startsWith(`${folder}/`);
-
-/**
- * What the server's `createRootsRemoval.check` does: a change of the storage folders that drops a
- * folder still holding channel directories is refused (`conflict`), naming the folder and how many
- * channels of how many users are inside.
- */
-function checkStorageRoots(ctx: MockCtx, next: readonly string[]): void {
-  const { world } = ctx;
-  const stays = [MEDIA_ROOT, ...next];
-  for (const folder of world.adminSettings.storageRoots) {
-    if (next.includes(folder)) continue;
-    const inside = world.channels.filter(
-      (channel) =>
-        isInside(folder, channel.dir) && !stays.some((other) => isInside(other, channel.dir)),
-    );
-    if (inside.length === 0) continue;
-    const users = new Set(inside.map((channel) => channel.userId)).size;
-    const count = (n: number, one: string, many: string) => `${String(n)} ${n === 1 ? one : many}`;
-    throw ctx.errors.conflict(
-      `${count(inside.length, "channel", "channels")} of ${count(users, "user", "users")} ` +
-        `${inside.length === 1 ? "is" : "are"} in ${folder}. ` +
-        `Move or remove ${inside.length === 1 ? "it" : "them"} first.`,
-    );
-  }
-}
 
 const isEnabledAdmin = (user: MockUser) => user.role === "admin" && !user.disabled;
 
@@ -224,7 +149,9 @@ function removeAccountData(ctx: MockCtx, userId: string): void {
   world.archived = world.archived.filter(
     (entry) => !channelIds.has(splitVideoId(entry.videoId)?.channelId ?? ""),
   );
-  world.uploads = world.uploads.filter((upload) => upload.userId !== userId);
+  world.uploads = world.uploads.filter(
+    (upload) => upload.userId !== userId && !channelIds.has(upload.channelId),
+  );
   world.users = world.users.filter((user) => user.id !== userId);
   emitQueues(ctx, touched);
   kick(ctx);
@@ -320,7 +247,7 @@ export function adminArea(ctx: MockCtx): Partial<Api> {
     adminGetSettings: () =>
       ctx.run(() => {
         ctx.requireAdmin();
-        return { ...world.adminSettings, storageRoots: [...world.adminSettings.storageRoots] };
+        return { ...world.adminSettings };
       }),
 
     adminUpdateSettings: (patch) =>
@@ -336,15 +263,13 @@ export function adminArea(ctx: MockCtx): Partial<Api> {
           }
           clean[key] = sanitize(ctx, key, DEFINITIONS[key as keyof AdminSettings], value);
         }
-        if (Array.isArray(clean.storageRoots))
-          checkStorageRoots(ctx, clean.storageRoots as string[]);
         Object.assign(world.adminSettings, clean);
         const { setup, maxUploadGb, maxEditsPerUser, startDelayMinutes } = world.adminSettings;
         ctx.emit("settings-changed", { setup, maxUploadGb, maxEditsPerUser, startDelayMinutes });
         // The queues are planned again with the new limits.
         kick(ctx);
         emitQueues(ctx, QUEUES);
-        return { ...world.adminSettings, storageRoots: [...world.adminSettings.storageRoots] };
+        return { ...world.adminSettings };
       }),
 
     adminGetQueue: () =>

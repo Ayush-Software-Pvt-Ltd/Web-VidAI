@@ -22,14 +22,13 @@ import type {
   SystemView,
   Timeline,
   TimelineNote,
-  UploadFolder,
   UsageView,
   VideoInputs,
   VideoOutput,
   VideoType,
   ApiModels,
   ApiOption,
-  FsEntry,
+  FsPlace,
   RevisionView,
 } from "../types";
 
@@ -112,15 +111,24 @@ export interface MockJob {
   sim: JobSim;
 }
 
+/**
+ * One row of the server's `uploads` table. A finished upload stands for a file in the `upload`
+ * folder of its target (a video, or a channel when `videoId` is `null`), an unfinished one for a
+ * part file.
+ */
 export interface MockUpload {
   id: string;
+  /** Who started it; the one who may continue or cancel it. */
   userId: string;
-  videoId: string;
-  folder: UploadFolder;
+  channelId: string;
+  /** The video whose `upload` folder it goes to, `null` for the channel's `upload` folder. */
+  videoId: string | null;
   name: string;
   size: number;
   received: number;
   done: boolean;
+  /** When the file got its name (ms); 0 while unfinished. */
+  modifiedAt: number;
 }
 
 /** The timeline of one video with its revisions (the timeline area owns it). */
@@ -133,11 +141,16 @@ export interface MockTimeline {
   previewUrl: string | null;
 }
 
+/**
+ * A folder of the mock server's disk that the admin's folder picker can show. The folders above
+ * it exist too, and so do the directories of the channels, their video folders and their `upload`
+ * folders (the storage area derives them from the world).
+ */
 export interface MockFsFolder {
   path: string;
   name: string;
+  /** How many video files lie directly in it. */
   videoCount: number;
-  children: FsEntry[];
 }
 
 export interface World {
@@ -173,6 +186,10 @@ export interface World {
   failJobsWith: string | null;
 
   // storage and uploads
+  /** The server's own data directory: no channel may be, lie inside or contain it. */
+  dataDir: string;
+  /** The places of the folder picker (home, drives, volumes); a volume may be unavailable. */
+  fsPlaces: FsPlace[];
   fs: MockFsFolder[];
   uploads: MockUpload[];
 

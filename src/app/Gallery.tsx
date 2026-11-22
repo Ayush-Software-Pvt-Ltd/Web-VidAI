@@ -506,8 +506,8 @@ export default function Gallery() {
               <EmptyState
                 icon={<Inbox />}
                 title="No videos yet"
-                description="Add a folder for each video inside a channel folder."
-                action={<Button>New Video</Button>}
+                description="Add a folder for each video inside the channel folder."
+                action={<Button>Upload Files</Button>}
               />
             </div>
             <div className="rounded-md border border-border">

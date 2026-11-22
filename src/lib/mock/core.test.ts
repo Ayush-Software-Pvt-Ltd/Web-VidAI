@@ -53,22 +53,15 @@ async function finish(backend: MockBackend, prefix: string): Promise<JobView> {
 }
 
 describe("channels", () => {
-  it("creates, updates, orders, exports, imports and removes channels", async () => {
+  it("updates, orders, exports and imports the owner's own channels", async () => {
     const backend = make();
-    const created = await backend.createChannel({
-      name: "  Cooking ",
-      videoType: "short",
-      location: { kind: "new", parent: null, folderName: null },
-    });
-    expect(created.name).toBe("Cooking");
-    expect(created.dir).toBe("/var/lib/vidai/media/admin00000000000000000000000001/Cooking");
-    expect(created.long.prompts).toHaveLength(5);
-
+    const [first] = (await backend.getWorkspace()).channels;
     const updated = await backend.updateChannel({
-      id: created.id,
-      update: { name: "Cooking Show", videoType: null, long: null, short: null },
+      id: first!.id,
+      update: { videoType: "short", long: null, short: null },
     });
-    expect(updated).toMatchObject({ name: "Cooking Show", videoType: "short" });
+    expect(updated).toMatchObject({ id: first!.id, name: first!.name, videoType: "short" });
+    expect(updated.long.prompts).toHaveLength(5);
 
     const before = (await backend.getWorkspace()).channels.map((c) => c.id);
     const reordered = await backend.reorderChannels({ ids: [...before].reverse() });
@@ -76,45 +69,33 @@ describe("channels", () => {
 
     const document = await backend.exportChannels();
     expect(document).toMatchObject({ format: "vidai-channels", version: 1 });
-    expect(document.channels).toHaveLength(3);
+    expect(document.channels).toHaveLength(2);
     const result = await backend.importChannels({
       document: {
         ...document,
-        channels: [...document.channels, { ...document.channels[0]!, name: "Brand New" }],
+        channels: [
+          ...document.channels,
+          { ...document.channels[0]!, name: "Brand New" },
+          { ...document.channels[0]!, name: "Another One" },
+        ],
       },
     });
-    expect(result).toEqual({ updated: 3, created: 1 });
-
-    await backend.removeChannel({ id: created.id });
-    const names = (await backend.getWorkspace()).channels.map((c) => c.name);
-    expect(names).not.toContain("Cooking Show");
+    // Import never makes a channel: the names that match none come back as skipped.
+    expect(result).toEqual({ updated: 2, skipped: ["Brand New", "Another One"] });
+    expect((await backend.getWorkspace()).channels).toHaveLength(2);
     expect(await backend.getDefaultPrompt()).toMatch(/\w/);
+  });
+
+  it("has no function to make, rename or remove a channel for a user", () => {
+    const backend = make();
+    for (const name of ["createChannel", "removeChannel", "createVideo"]) {
+      expect(name in backend).toBe(false);
+    }
   });
 
   it("refuses with the server's codes", async () => {
     const backend = make();
-    const location = { kind: "new", parent: null, folderName: null } as const;
-    await expect(
-      backend.createChannel({ name: "  ", videoType: "auto", location }),
-    ).rejects.toMatchObject({ code: "invalidInput" });
-    await expect(
-      backend.createChannel({ name: "beauty channel", videoType: "auto", location }),
-    ).rejects.toMatchObject({ code: "conflict" });
-    await expect(
-      backend.createChannel({
-        name: "Elsewhere",
-        videoType: "auto",
-        location: { kind: "link", dir: "/etc" },
-      }),
-    ).rejects.toMatchObject({ code: "forbidden" });
     const [first] = (await backend.getWorkspace()).channels;
-    await expect(
-      backend.createChannel({
-        name: "Twin",
-        videoType: "auto",
-        location: { kind: "link", dir: first!.dir },
-      }),
-    ).rejects.toMatchObject({ code: "conflict" });
     await expect(backend.reorderChannels({ ids: [first!.id] })).rejects.toMatchObject({
       code: "invalidInput",
     });
@@ -125,7 +106,6 @@ describe("channels", () => {
       backend.updateChannel({
         id: first!.id,
         update: {
-          name: null,
           videoType: null,
           long: { prompts: [], styles: [] },
           short: null,
@@ -134,26 +114,16 @@ describe("channels", () => {
     ).rejects.toMatchObject({ code: "invalidInput" });
   });
 
-  it("refuses to remove a channel with an active job", async () => {
-    const backend = make();
-    const target = await video(backend, "Hair Oil");
-    await backend.startEdit({ videoId: target.id, urgent: false });
-    await expect(backend.removeChannel({ id: target.channelId })).rejects.toMatchObject({
-      code: "conflict",
-    });
-  });
-
   it("keeps users apart: another user's channel, video and job do not exist", async () => {
     const admin = make();
     const user = make(["default"], "user", admin.world);
     const adminVideo = await video(admin, "Hair Oil");
     const job = await admin.startEdit({ videoId: adminVideo.id, urgent: false });
     const notFound = { code: "notFound" };
-    await expect(user.removeChannel({ id: adminVideo.channelId })).rejects.toMatchObject(notFound);
     await expect(
       user.updateChannel({
         id: adminVideo.channelId,
-        update: { name: "x", videoType: null, long: null, short: null },
+        update: { videoType: "long", long: null, short: null },
       }),
     ).rejects.toMatchObject(notFound);
     await expect(user.startEdit({ videoId: adminVideo.id, urgent: false })).rejects.toMatchObject(
@@ -171,29 +141,17 @@ describe("channels", () => {
 });
 
 describe("library", () => {
-  it("creates videos and refuses bad names", async () => {
+  it("never lists a channel's upload folder as a video", async () => {
     const backend = make();
-    const [channel] = (await backend.getWorkspace()).channels;
-    const ref = await backend.createVideo({ channelId: channel!.id, name: " New Video " });
-    expect(ref).toEqual({
-      id: `${channel!.id}/New Video`,
-      channelId: channel!.id,
-      folderName: "New Video",
-    });
-    const row = await video(backend, "New Video");
-    expect(row.arollCount).toBe(0);
-    expect(row.actions).toContain("upload");
-    await expect(
-      backend.createVideo({ channelId: channel!.id, name: "new video" }),
-    ).rejects.toMatchObject({ code: "conflict" });
-    for (const name of ["", "a/b", "CLAUDE_VE_X"]) {
-      await expect(backend.createVideo({ channelId: channel!.id, name })).rejects.toMatchObject({
-        code: "invalidInput",
-      });
+    const [row] = backend.world.videos;
+    for (const folderName of ["upload", "Upload"]) {
+      backend.world.videos.push({ ...row!, folderName, archivedAt: null });
     }
-    await expect(backend.createVideo({ channelId: "nope", name: "x" })).rejects.toMatchObject({
-      code: "notFound",
-    });
+    const names = (await backend.getLibrary()).channels.flatMap((c) =>
+      c.videos.map((v) => v.folderName),
+    );
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.map((name) => name.toLowerCase())).not.toContain("upload");
   });
 
   it("sets the type override and the inputs", async () => {
@@ -242,8 +200,8 @@ describe("library", () => {
     const userSeen = vi.fn();
     admin.on.libraryChanged(adminSeen);
     user.on.libraryChanged(userSeen);
-    const [channel] = (await admin.getWorkspace()).channels;
-    await admin.createVideo({ channelId: channel!.id, name: "Event Video" });
+    const row = await video(admin, "Hair Oil");
+    await admin.setVideoTypeOverride({ videoId: row.id, videoType: "short" });
     expect(adminSeen).toHaveBeenCalledTimes(1);
     expect(adminSeen.mock.calls[0]![0]?.channels.length).toBe(2);
     expect(userSeen).not.toHaveBeenCalled();

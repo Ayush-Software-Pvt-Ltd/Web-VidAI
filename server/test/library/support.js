@@ -184,7 +184,10 @@ export function createLibraryWorld({ jobsFor, mediaOptions, env, watchedUsers } 
    * @param {string} [name]
    */
   async function channelOf(user, name = "Main") {
-    const channel = await world.makeChannel(user, name);
+    // One folder per user, so two users can have a channel of the same name.
+    const channel = await world.makeChannel(user, name, {
+      dir: world.mkdir(path.join("channels", `${user.id}-${name}`)),
+    });
     const dir = fs.realpathSync(world.mod.api.channelsRepo.byId(channel.id)?.dir ?? "");
     return {
       channel,

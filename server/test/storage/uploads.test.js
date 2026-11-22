@@ -1,4 +1,5 @@
-// Uploads (SPEC section 6): never overwrite, offsets, limits, one writer, cleanup.
+// Uploads (SPEC section 6): the `upload` folders, any file type, names, never overwrite, offsets, limits,
+// one writer, cleanup, and the rule that users never reach each other's folders.
 import { afterEach, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -17,7 +18,12 @@ describe("uploads", () => {
   /** @type {{ id: string, email: string }} */
   let bob;
   /** @type {string} */
+  let videoFolder;
+  /** The `upload` folder of the video (made in `beforeEach`, as if it existed already). */
+  /** @type {string} */
   let videoDir;
+  /** @type {string} */
+  let channelDir;
   /** @type {string} */
   let videoId;
   /** @type {import("../../src/storage/uploads.js").UploadHooks} */
@@ -30,25 +36,31 @@ describe("uploads", () => {
   beforeEach(async () => {
     hooks = {};
     world = createWorld({
-      storageRoots: ["share"],
       uploadOptions: { hooks, maxChunkBytes: 1024, idleMs: 40 },
     });
     alice = world.makeUser("alice@example.com");
     bob = world.makeUser("bob@example.com");
     outside = world.mkdir("outside");
-    const dir = world.mkdir("share/channel");
-    channel = await world.makeChannel(alice, "Chan", { location: { kind: "link", dir } });
-    const video = await world.mod.api.channels.createVideo(alice.id, channel.id, "Video 1");
-    videoId = video.id;
-    videoDir = path.join(dir, "Video 1");
+    channel = await world.makeChannel(alice, "Chan");
+    channelDir = channel.dir;
+    videoFolder = world.mkdir("channels/Chan/Video 1");
+    videoId = `${channel.id}/Video 1`;
+    videoDir = world.mkdir("channels/Chan/Video 1/upload");
     world.emitted.length = 0;
   });
   afterEach(() => world.cleanup());
 
   const uploads = () => world.mod.api.uploads;
-  /** @param {Partial<{ videoId: string, folder: "video" | "broll", name: string, size: number }>} [input] */
+  /** @param {Partial<{ target: import("../../src/storage/uploads.js").UploadTarget, name: string, size: number }>} [input] */
   const create = (input = {}, user = alice) =>
-    uploads().create(user, { videoId, folder: "video", name: "clip.mp4", size: 10, ...input });
+    uploads().create(user, {
+      target: { kind: "video", videoId },
+      name: "clip.mp4",
+      size: 10,
+      ...input,
+    });
+  /** @param {string} id */
+  const videoTarget = (id) => /** @type {const} */ ({ kind: "video", videoId: id });
   /** @param {string} id @param {number} offset @param {string | Buffer} text */
   const put = (id, offset, text, user = alice) => {
     const buffer = Buffer.from(text);
@@ -73,19 +85,71 @@ describe("uploads", () => {
       assert.deepEqual(treeOf(videoDir), []);
     });
 
-    test("B-roll uploads go to the B-roll folder, made when missing", async () => {
-      const ticket = await create({ folder: "broll", name: "b.png" });
-      assert.ok(fs.statSync(path.join(videoDir, "Broll")).isDirectory());
+    test("the upload folder is made by the first upload and files go into it", async () => {
+      fs.rmSync(videoDir, { recursive: true });
+      const ticket = await create({ name: "b.png" });
+      assert.ok(fs.statSync(path.join(videoFolder, "upload")).isDirectory());
       assert.deepEqual(await put(ticket.id, 0, "0123456789"), { received: 10, done: true });
-      assert.deepEqual(fs.readdirSync(path.join(videoDir, "Broll")), ["b.png"]);
+      assert.deepEqual(fs.readdirSync(path.join(videoFolder, "upload")), ["b.png"]);
+      // Nothing lands next to the footage.
+      assert.deepEqual(fs.readdirSync(videoFolder), ["upload"]);
     });
 
-    test("an existing B-roll folder with another spelling is used", async () => {
-      fs.mkdirSync(path.join(videoDir, "B-Roll"));
-      const ticket = await create({ folder: "broll", name: "b.png" });
+    test("a refused upload does not make the folder", async () => {
+      fs.rmSync(videoDir, { recursive: true });
+      await rejectsCode(create({ name: "../x.mp4" }), "invalidInput");
+      await rejectsCode(create({ size: 0 }), "invalidInput");
+      assert.equal(fs.existsSync(path.join(videoFolder, "upload")), false);
+    });
+
+    test("an existing folder with another letter case is used as it is", async () => {
+      fs.rmSync(videoDir, { recursive: true });
+      fs.mkdirSync(path.join(videoFolder, "Upload"));
+      const ticket = await create({ name: "b.png" });
       await put(ticket.id, 0, "0123456789");
-      assert.deepEqual(fs.readdirSync(path.join(videoDir, "B-Roll")), ["b.png"]);
-      assert.equal(fs.existsSync(path.join(videoDir, "Broll")), false);
+      assert.deepEqual(fs.readdirSync(path.join(videoFolder, "Upload")), ["b.png"]);
+      assert.equal(fs.readdirSync(videoFolder).length, 1);
+    });
+
+    test("an `upload` that is a file or a link out is refused and nothing is written", async () => {
+      fs.rmSync(videoDir, { recursive: true });
+      fs.writeFileSync(path.join(videoFolder, "upload"), "a file");
+      await rejectsCode(create(), "conflict");
+      fs.rmSync(path.join(videoFolder, "upload"));
+      fs.symlinkSync(outside, path.join(videoFolder, "upload"));
+      await rejectsCode(create(), "conflict");
+      assert.deepEqual(fs.readdirSync(outside), []);
+    });
+
+    test("channel uploads go to the channel's upload folder, made on the first one", async () => {
+      const ticket = await uploads().create(alice, {
+        target: { kind: "channel", channelId: channel.id },
+        name: "logo.png",
+        size: 4,
+      });
+      assert.ok(fs.statSync(path.join(channelDir, "upload")).isDirectory());
+      assert.deepEqual(await put(ticket.id, 0, "abcd"), { received: 4, done: true });
+      assert.deepEqual(fs.readdirSync(path.join(channelDir, "upload")), ["logo.png"]);
+      assert.equal(fs.readFileSync(path.join(channelDir, "upload", "logo.png"), "utf8"), "abcd");
+      // The video's own folder was not touched.
+      assert.deepEqual(fs.readdirSync(videoDir), []);
+    });
+
+    test("any file type is accepted", async () => {
+      for (const name of [
+        "run.exe",
+        "script.sh",
+        "noextension",
+        "archive.zip",
+        "x.mp4.exe",
+        "A.MP4",
+        "b.srt",
+        "doc.PDF",
+        "project.psd",
+        "name with spaces.tar.gz",
+      ]) {
+        await create({ name });
+      }
     });
 
     test("refuses names that are not one plain name", async () => {
@@ -98,28 +162,25 @@ describe("uploads", () => {
         "x\u0000.mp4",
         "a".repeat(250) + ".mp4",
         " lead.mp4",
+        "trail.mp4 ",
+        "trailing-dot.",
+        "x.",
+        "CON",
+        "con.txt",
+        "NUL.mp4",
+        "LPT1",
+        "com1.mov",
         "evil‮fdp.mp4",
+        "",
       ]) {
-        await rejectsCode(create({ name }), "invalidInput");
+        const error = await rejectsCode(create({ name }), "invalidInput");
+        assert.equal(error.field, "name", name);
       }
       assert.deepEqual(treeOf(videoDir), []);
       assert.deepEqual(fs.readdirSync(outside), []);
-    });
-
-    test("refuses kinds of file that are not accepted", async () => {
-      for (const name of [
-        "run.exe",
-        "script.sh",
-        "noextension",
-        "archive.zip",
-        "x.mp4.exe",
-        "x.",
-      ]) {
-        await rejectsCode(create({ name }), "invalidInput");
-      }
-      for (const name of ["a.MP4", "b.srt", "c.md", "d.JPG", "e.wav"]) {
-        await create({ name });
-      }
+      // A name of exactly 200 characters is fine, 201 is not.
+      await create({ name: `${"a".repeat(196)}.mp4` });
+      await rejectsCode(create({ name: `${"a".repeat(197)}.mp4` }), "invalidInput");
     });
 
     test("refuses an empty file and a size that is not a whole number", async () => {
@@ -138,16 +199,14 @@ describe("uploads", () => {
     test("refuses a file that does not fit on the disk with a gigabyte to spare", async () => {
       world.cleanup();
       world = createWorld({
-        storageRoots: ["share"],
         uploadOptions: {
           statfs: () => Promise.resolve({ bavail: 100, bsize: 1024 * 1024 * 1024 }),
         },
       });
       alice = world.makeUser("alice@example.com");
-      const dir = world.mkdir("share/c");
-      const made = await world.makeChannel(alice, "C", { location: { kind: "link", dir } });
-      const video = await world.mod.api.channels.createVideo(alice.id, made.id, "V");
-      const request = { videoId: video.id, folder: /** @type {const} */ ("video"), name: "a.mp4" };
+      const made = await world.makeChannel(alice, "C");
+      world.mkdir("channels/C/V");
+      const request = { target: videoTarget(`${made.id}/V`), name: "a.mp4" };
       await world.mod.api.uploads.create(alice, { ...request, size: 99 * 1024 ** 3 });
       await rejectsCode(
         world.mod.api.uploads.create(alice, { ...request, name: "b.mp4", size: 100 * 1024 ** 3 }),
@@ -158,16 +217,13 @@ describe("uploads", () => {
     test("a disk that cannot say how much is free is not a reason to refuse", async () => {
       world.cleanup();
       world = createWorld({
-        storageRoots: ["share"],
         uploadOptions: { statfs: () => Promise.reject(new Error("no statfs here")) },
       });
       alice = world.makeUser("alice@example.com");
-      const dir = world.mkdir("share/c");
-      const made = await world.makeChannel(alice, "C", { location: { kind: "link", dir } });
-      const video = await world.mod.api.channels.createVideo(alice.id, made.id, "V");
+      const made = await world.makeChannel(alice, "C");
+      world.mkdir("channels/C/V");
       await world.mod.api.uploads.create(alice, {
-        videoId: video.id,
-        folder: "video",
+        target: videoTarget(`${made.id}/V`),
         name: "a.mp4",
         size: 5,
       });
@@ -216,27 +272,111 @@ describe("uploads", () => {
         `${channel.id}/Video 1/extra`,
         `${channel.id}/.`,
       ]) {
-        await rejectsCode(create({ videoId: id }), "notFound");
+        await rejectsCode(create({ target: videoTarget(id) }), "notFound");
       }
       assert.deepEqual(treeOf(videoDir), []);
     });
 
     test("the answer for another user's video is the same as for a missing one", async () => {
       const foreign = await rejectsCode(create({}, bob), "notFound");
-      const missing = await rejectsCode(create({ videoId: `${channel.id}/Nope` }, bob), "notFound");
+      const missing = await rejectsCode(
+        create({ target: videoTarget(`${channel.id}/Nope`) }, bob),
+        "notFound",
+      );
       assert.equal(foreign.message, missing.message);
     });
 
     test("a video folder that is a link out is not a video", async () => {
       fs.symlinkSync(outside, path.join(path.dirname(videoDir), "Linked"));
-      await rejectsCode(create({ videoId: `${channel.id}/Linked` }), "notFound");
+      await rejectsCode(create({ target: videoTarget(`${channel.id}/Linked`) }), "notFound");
       assert.deepEqual(fs.readdirSync(outside), []);
     });
 
-    test("a B-roll folder that is a link out is refused", async () => {
-      fs.symlinkSync(outside, path.join(videoDir, "Broll"));
-      await rejectsCode(create({ folder: "broll", name: "x.png" }), "conflict");
-      assert.deepEqual(fs.readdirSync(outside), []);
+    test("a video folder that is a link inside the channel is not a video either", async () => {
+      fs.symlinkSync(videoFolder, path.join(channelDir, "Alias"));
+      await rejectsCode(create({ target: videoTarget(`${channel.id}/Alias`) }), "notFound");
+    });
+
+    test("the channel's upload folder and asset folders are not videos", async () => {
+      for (const name of ["upload", "Upload", "Style", ".hidden", "CLAUDE_VE"]) {
+        fs.mkdirSync(path.join(channelDir, name), { recursive: true });
+        await rejectsCode(create({ target: videoTarget(`${channel.id}/${name}`) }), "notFound");
+      }
+    });
+
+    test("another user's channel is notFound, for an upload into its folder too", async () => {
+      const target = /** @type {const} */ ({ kind: "channel", channelId: channel.id });
+      const foreign = await rejectsCode(create({ target }, bob), "notFound");
+      const missing = await rejectsCode(
+        create({ target: { kind: "channel", channelId: "nochannel" } }, bob),
+        "notFound",
+      );
+      assert.equal(foreign.message, missing.message);
+      assert.equal(fs.existsSync(path.join(channelDir, "upload")), false);
+      assert.equal(world.db.all("SELECT id FROM uploads").length, 0);
+    });
+  });
+
+  describe("list", () => {
+    const list = (/** @type {any} */ target, user = alice) => uploads().list(user, target);
+
+    test("lists the files directly in the folder in natural order with size and time", async () => {
+      fs.writeFileSync(path.join(videoDir, "clip10.mp4"), "0123456789");
+      fs.writeFileSync(path.join(videoDir, "clip2.mp4"), "01");
+      fs.writeFileSync(path.join(videoDir, "Clip1.mp4"), "0");
+      fs.writeFileSync(path.join(videoDir, ".hidden"), "x");
+      fs.mkdirSync(path.join(videoDir, "Sub"));
+      fs.writeFileSync(path.join(videoDir, "Sub", "inner.mp4"), "inner");
+      const ticket = await create({ name: "busy.mp4", size: 10 });
+      await put(ticket.id, 0, "01234");
+      const files = await list(videoTarget(videoId));
+      assert.deepEqual(
+        files.map((file) => [file.name, file.size]),
+        [
+          ["Clip1.mp4", 1],
+          ["clip2.mp4", 2],
+          ["clip10.mp4", 10],
+        ],
+      );
+      for (const file of files) {
+        assert.equal(Number.isInteger(file.modifiedAt), true);
+        assert.ok(file.modifiedAt > 0);
+      }
+      assert.deepEqual(Object.keys(files[0] ?? {}).sort(), ["modifiedAt", "name", "size"]);
+    });
+
+    test("a folder that does not exist yet is an empty list, and listing does not make it", async () => {
+      fs.rmSync(videoDir, { recursive: true });
+      assert.deepEqual(await list(videoTarget(videoId)), []);
+      assert.deepEqual(await list({ kind: "channel", channelId: channel.id }), []);
+      assert.equal(fs.existsSync(path.join(videoFolder, "upload")), false);
+      assert.equal(fs.existsSync(path.join(channelDir, "upload")), false);
+    });
+
+    test("lists the channel's folder, and a finished upload shows up", async () => {
+      const ticket = await uploads().create(alice, {
+        target: { kind: "channel", channelId: channel.id },
+        name: "logo.png",
+        size: 3,
+      });
+      const target = /** @type {const} */ ({ kind: "channel", channelId: channel.id });
+      assert.deepEqual(await list(target), []);
+      await put(ticket.id, 0, "abc");
+      assert.deepEqual(
+        (await list(target)).map((file) => file.name),
+        ["logo.png"],
+      );
+    });
+
+    test("another user cannot list a folder, and the answer is the one for a missing target", async () => {
+      fs.writeFileSync(path.join(videoDir, "secret.mp4"), "x");
+      const foreignVideo = await rejectsCode(list(videoTarget(videoId), bob), "notFound");
+      const missingVideo = await rejectsCode(
+        list(videoTarget(`${channel.id}/Nope`), bob),
+        "notFound",
+      );
+      assert.equal(foreignVideo.message, missingVideo.message);
+      await rejectsCode(list({ kind: "channel", channelId: channel.id }, bob), "notFound");
     });
   });
 
@@ -574,7 +714,7 @@ describe("uploads", () => {
       fs.writeFileSync(path.join(videoDir, "keep.mp4"), "keep");
       const ticket = await create({ size: 10 });
       await put(ticket.id, 0, "01234");
-      await world.mod.api.channels.remove(alice.id, channel.id);
+      await world.mod.api.channels.remove(channel.id);
       assert.deepEqual(fs.readdirSync(videoDir), ["keep.mp4"]);
       assert.equal(world.db.all("SELECT id FROM uploads").length, 0);
     });
@@ -627,7 +767,6 @@ describe("uploads", () => {
       let cleared = 0;
       world.cleanup();
       world = createWorld({
-        storageRoots: ["share"],
         uploadOptions: {
           cleanupIntervalMs: 1234,
           timers: {
@@ -643,12 +782,10 @@ describe("uploads", () => {
         },
       });
       alice = world.makeUser("alice@example.com");
-      const dir = world.mkdir("share/c");
-      const made = await world.makeChannel(alice, "C", { location: { kind: "link", dir } });
-      const video = await world.mod.api.channels.createVideo(alice.id, made.id, "V");
+      const made = await world.makeChannel(alice, "C");
+      world.mkdir("channels/C/V");
       const ticket = await world.mod.api.uploads.create(alice, {
-        videoId: video.id,
-        folder: "video",
+        target: videoTarget(`${made.id}/V`),
         name: "a.mp4",
         size: 5,
       });
@@ -661,12 +798,69 @@ describe("uploads", () => {
     });
   });
 
-  test("uploadsInProgress counts the unfinished uploads of a video", async () => {
+  test("uploadsInProgress counts the unfinished uploads into the video's own folder only", async () => {
     const a = await create({ name: "a.mp4", size: 3 });
     await create({ name: "b.mp4", size: 3 });
+    // An upload into the channel's folder blocks nothing.
+    await uploads().create(alice, {
+      target: { kind: "channel", channelId: channel.id },
+      name: "c.mp4",
+      size: 3,
+    });
     const count = () => world.mod.api.uploadsInProgress(channel.id, "Video 1");
     assert.equal(count(), 2);
     await put(a.id, 0, "abc");
     assert.equal(count(), 1);
+  });
+
+  describe("cancelAllForChannel", () => {
+    test("stops the uploads into the channel's folder and into its videos' folders, with their part files", async () => {
+      fs.writeFileSync(path.join(videoDir, "keep.mp4"), "keep");
+      const second = world.mkdir("channels/Chan/Video 2/upload");
+      const inVideo = await create({ size: 10 });
+      await put(inVideo.id, 0, "01234");
+      const inSecond = await create({
+        target: videoTarget(`${channel.id}/Video 2`),
+        name: "two.mp4",
+        size: 10,
+      });
+      await put(inSecond.id, 0, "01234");
+      const inChannel = await uploads().create(alice, {
+        target: { kind: "channel", channelId: channel.id },
+        name: "ch.mp4",
+        size: 10,
+      });
+      await put(inChannel.id, 0, "01234");
+
+      // Another channel of the same user is left alone.
+      const other = await world.makeChannel(alice, "Other");
+      world.mkdir("channels/Other/V/upload");
+      const otherTicket = await uploads().create(alice, {
+        target: videoTarget(`${other.id}/V`),
+        name: "o.mp4",
+        size: 10,
+      });
+      await put(otherTicket.id, 0, "01234");
+
+      await uploads().cancelAllForChannel(channel.id);
+
+      assert.deepEqual(fs.readdirSync(videoDir), ["keep.mp4"]);
+      assert.deepEqual(fs.readdirSync(second), []);
+      assert.deepEqual(fs.readdirSync(path.join(channelDir, "upload")), []);
+      for (const ticket of [inVideo, inSecond, inChannel]) {
+        await rejectsCode(uploads().state(alice.id, ticket.id), "notFound");
+      }
+      assert.equal((await uploads().state(alice.id, otherTicket.id)).received, 5);
+      assert.equal(world.db.all("SELECT id FROM uploads").length, 1);
+    });
+
+    test("also works after the channel changed hands, and cancels every owner's uploads", async () => {
+      const ticket = await create({ size: 10 });
+      await put(ticket.id, 0, "01234");
+      world.db.run("UPDATE channels SET user_id = ? WHERE id = ?", bob.id, channel.id);
+      await uploads().cancelAllForChannel(channel.id);
+      assert.deepEqual(fs.readdirSync(videoDir), []);
+      assert.equal(world.db.all("SELECT id FROM uploads").length, 0);
+    });
   });
 });

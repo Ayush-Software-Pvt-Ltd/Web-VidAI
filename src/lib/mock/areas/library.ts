@@ -1,6 +1,6 @@
 /**
  * The library area: the videos of the signed-in user's channels with the actions the server
- * offers (`rules.computeActions`), creating videos, the type override, the inputs and archiving.
+ * offers (`rules.computeActions`), the type override, the inputs and archiving.
  * `libraryFor`, `videoViewOf` and `emitLibrary` are shared with the jobs area, which sends
  * `library-changed` when a job changes what a video row shows.
  */
@@ -10,13 +10,13 @@ import { makeVideoId } from "../../videoId";
 import type { MockCtx } from "../ctx";
 import { viewsOf, type QueueClock } from "../queue";
 import {
-  checkVideoName,
   computeActions,
   ensureChannelReachable,
   isActiveState,
+  isNeverAVideo,
   resolveVideoType,
 } from "../rules";
-import { EMPTY_INPUTS, EMPTY_OUTPUT, type MockUser, type MockVideo, type World } from "../world";
+import type { MockUser, MockVideo, World } from "../world";
 
 const NOT_FOUND = "That video was not found.";
 const MAX_LINKS_CHARS = 4000;
@@ -95,7 +95,12 @@ export function libraryFor(world: World, user: MockUser, clock: QueueClock): Lib
         // The server lists nothing from a folder it cannot reach.
         videos: channel.available
           ? world.videos
-              .filter((v) => v.channelId === channel.id && v.archivedAt === null)
+              .filter(
+                (v) =>
+                  v.channelId === channel.id &&
+                  v.archivedAt === null &&
+                  !isNeverAVideo(v.folderName),
+              )
               .map((v) => videoViewOf(world, v, user, views))
           : [],
       })),
@@ -152,40 +157,6 @@ export function libraryArea(ctx: MockCtx): Partial<Api> {
         const user = ctx.requireUser();
         if (world.libraryFails) throw ctx.errors.io("The library could not be read.");
         return libraryFor(world, user, clock());
-      }),
-
-    createVideo: ({ channelId, name }) =>
-      ctx.run(() => {
-        const user = ctx.requireUser();
-        const channel = world.channels.find((c) => c.id === channelId && c.userId === user.id);
-        if (!channel) throw ctx.errors.notFound("That channel was not found.");
-        ensureChannelReachable(ctx, channel.id);
-        const checked = checkVideoName(name);
-        if ("error" in checked) throw ctx.errors.invalidInput(checked.error);
-        const folderName = checked.name;
-        const taken = world.videos.some(
-          (v) =>
-            v.channelId === channelId && v.folderName.toLowerCase() === folderName.toLowerCase(),
-        );
-        if (taken)
-          throw ctx.errors.conflict("A video with this name already exists in this channel.");
-        world.videos.push({
-          channelId,
-          folderName,
-          userId: user.id,
-          createdAt: ctx.clock.now(),
-          detectedType: null,
-          typeOverride: null,
-          arollCount: 0,
-          inputs: { ...EMPTY_INPUTS },
-          output: structuredClone(EMPTY_OUTPUT),
-          archivedAt: null,
-          edited: false,
-          finalRendered: false,
-          workingFiles: false,
-        });
-        emitLibrary(ctx, user.id);
-        return { id: makeVideoId(channelId, folderName), channelId, folderName };
       }),
 
     setVideoTypeOverride: ({ videoId, videoType }) =>

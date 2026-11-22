@@ -705,13 +705,15 @@ describe("navigation", () => {
     expect(get().selectedVideoId).toBe("c1/001");
   });
 
-  it("clears the selected channel when the channel is removed", async () => {
+  it("clears the selected channel when an admin removes the channel (workspace-changed)", async () => {
     const { fake, get } = await start();
     get().selectChannel("c1");
-    fake.answer("removeChannel", undefined);
-    fake.answer("getLibrary", cast({ channels: [] }));
-    await get().removeChannel("c1");
-    expect(get().selectedChannelId).toBeNull();
+    const before = fake.count("getWorkspace");
+    fake.answer("getWorkspace", workspaceOf());
+    fake.emit("workspaceChanged", null);
+    await vi.waitFor(() => expect(get().selectedChannelId).toBeNull());
+    expect(fake.count("getWorkspace")).toBe(before + 1);
+    expect(get().workspace.data?.channels).toEqual([]);
   });
 
   it("leaves the timeline view when its video is gone", async () => {

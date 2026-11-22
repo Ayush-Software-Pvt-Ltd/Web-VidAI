@@ -324,7 +324,6 @@ test("an upload in progress blocks startEdit", async () => {
       userId: w.alice.id,
       channelId: main.channel.id,
       folderName: "001 A",
-      folder: "video",
       name: "a.mp4",
       size: 10,
     });
@@ -333,6 +332,33 @@ test("an upload in progress blocks startEdit", async () => {
     assert.equal(view.uploading, true);
     assert.ok(!view.actions.includes("startEdit"));
     assert.ok(view.actions.includes("upload"));
+  } finally {
+    w.cleanup();
+  }
+});
+
+test("an upload into the channel's folder blocks no video, and `upload` is not a video", async () => {
+  const w = createLibraryWorld();
+  try {
+    const main = await w.channelOf(w.alice);
+    main.video("001 A");
+    main.video("upload", "logo.png");
+    const uploads = createUploadsRepo(w.db, { clock: w.clock });
+    uploads.create({
+      userId: w.alice.id,
+      channelId: main.channel.id,
+      folderName: null,
+      name: "logo.png",
+      size: 10,
+    });
+    const library = await w.call(w.alice, "getLibrary");
+    const videos = library.channels[0].videos;
+    assert.deepEqual(
+      videos.map((/** @type {{ id: string }} */ v) => v.id),
+      [`${main.channel.id}/001 A`],
+    );
+    assert.equal(videos[0].uploading, false);
+    assert.ok(videos[0].actions.includes("startEdit"));
   } finally {
     w.cleanup();
   }

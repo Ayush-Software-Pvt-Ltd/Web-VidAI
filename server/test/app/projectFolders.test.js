@@ -30,7 +30,7 @@ test("removing a channel removes its videos' timeline folders and keeps the chan
     const goneFolder = makeProjectFolder(w.root, gone.key);
     const keptFolder = makeProjectFolder(w.root, kept.key);
 
-    const removed = await alice.client.rpc("removeChannel", { id: gone.channelId });
+    const removed = await w.admin.rpc("adminRemoveChannel", { id: gone.channelId });
     assert.equal(removed.status, 200, removed.text);
 
     assert.equal(fs.existsSync(goneFolder), false, "the removed channel's video folder goes");
@@ -47,27 +47,19 @@ test("a channel added again on the same directory gets a fresh timeline folder",
     const alice = await w.addUser({ name: "alice" });
     const first = await w.addVideo(alice, { channel: "Again" });
     makeProjectFolder(w.root, first.key);
-    const removed = await alice.client.rpc("removeChannel", { id: first.channelId });
+    const removed = await w.admin.rpc("adminRemoveChannel", { id: first.channelId });
     assert.equal(removed.status, 200, removed.text);
 
-    const again = await alice.client.rpc("createChannel", {
-      name: "Again",
-      videoType: "auto",
-      location: { kind: "link", dir: first.channelDir },
-    });
-    assert.equal(again.status, 200, again.text);
+    const againId = await w.adminCreateChannel(alice, { name: "Again", dir: first.channelDir });
     await w.api["library"].api.rescan(alice.id);
-    const video = await w.api["library"].api.videoByWireId(
-      alice.id,
-      `${again.json.id}/${first.folder}`,
-    );
+    const video = await w.api["library"].api.videoByWireId(alice.id, `${againId}/${first.folder}`);
     assert.notEqual(video.key, first.key, "the video has a new row with a new key");
     assert.equal(fs.existsSync(projectFolder(w.root, first.key)), false);
     const fresh = makeProjectFolder(w.root, video.key);
 
     // A later removal elsewhere never touches the folder of a video that has a row.
     const other = await w.addVideo(alice, { channel: "Other" });
-    const removedOther = await alice.client.rpc("removeChannel", { id: other.channelId });
+    const removedOther = await w.admin.rpc("adminRemoveChannel", { id: other.channelId });
     assert.equal(removedOther.status, 200, removedOther.text);
     assert.equal(fs.existsSync(fresh), true);
   } finally {

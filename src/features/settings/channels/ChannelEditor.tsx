@@ -1,10 +1,9 @@
 /**
- * The editor of one channel: its name, its folder (shown, never changed here: the server's update
- * has no directory), its video type setting (Auto-detect, Always Long, Always Short), and per type
+ * The editor of one channel: its name and folder (shown; an admin sets both), its video type setting (Auto-detect, Always Long, Always Short), and per type
  * (Long 16:9, Short 9:16) a Prompt and a Style editor. Edits stay in a draft until Save (or
  * Ctrl+S); Revert drops them.
  */
-import { Check, CircleAlert, Info, Trash2 } from "lucide-react";
+import { Check, CircleAlert, Info } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import {
   Button,
@@ -29,7 +28,6 @@ import { characterCount, TYPE_LABEL } from "../text";
 import { UNREACHABLE_TEXT } from "./ChannelList";
 import {
   changedFields,
-  channelNameProblem,
   describeFields,
   type Draft,
   type DraftField,
@@ -76,7 +74,6 @@ export interface ChannelEditorProps {
   justSaved: boolean;
   onSave: () => void;
   onRevert: () => void;
-  onRemove: () => void;
   otherChannels: Channel[];
 }
 
@@ -96,74 +93,28 @@ export function ChannelEditor({
   justSaved,
   onSave,
   onRevert,
-  onRemove,
   otherChannels,
 }: ChannelEditorProps) {
-  const nameId = useId();
   const changed = changedFields(channel, draft);
   const dirty = changed.length > 0;
   const canSave = dirty && !hasInvalidSlotName(channel, draft);
   // The slot shown in each editor ("long.prompt" to 0 to 4), local to the screen.
   const [shown, setShown] = useState<Partial<Record<`${VideoType}.${ProfileField}`, number>>>({});
-  const name = draftValue(channel, draft, "name");
-  const renaming = isFieldChanged(channel, draft, "name");
-  const nameProblem = renaming ? channelNameProblem(name) : null;
-  const nameError =
-    nameProblem !== null ||
-    (saveError !== null &&
-      renaming &&
-      (saveError.code === "conflict" || saveError.code === "invalidInput"));
   const channelType = draftValue(channel, draft, "videoType") as ChannelVideoType;
   const channelTypeChanged = isFieldChanged(channel, draft, "videoType");
 
   return (
     <div className="flex h-full min-w-0 flex-col">
       <div className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
-        <div className="flex items-center gap-2">
-          <label htmlFor={nameId} className="sr-only">
-            Channel name
-          </label>
-          <Input
-            id={nameId}
-            value={name}
-            dir="auto"
-            invalid={nameError || undefined}
-            aria-describedby={`${nameId}-hint`}
-            wrapperClassName="min-w-0 flex-1"
-            className="h-8 text-md font-semibold"
-            onChange={(event) => {
-              onChange("name", event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                if (canSave) onSave();
-              }
-            }}
-          />
-          <Button variant="ghost" icon={<Trash2 />} onClick={onRemove} className="text-fg-muted">
-            Remove{"…"}
-          </Button>
-        </div>
-        <p
-          id={`${nameId}-hint`}
-          className={cn(
-            "flex min-h-4 items-start gap-1.5 text-xs [&_svg]:mt-px [&_svg]:size-3 [&_svg]:shrink-0",
-            nameProblem ? "text-danger" : "text-fg-muted",
-          )}
-        >
-          <span className="min-w-0 break-words">
-            {nameProblem ??
-              "The name is only for you. Renaming a channel does not touch its folder."}
-          </span>
-        </p>
+        <h2 dir="auto" className="min-w-0 truncate text-md leading-8 font-semibold text-fg">
+          {channel.name}
+        </h2>
         <div className="flex items-baseline gap-3 text-sm">
           <span className="w-[72px] shrink-0 font-medium text-fg">Folder</span>
           <PathText path={channel.dir} className="min-w-0 flex-1 break-words" />
         </div>
         <p className="-mt-0.5 pl-[84px] text-xs text-fg-muted">
-          Its videos are the folders inside it. A channel keeps its folder; to use another folder,
-          make a new channel.
+          Its videos are the folders inside it. An admin sets the name and the folder of a channel.
         </p>
         <div className="mt-1.5 flex flex-col gap-1.5">
           <div className="flex h-6 items-center gap-3">

@@ -61,6 +61,27 @@ describe("npmShimTarget", () => {
     );
   });
 
+  test("the OpenCode 2 installer's shim has no backslash after %~dp0", () => {
+    const shim = '@echo off\r\n"%~dp0opencode.exe" %*\r\nexit /b %errorlevel%\r\n';
+    assert.equal(
+      npmShimTarget(shim, "C:\\Users\\Ed\\.opencode\\bin"),
+      "C:\\Users\\Ed\\.opencode\\bin\\opencode.exe",
+    );
+    assert.equal(npmShimTarget('"%dp0%opencode.exe" %*', NPM), `${NPM}\\opencode.exe`);
+    assert.equal(
+      npmShimTarget('"%~DP0..\\lib\\tool.exe" %*', "C:\\tools\\bin"),
+      "C:\\tools\\lib\\tool.exe",
+    );
+  });
+
+  test("a path that only looks like the shim's folder has no target", () => {
+    assert.equal(npmShimTarget('"%~dp0" %*', NPM), null);
+    assert.equal(npmShimTarget('"%dp0%" %*', NPM), null);
+    assert.equal(npmShimTarget('"%~dp1opencode.exe" %*', NPM), null);
+    assert.equal(npmShimTarget('"C:\\other\\opencode.exe" %*', NPM), null);
+    assert.equal(npmShimTarget('"%~dp0%NAME%.exe" %*', NPM), null);
+  });
+
   test("the node.exe next to the shim is the interpreter, not the target", () => {
     assert.equal(npmShimTarget('"%dp0%\\node.exe" %*', NPM), null);
   });
@@ -122,6 +143,17 @@ describe("resolveWindowsLaunch", () => {
     ...over,
   });
   const plain = (/** @type {import("../../src/platform/launch.js").Launch} */ l) => l;
+
+  test("the installer's opencode2.cmd starts the opencode.exe next to it", () => {
+    const dir = "C:\\Users\\Ed\\.opencode\\bin";
+    const shim = '@echo off\r\n"%~dp0opencode.exe" %*\r\nexit /b %errorlevel%\r\n';
+    assert.deepEqual(
+      plain(
+        resolveWindowsLaunch(`${dir}\\opencode2.cmd`, deps({ [`${dir}\\opencode2.cmd`]: shim })),
+      ),
+      { program: `${dir}\\opencode.exe`, args: [], msys: false },
+    );
+  });
 
   test("an exe or com runs directly", () => {
     for (const program of ["C:\\a\\claude.exe", "C:\\a\\CLAUDE.EXE", "C:\\a\\x.com"]) {

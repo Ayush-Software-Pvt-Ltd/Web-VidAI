@@ -157,6 +157,10 @@ export function createAppStore(api: Api): AppStore {
           if (library) get().setLibrary(library);
           else void get().refreshLibrary();
         }),
+        // An admin made, changed or removed one of the user's channels.
+        on.workspaceChanged(() => {
+          void get().loadWorkspace();
+        }),
         on.jobUpdated((job) => get().applyJob(job)),
         on.jobLog((log) => get().appendJobLog(log)),
         on.queueChanged(() => {

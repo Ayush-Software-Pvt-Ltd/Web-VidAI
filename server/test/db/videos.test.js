@@ -175,10 +175,19 @@ test("removing a channel removes its videos; removing a video removes its upload
     userId: user.id,
     channelId: channel.id,
     folderName: "v",
-    folder: "video",
     name: "a.mp4",
     size: 10,
   });
+  const channelUpload = uploads.create({
+    userId: user.id,
+    channelId: channel.id,
+    folderName: null,
+    name: "logo.png",
+    size: 10,
+  });
+  assert.equal(channelUpload.videoKey, null);
+  assert.equal(channelUpload.folderName, null);
+  assert.equal(uploads.countInProgress(channel.id, "v"), 1, "only the video's own upload counts");
   const row = videos.find(channel.id, "v");
   assert.ok(row, "an upload makes the video row through the repository");
   assert.equal(upload.videoKey, row.key);
@@ -187,7 +196,13 @@ test("removing a channel removes its videos; removing a video removes its upload
   videos.remove(row.key);
   assert.equal(videos.byKey(row.key), undefined);
   assert.equal(uploads.byId(upload.id), undefined);
+  assert.ok(uploads.byId(channelUpload.id), "a channel upload belongs to no video");
+  assert.deepEqual(
+    uploads.listForTarget(channel.id, null).map((row) => row.id),
+    [channelUpload.id],
+  );
 
   channels.delete(channel.id);
+  assert.equal(uploads.byId(channelUpload.id), undefined);
   assert.deepEqual(videos.listForChannels([channel.id]), []);
 });

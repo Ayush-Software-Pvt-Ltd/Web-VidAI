@@ -10,7 +10,8 @@ export type AppView =
 export type SettingsSection = "channels" | "appearance" | "importExport";
 
 /** Sections of the admin area (SPEC section 16), in the order of its menu. */
-export type AdminSection = "users" | "harness" | "limits" | "storage" | "queue" | "system";
+export type AdminSection =
+  "users" | "channels" | "harness" | "limits" | "storage" | "queue" | "system";
 
 export const SETTINGS_SECTIONS = [
   "channels",
@@ -20,6 +21,7 @@ export const SETTINGS_SECTIONS = [
 
 export const ADMIN_SECTIONS = [
   "users",
+  "channels",
   "harness",
   "limits",
   "storage",

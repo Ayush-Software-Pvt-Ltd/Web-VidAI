@@ -15,6 +15,7 @@
  * time), `ticks=off` (freeze jobs and usage, for deterministic screenshots).
  */
 import { createEmptyWorld } from "./seed/empty";
+import { addAdminChannelsScenario } from "./seed/adminChannels";
 import { seedAdmin } from "./seed/admin";
 import { addLargeDisk, seedDisk } from "./seed/disk";
 import {
@@ -116,7 +117,8 @@ export const SCENARIOS = {
     },
   },
   "no-channels": {
-    description: "Signed in, but nobody has a channel yet.",
+    description:
+      'Nobody has a channel yet: a user sees "No channels yet. An admin adds channels for you.", the admin adds them on the Channels page.',
     owner: "workspace",
     workspace: (world) => {
       world.channels = [];
@@ -124,6 +126,15 @@ export const SCENARIOS = {
     library: (world) => {
       world.videos = [];
     },
+    uploads: (world) => {
+      world.uploads = [];
+    },
+  },
+  "admin-channels": {
+    description:
+      "The admin's Channels page with several users' channels: Ana's Cooking Basics is busy (an edit runs, owner and folder are locked), Ben's Retro Games lies on an unplugged network volume.",
+    owner: "workspace",
+    workspace: (world) => addAdminChannelsScenario(world, Date.now()),
   },
   "library-error": {
     description: "getLibrary fails with an io error.",
@@ -276,12 +287,13 @@ export const SCENARIOS = {
     timeline: (world) => addCopiesScenario(world, Date.now()),
   },
   uploads: {
-    description: "A video with an unfinished upload (its row shows the progress).",
+    description:
+      "A video with an unfinished upload into its upload folder (its row shows the progress, Start Editing is not offered).",
     owner: "uploads",
     uploads: uploadingPatch,
   },
   uploading: {
-    description: "A video with an unfinished upload (its row shows the progress).",
+    description: "Same as uploads.",
     owner: "uploads",
     uploads: uploadingPatch,
   },

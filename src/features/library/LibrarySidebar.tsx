@@ -3,11 +3,22 @@
  * signed-in user with the counts [not edited / editing / edited], a live indicator while an agent
  * works on one of its videos and a light red background when one of them needs attention (a
  * failed job). A channel whose folder cannot be reached right now is marked and has no counts.
- * "New channel" opens the user's Settings at Channels.
+ * A channel's row has a menu with Upload Files (its `upload` folder); channels are added by an
+ * admin, so there is no way to add one here.
  */
-import { Folder, FolderPlus, FolderX, Layers } from "lucide-react";
+import { Ellipsis, Folder, FolderX, Layers, Upload } from "lucide-react";
 import { type KeyboardEvent, type ReactNode } from "react";
-import { Button, EmptyState, ScrollArea, Tooltip } from "@/components/ui";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  EmptyState,
+  IconButton,
+  ScrollArea,
+  Tooltip,
+} from "@/components/ui";
+import { useUploads } from "@/features/uploads";
 import { cn } from "@/lib/cn";
 import { useAppState } from "@/lib/appEnv";
 import { findChannelLibrary, selectChannels } from "@/lib/store";
@@ -27,6 +38,8 @@ interface EntryProps {
   unavailable?: boolean;
   /** The sentence of the tooltip of an unavailable channel. */
   unavailableText?: string;
+  /** The row's menu button; it takes the place of the counts while the row is hovered or focused. */
+  menu?: ReactNode;
 }
 
 /** "2 not edited, 4 editing, 1 edited, needs attention": the zero counts are left out. */
@@ -65,6 +78,7 @@ function Entry({
   onSelect,
   unavailable = false,
   unavailableText,
+  menu,
 }: EntryProps) {
   const description = entryDescription({ counts, live, unavailable });
   const attention = counts !== null && counts.failed > 0;
@@ -98,25 +112,66 @@ function Entry({
       </span>
       {live && <LiveDot />}
       {counts && (
-        <span className="shrink-0 text-right text-sm text-fg-subtle tabular" aria-hidden>
+        <span
+          className={cn(
+            "shrink-0 text-right text-sm text-fg-subtle tabular",
+            menu &&
+              "group-focus-within/entry:invisible group-hover/entry:invisible group-has-data-[state=open]/entry:invisible",
+          )}
+          aria-hidden
+        >
           [{counts.notEdited}/{counts.editing}/{counts.edited}]
         </span>
       )}
     </button>
   );
-  if (unavailable) {
-    return (
-      <Tooltip side="right" content={unavailableText ?? description}>
-        {button}
-      </Tooltip>
-    );
-  }
-  return counts ? (
+  const shown = unavailable ? (
+    <Tooltip side="right" content={unavailableText ?? description}>
+      {button}
+    </Tooltip>
+  ) : counts ? (
     <Tooltip side="right" content={description || label}>
       {button}
     </Tooltip>
   ) : (
     button
+  );
+  if (!menu) return shown;
+  return (
+    <div className="group/entry relative">
+      {shown}
+      <div className="absolute inset-y-0 right-1 flex items-center opacity-0 group-focus-within/entry:opacity-100 group-hover/entry:opacity-100 has-data-[state=open]:opacity-100">
+        {menu}
+      </div>
+    </div>
+  );
+}
+
+/** The menu of a channel's row: Upload Files opens the dialog for the channel's `upload` folder. */
+function ChannelMenu({ channel }: { channel: Channel }) {
+  const uploads = useUploads();
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <IconButton
+          label={`More for ${channel.name}`}
+          noTooltip
+          icon={<Ellipsis />}
+          size="sm"
+          className="data-[state=open]:bg-pressed data-[state=open]:text-fg"
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-[200px]">
+        <DropdownMenuItem
+          icon={<Upload />}
+          onSelect={() => {
+            uploads.openDialog({ kind: "channel", channelId: channel.id });
+          }}
+        >
+          Upload Files
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -156,20 +211,6 @@ function onNavKeyDown(event: KeyboardEvent<HTMLElement>) {
   entries[next]?.focus();
 }
 
-function NewChannelButton() {
-  const openSettings = useAppState((s) => s.openSettings);
-  return (
-    <Button
-      icon={<FolderPlus />}
-      onClick={() => {
-        openSettings({ section: "channels" });
-      }}
-    >
-      New Channel
-    </Button>
-  );
-}
-
 export function LibrarySidebar() {
   const library = useAppState((s) => s.library.data);
   const channels: readonly Channel[] = useAppState(selectChannels);
@@ -178,7 +219,6 @@ export function LibrarySidebar() {
   // On the Archive and Edit Log pages the footer entry is the selected one.
   const onList = useAppState((s) => s.view === "main");
   const selectChannel = useAppState((s) => s.selectChannel);
-  const openSettings = useAppState((s) => s.openSettings);
 
   const loaded = library !== null && workspaceLoaded;
   const entries: { channel: Channel; library: ChannelLibrary | null }[] = channels.map(
@@ -209,8 +249,7 @@ export function LibrarySidebar() {
           <EmptyState
             className="px-2 py-3"
             title="No channels yet"
-            description="A channel is a folder with one folder per video."
-            action={<NewChannelButton />}
+            description="An admin adds channels for you."
           />
         ) : (
           entries.map(({ channel, library: entry }) => {
@@ -224,6 +263,7 @@ export function LibrarySidebar() {
                 live={entry !== null && available && isChannelLive(entry)}
                 unavailable={!available}
                 unavailableText={unavailableText(channel.name)}
+                menu={available ? <ChannelMenu channel={channel} /> : undefined}
                 selected={onList && selected === channel.id}
                 onSelect={() => {
                   selectChannel(channel.id);
@@ -231,19 +271,6 @@ export function LibrarySidebar() {
               />
             );
           })
-        )}
-        {loaded && channels.length > 0 && (
-          <button
-            type="button"
-            data-sidebar-entry
-            onClick={() => {
-              openSettings({ section: "channels" });
-            }}
-            className="focus-ring mt-1 flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-fg-muted hover:bg-hover hover:text-fg active:bg-pressed [&_svg]:size-4 [&_svg]:shrink-0"
-          >
-            <FolderPlus className="text-fg-subtle" />
-            <span className="min-w-0 flex-1 truncate">New channel</span>
-          </button>
         )}
       </nav>
     </ScrollArea>

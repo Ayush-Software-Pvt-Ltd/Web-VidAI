@@ -106,7 +106,7 @@ export function createStorageRoutes({ uploads, folders, guard, platform = proces
         }
         if (hasDotDot(relative, platform)) throw forbidden(OUTSIDE_VIDEO);
         const wanted = api.join(video.dir, ...pathSegments(relative, platform));
-        const real = await guard.resolveInside(wanted);
+        const real = await guard.resolve(wanted);
         // Links are followed first, so a link that leads out of this folder (into another video, another
         // user's folder) is caught here, whatever it points at.
         if (!guard.isInside(video.dir, real) || guard.isSame(video.dir, real)) {

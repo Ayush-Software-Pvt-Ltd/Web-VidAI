@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import { openDatabase } from "../../src/db/open.js";
 import { createSettingsRepo } from "../../src/db/settings.js";
 import { createSettings } from "../../src/settings.js";
@@ -32,7 +31,6 @@ test("defaults are the ones of SPEC section 5", () => {
     cpuTotalPercent: 100,
     gpuPerEditPercent: 100,
     gpuTotalPercent: 100,
-    storageRoots: [],
     maxUploadGb: 200,
     proxyCacheGb: 50,
   });
@@ -160,28 +158,10 @@ test("setup must be one of the four setups", () => {
   throwsInvalid(() => settings.update({ setup: 1 }));
 });
 
-test("storageRoots are absolute, cleaned and without duplicates", () => {
+test("storageRoots is gone: it is refused as an unknown setting and never part of the settings", () => {
   const { settings } = make();
-  const a = resolve("/srv/media");
-  const b = resolve("/srv/other");
-  const all = settings.update({
-    storageRoots: ["/srv/media/", "/srv/other", " /srv/media ", "/srv/x/../other"],
-  });
-  assert.deepEqual(all.storageRoots, [a, b]);
-  assert.deepEqual(settings.update({ storageRoots: [] }).storageRoots, []);
-});
-
-test("storageRoots refuse relative paths, empty entries and wrong types", () => {
-  const { settings } = make();
-  throwsInvalid(() => settings.update({ storageRoots: ["relative/dir"] }), /full folder path/);
-  throwsInvalid(() => settings.update({ storageRoots: [""] }), /full folder path/);
-  throwsInvalid(() => settings.update({ storageRoots: ["/a\0b"] }), /full folder path/);
-  throwsInvalid(() => settings.update({ storageRoots: [3] }), /list of folders/);
-  throwsInvalid(() => settings.update({ storageRoots: "/srv" }), /list of folders/);
-  throwsInvalid(
-    () => settings.update({ storageRoots: Array.from({ length: 101 }, (_, i) => `/r${i}`) }),
-    /at most/,
-  );
+  throwsInvalid(() => settings.update({ storageRoots: ["/srv/media"] }), /storageRoots/);
+  assert.ok(!("storageRoots" in settings.getAll()));
 });
 
 test("one bad value in an update stops the whole update", () => {
@@ -194,12 +174,13 @@ test("a stored value that no longer fits falls back to the default", () => {
   const { repo, settings } = make();
   repo.set("maxEdits", "lots");
   repo.set("cpuTotalPercent", 33);
-  repo.set("storageRoots", ["relative"]);
+  // A row of the removed storage folders setting is ignored, not an error.
+  repo.set("storageRoots", ["/srv/media"]);
   repo.set("setup", "old-setup");
   const all = settings.getAll();
   assert.equal(all.maxEdits, 2);
   assert.equal(all.cpuTotalPercent, 35);
-  assert.deepEqual(all.storageRoots, []);
+  assert.ok(!("storageRoots" in all));
   assert.equal(all.setup, "claudeSubscription");
 });
 

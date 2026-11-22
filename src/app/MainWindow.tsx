@@ -8,11 +8,10 @@ import {
   LibrarySidebar,
   LibraryToolbar,
   ModelControls,
-  NewVideoProvider,
   useSearchShortcut,
   VideoList,
 } from "@/features/library";
-import { UploadsHost, useOpenNewVideo } from "@/features/uploads";
+import { UploadsHost } from "@/features/uploads";
 import { useAppState, useAppStoreApi } from "@/lib/appEnv";
 import { hasOpenLayer, isEditableTarget } from "@/lib/keyboard";
 import { SidebarFooter } from "./SidebarFooter";
@@ -30,16 +29,15 @@ const LIST_MIN_WIDTH = 420;
  * effort on the right), the video list and, for the selected video, the activity panel at the
  * right. Archive and Edit Log replace the list and the panel in the content area, with the same
  * sidebar and a Done button (Esc) back to the list. The job sheets and confirmations are mounted
- * once here, and so is `UploadsHost` (New Video, Upload files and the running uploads).
+ * once here, and so is `UploadsHost` (Upload Files and the running uploads).
  */
 export function MainWindow() {
   useSearchShortcut();
   const view = useAppState((s) => s.view);
   const page = view === "archive" || view === "editLog" ? view : null;
   useReturnFocus(page !== null);
-  const onNewVideo = useOpenNewVideo();
   return (
-    <NewVideoProvider onNewVideo={onNewVideo}>
+    <>
       <WindowFrame
         sidebar={<LibrarySidebar />}
         sidebarFooter={<SidebarFooter />}
@@ -71,7 +69,7 @@ export function MainWindow() {
       </WindowFrame>
       <JobDialogs />
       <UploadsHost />
-    </NewVideoProvider>
+    </>
   );
 }
 

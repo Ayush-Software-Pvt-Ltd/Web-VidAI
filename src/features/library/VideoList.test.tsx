@@ -5,7 +5,6 @@ import { naturalCompare } from "@/lib/format";
 import { USER_ID } from "@/lib/mock/seed/session";
 import { setupApp, type SetupOptions, type TestApp } from "@/test/app";
 import { LibraryToolbar } from "./LibraryToolbar";
-import { NewVideoProvider } from "./newVideo";
 import { addVideos } from "./testSupport";
 import { VideoList } from "./VideoList";
 import { useLibraryView } from "./viewStore";
@@ -179,15 +178,6 @@ describe("VideoList states", () => {
     expect(screen.getAllByRole("listitem").length).toBeGreaterThan(0);
   });
 
-  it("offers New Channel when the user has no channels", async () => {
-    const user = userEvent.setup();
-    await setup(["no-channels"]);
-    app.render(<VideoList />);
-    expect(await screen.findByText("No channels yet")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "New Channel" }));
-    expect(app.store.getState().settingsTarget).toMatchObject({ section: "channels" });
-  });
-
   it("explains a selected channel whose folder cannot be reached", async () => {
     await setup(["default"], {
       user: "user",
@@ -202,25 +192,24 @@ describe("VideoList states", () => {
     expect(await screen.findByText("Channel folder cannot be reached")).toBeInTheDocument();
   });
 
-  it("explains an empty channel, with New Video only when the uploads feature provides it", async () => {
-    const calls: (string | null)[] = [];
+  it("explains an empty channel: videos are put in the channel's folder, nothing is created here", async () => {
     await setup(["default"], {
       user: "user",
       prepare: (backend) => {
         backend.world.videos = backend.world.videos.filter((v) => v.userId !== USER_ID);
       },
     });
-    const { unmount } = app.render(<VideoList />);
+    app.render(<VideoList />);
     expect(await screen.findByText("No videos yet")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "New Video" })).toBeNull();
-    unmount();
-    app.render(
-      <NewVideoProvider onNewVideo={(id) => calls.push(id)}>
-        <VideoList />
-      </NewVideoProvider>,
-    );
-    await userEvent.setup().click(await screen.findByRole("button", { name: "New Video" }));
-    expect(calls).toEqual([null]);
+    expect(screen.queryByRole("button", { name: /New Video/ })).toBeNull();
+  });
+
+  it("tells a user without channels that an admin adds them, with no New Channel", async () => {
+    await setup(["no-channels"], { user: "user" });
+    app.render(<VideoList />);
+    expect(await screen.findByText("No channels yet")).toBeInTheDocument();
+    expect(screen.getByText("An admin adds channels for you.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /New (Channel|Video)/ })).toBeNull();
   });
 });
 
@@ -244,22 +233,10 @@ describe("LibraryToolbar", () => {
     expect(useLibraryView.getState().sort).toEqual({ key: "status", dir: "asc" });
   });
 
-  it("hides New Video until a handler is provided, then passes the selected channel", async () => {
-    const user = userEvent.setup();
-    const calls: (string | null)[] = [];
+  it("has no New Video button", async () => {
     await setup();
-    const { unmount } = app.render(<LibraryToolbar />);
+    app.render(<LibraryToolbar />);
     expect(screen.queryByRole("button", { name: "New Video" })).toBeNull();
-    unmount();
-    const id = app.store.getState().workspace.data?.channels[0]?.id ?? null;
-    app.store.getState().selectChannel(id);
-    app.render(
-      <NewVideoProvider onNewVideo={(c) => calls.push(c)}>
-        <LibraryToolbar />
-      </NewVideoProvider>,
-    );
-    await user.click(screen.getByRole("button", { name: "New Video" }));
-    expect(calls).toEqual([id]);
   });
 
   it("summarizes the user's own jobs", async () => {

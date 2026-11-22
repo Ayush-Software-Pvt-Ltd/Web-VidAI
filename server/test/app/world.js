@@ -199,23 +199,37 @@ export async function startWorld({ base, engine = {}, settings } = {}) {
     return { client, id: /** @type {string} */ (login.json.user.id), email };
   }
 
+  /** A new empty channel directory outside the data directory. @param {string} name */
+  function channelDir(name) {
+    const dir = path.join(root, "channels", name.replace(/[^A-Za-z0-9 _.-]/g, "_"));
+    fs.mkdirSync(dir, { recursive: true });
+    return fs.realpathSync(dir);
+  }
+
   /**
-   * A channel with one video folder that has a tiny A-roll, seen by the library.
+   * The admin makes a channel for a user on a directory that exists.
+   * @param {{ id: string }} user
+   * @param {{ name: string, dir: string, videoType?: string }} input
+   * @returns {Promise<string>} the channel's id
+   */
+  async function adminCreateChannel(user, { name, dir, videoType = "auto" }) {
+    const made = await admin.rpc("adminCreateChannel", { name, userId: user.id, dir, videoType });
+    if (made.status !== 200) throw new Error(`adminCreateChannel: ${made.status} ${made.text}`);
+    return /** @type {string} */ (made.json.id);
+  }
+
+  /**
+   * A channel with one video folder that has a tiny A-roll, seen by the library. The folders are
+   * made on disk here (VidAI makes none), then the admin makes the channel for the user.
    * @param {{ client: ReturnType<typeof t.client>, id: string }} user
    * @param {{ channel?: string, folder?: string }} [options]
    */
   async function addVideo(user, { channel = "Main", folder = "001 First" } = {}) {
-    const made = await user.client.rpc("createChannel", {
-      name: channel,
-      videoType: "auto",
-      location: { kind: "new", parent: null, folderName: channel },
-    });
-    if (made.status !== 200) throw new Error(`createChannel: ${made.status} ${made.text}`);
-    const channelId = /** @type {string} */ (made.json.id);
-    const dir = fs.realpathSync(api["storage"].api.channelsRepo.byId(channelId).dir);
+    const dir = channelDir(`${user.id}-${channel}`);
     const videoDir = path.join(dir, folder);
     fs.mkdirSync(videoDir, { recursive: true });
     fs.writeFileSync(path.join(videoDir, "clip.mp4"), "tiny a-roll");
+    const channelId = await adminCreateChannel(user, { name: channel, dir });
     await api["library"].api.rescan(user.id);
     const videoId = `${channelId}/${folder}`;
     const key = (await api["library"].api.videoByWireId(user.id, videoId)).key;
@@ -277,6 +291,8 @@ export async function startWorld({ base, engine = {}, settings } = {}) {
     stateDir,
     addUser,
     addVideo,
+    channelDir,
+    adminCreateChannel,
     writesProject,
     signals,
     stateOf,

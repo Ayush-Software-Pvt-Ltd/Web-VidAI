@@ -37,26 +37,48 @@ export interface Channel {
   available: boolean;
 }
 
-/** How `createChannel` gets the channel's directory. */
-export type ChannelLocation =
-  /** Makes a new folder: `folderName` (`null`: made from the channel name) inside `parent` (`null`: the personal folder). */
-  | { kind: "new"; parent: string | null; folderName: string | null }
-  /** Uses an existing directory inside a storage folder. */
-  | { kind: "link"; dir: string };
-
-/** The input of `createChannel`. */
-export interface ChannelCreate {
-  name: string;
-  videoType: ChannelVideoType;
-  location: ChannelLocation;
-}
-
-/** The input of `updateChannel`: a `null` field is left as it is; a profile replaces the old one whole. */
+/**
+ * The input of `updateChannel`, the owner's own changes: a `null` field is left as it is; a profile
+ * replaces the old one whole. The name, folder and owner are the admin's (`adminUpdateChannel`).
+ */
 export interface ChannelUpdate {
-  name: string | null;
   videoType: ChannelVideoType | null;
   long: ChannelProfile | null;
   short: ChannelProfile | null;
+}
+
+/** A channel as the admin's Channels page lists it: every user's channels. */
+export interface AdminChannel {
+  id: string;
+  name: string;
+  /** Absolute real path of the channel directory on the server. */
+  dir: string;
+  /** The user the channel belongs to. */
+  userId: string;
+  userEmail: string;
+  videoType: ChannelVideoType;
+  /** False when the directory cannot be reached right now (for example an unplugged drive). */
+  available: boolean;
+  /** Video folders found in the directory (archived ones included); 0 when unavailable. */
+  videoCount: number;
+  /** True while a job of one of its videos waits, runs or is paused (then owner and folder are locked). */
+  busy: boolean;
+}
+
+/** The input of `adminCreateChannel`: the directory must already exist (`fsCreateFolder` makes one). */
+export interface AdminChannelCreate {
+  name: string;
+  userId: string;
+  dir: string;
+  videoType: ChannelVideoType;
+}
+
+/** The input of `adminUpdateChannel`: a `null` field is left as it is. */
+export interface AdminChannelUpdate {
+  name: string | null;
+  userId: string | null;
+  dir: string | null;
+  videoType: ChannelVideoType | null;
 }
 
 /** What `getWorkspace` answers: everything the sidebar and the settings screens start from. */
@@ -87,18 +109,10 @@ export interface ChannelsDocumentEntry {
   short: ChannelProfile;
 }
 
-/** What `importChannels` did. */
+/** What `importChannels` did; it never makes channels (only an admin does). */
 export interface ImportResult {
-  /** Channels of the same name that got the imported video type, prompts and styles. */
+  /** The user's channels of the same name that got the imported video type, prompts and styles. */
   updated: number;
-  /** New channels, each with a new folder in the personal folder. */
-  created: number;
-}
-
-/** What `createVideo` answers: the new video folder. */
-export interface VideoRef {
-  /** `<channel id>/<folder name>`. */
-  id: string;
-  channelId: string;
-  folderName: string;
+  /** Names in the file that match none of the user's channels, in the file's order. */
+  skipped: string[];
 }

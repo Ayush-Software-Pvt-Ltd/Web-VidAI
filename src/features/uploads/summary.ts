@@ -41,21 +41,6 @@ export function summarize(
   return null;
 }
 
-/**
- * The file chooser's filter (SPEC section 6, "Uploads"). Only a convenience: the server decides
- * what it takes and says so in its own sentence, also for a file that was dropped.
- */
-export const ACCEPT = [
-  ...["mp4", "mov", "m4v", "mkv", "mts", "m2ts", "avi", "webm"],
-  ...["wav", "mp3", "m4a", "aac", "flac"],
-  ...["png", "jpg", "jpeg", "webp", "gif"],
-  ...["txt", "md", "srt"],
-]
-  .map((extension) => `.${extension}`)
-  .join(",");
-
-export const FOLDER_LABELS = { video: "A-roll", broll: "B-roll" } as const;
-
 /** The line under the bar: percent, sizes, speed and time left while sending, else the state. */
 export function statusText(item: UploadItem): string {
   const sizes = `${formatBytes(item.received)} of ${formatBytes(item.size)}`;

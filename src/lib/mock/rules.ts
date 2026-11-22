@@ -110,14 +110,27 @@ export function resolveVideoType(
   return { videoType: "long", typeSource: "assumed" };
 }
 
-/** Names the editing folder keeps for itself (SPEC section 2): a video cannot have them. */
-export function isReservedChannelEntry(name: string): boolean {
+const ASSET_FOLDERS = [
+  ...["style", "sample", "samples", "images", "pictures"],
+  ...["host images", "host pictures"],
+];
+
+/**
+ * Whether a folder directly in a channel directory is never a video (SPEC section 6): a dot name,
+ * the working folder `CLAUDE_VE*`, the channel's `upload` folder and the asset folders.
+ */
+export function isNeverAVideo(name: string): boolean {
   const lower = name.toLowerCase();
-  return name.startsWith("CLAUDE_VE") || lower === "style" || lower === "memory.md";
+  return (
+    name.startsWith(".") ||
+    name.startsWith("CLAUDE_VE") ||
+    lower === "upload" ||
+    ASSET_FOLDERS.includes(lower)
+  );
 }
 
 export const MAX_CHANNEL_NAME_CHARS = 60;
-export const MAX_VIDEO_NAME_CHARS = 120;
+export const MAX_UPLOAD_NAME_CHARS = 200;
 export const CHANNEL_SLOTS = 5;
 export const MAX_SLOT_TEXT_CHARS = 20_000;
 export const MAX_IMPORTED_CHANNELS = 100;
@@ -136,21 +149,27 @@ export function checkChannelName(value: string): { name: string } | { error: str
   return { name };
 }
 
-/** A video folder name trimmed, or the message why it is not valid. */
-export function checkVideoName(value: string): { name: string } | { error: string } {
-  const name = value.trim();
-  if (name === "") return { error: "The name cannot be empty." };
-  if (name.length > MAX_VIDEO_NAME_CHARS) {
-    return { error: `The name can have at most ${MAX_VIDEO_NAME_CHARS} characters.` };
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+
+/** Why `name` cannot be the name of an uploaded file (SPEC "Uploads"), or `null`. */
+export function uploadNameProblem(name: string): string | null {
+  const length = Array.from(name).length;
+  if (length < 1 || length > MAX_UPLOAD_NAME_CHARS) {
+    return `A file name must have 1 to ${MAX_UPLOAD_NAME_CHARS} characters.`;
   }
+  if (name.includes("/") || name.includes("\\")) return "A file name cannot contain slashes.";
   // eslint-disable-next-line no-control-regex
-  if (name === "." || name === ".." || /[/\\:\u0000]/.test(name) || name.startsWith(".")) {
-    return { error: "This name is not allowed. Use letters, digits, spaces and dashes." };
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(name)) {
+    return "A file name cannot contain control characters.";
   }
-  if (isReservedChannelEntry(name)) {
-    return { error: "This name is reserved. Choose another name for the video." };
+  if (name.startsWith(".")) return "A file name cannot start with a dot.";
+  if (name.endsWith(".") || name.endsWith(" ")) {
+    return "A file name cannot end with a dot or a space.";
   }
-  return { name };
+  if (WINDOWS_RESERVED.test(name)) {
+    return "Windows does not allow this file name. Choose another name.";
+  }
+  return null;
 }
 
 /** The message why a profile is not valid, or `null` (mirrors `validateProfile`). */

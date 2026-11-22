@@ -1,7 +1,8 @@
 // From a video id to its folder on disk (docs/SPEC.md section 6, "Videos"): the id is
-// `<channel id>/<folder name>`; the folder is found through the caller's own channel row and must be
-// a real folder directly inside the channel directory. Uploads and file serving both use this, so
-// a foreign or made-up id answers `notFound` the same way everywhere.
+// `<channel id>/<folder name>`; the folder is found through the caller's own channel row and must
+// be a real folder directly inside the channel directory, not a link and not a reserved name
+// (`upload`, `Style`, ...). Uploads and file serving both use this, so a foreign or made-up id
+// answers `notFound` the same way everywhere.
 
 import fsp from "node:fs/promises";
 import { AppError, conflict, notFound } from "../errors.js";
@@ -28,6 +29,53 @@ export function createVideoFolders({ channels, guard, platform = process.platfor
 
   const missingVideo = () => notFound("That video was not found.");
 
+  /**
+   * The real directory of a channel, checked to be reachable and unchanged.
+   * @param {import("../db/channels.js").ChannelRecord} channel
+   * @returns {Promise<string>}
+   * @throws {AppError} `conflict` when the directory cannot be reached right now.
+   */
+  async function reachableDir(channel) {
+    const unreachable = () => conflict("This channel's folder cannot be reached right now.");
+    /** @type {string} */
+    let dir;
+    try {
+      dir = await guard.resolve(channel.dir);
+      if (!(await fsp.stat(dir)).isDirectory()) throw unreachable();
+    } catch (error) {
+      if (error instanceof AppError && error.code === "conflict") throw error;
+      throw unreachable();
+    }
+    if (!guard.isSame(dir, channel.dir)) throw unreachable();
+    return dir;
+  }
+
+  /**
+   * @param {import("../db/channels.js").ChannelRecord} channel
+   * @param {string} asked The folder name as the id gave it.
+   * @returns {Promise<ResolvedVideo>}
+   */
+  async function videoOf(channel, asked) {
+    if (segmentProblem(asked, platform) || isReservedChannelEntry(asked)) throw missingVideo();
+    const channelDir = await reachableDir(channel);
+    /** @type {string} */
+    let dir;
+    try {
+      const wanted = api.join(channelDir, asked);
+      // A video folder that is itself a link is not a video (`lstat` does not follow it).
+      if (!(await fsp.lstat(wanted)).isDirectory()) throw missingVideo();
+      dir = await guard.resolve(wanted);
+      if (!(await fsp.stat(dir)).isDirectory()) throw missingVideo();
+    } catch {
+      throw missingVideo();
+    }
+    // A direct child of the channel directory, whatever letter case the id used.
+    if (!guard.isSame(api.dirname(dir), channelDir)) throw missingVideo();
+    const folderName = api.basename(dir);
+    if (isReservedChannelEntry(folderName)) throw missingVideo();
+    return { channel, channelDir, folderName, dir };
+  }
+
   const folders = {
     /**
      * Splits `<channel id>/<folder name>`.
@@ -53,18 +101,7 @@ export function createVideoFolders({ channels, guard, platform = process.platfor
     async channelDir(userId, channelId) {
       const channel = channels.byIdForUser(channelId, userId);
       if (!channel) throw notFound("That channel was not found.");
-      const unreachable = () => conflict("This channel's folder cannot be reached right now.");
-      /** @type {string} */
-      let dir;
-      try {
-        dir = await guard.resolveFor(channel.dir, userId);
-        if (!(await fsp.stat(dir)).isDirectory()) throw unreachable();
-      } catch (error) {
-        if (error instanceof AppError && error.code === "conflict") throw error;
-        throw unreachable();
-      }
-      if (!guard.isSame(dir, channel.dir)) throw unreachable();
-      return { channel, dir };
+      return { channel, dir: await reachableDir(channel) };
     },
 
     /**
@@ -76,22 +113,25 @@ export function createVideoFolders({ channels, guard, platform = process.platfor
      */
     async resolveVideo(userId, videoId) {
       const { channelId, folderName } = folders.parseVideoId(videoId);
-      if (!channels.byIdForUser(channelId, userId)) throw missingVideo();
-      if (segmentProblem(folderName, platform) || isReservedChannelEntry(folderName)) {
-        throw missingVideo();
-      }
-      const { channel, dir: channelDir } = await folders.channelDir(userId, channelId);
-      /** @type {string} */
-      let dir;
-      try {
-        dir = await guard.resolveInside(api.join(channelDir, folderName));
-        if (!(await fsp.stat(dir)).isDirectory()) throw missingVideo();
-      } catch {
-        throw missingVideo();
-      }
-      // A video folder that is a link to somewhere else is not a video of this channel.
-      if (!guard.isSame(api.dirname(dir), channelDir)) throw missingVideo();
-      return { channel, channelDir, folderName, dir };
+      const channel = channels.byIdForUser(channelId, userId);
+      if (!channel) throw missingVideo();
+      return videoOf(channel, folderName);
+    },
+
+    /**
+     * The server's own bookkeeping (cleaning up an upload of a channel whose owner changed): the
+     * channel's directory and one of its videos' folders without asking who owns the channel.
+     * Never reachable from a user's input.
+     * @param {string} channelId
+     * @param {string | null} folderName A video folder, or null for the channel directory itself.
+     * @returns {Promise<{ dir: string }>}
+     * @throws {AppError} `notFound` for a missing channel or video, `conflict` when unreachable.
+     */
+    async locate(channelId, folderName) {
+      const channel = channels.byId(channelId);
+      if (!channel) throw notFound("That channel was not found.");
+      if (folderName === null) return { dir: await reachableDir(channel) };
+      return { dir: (await videoOf(channel, folderName)).dir };
     },
   };
   return folders;

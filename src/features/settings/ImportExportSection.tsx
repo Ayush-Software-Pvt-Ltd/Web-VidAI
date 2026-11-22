@@ -67,7 +67,7 @@ export function ImportExportSection() {
         />
         <Row
           label="Import channels"
-          description="Channels with the same name get the video type, prompts and styles from the file. The other channels in it are added, each with a new folder."
+          description="Channels with the same name get the video type, prompts and styles from the file. Names that are not among your channels are skipped; an admin adds channels."
           control={
             <>
               <input
@@ -108,7 +108,11 @@ export function ImportExportSection() {
         </Callout>
       )}
       {result && (
-        <Callout tone="success" live title="Channels imported">
+        <Callout
+          tone={result.updated > 0 ? "success" : "warning"}
+          live
+          title={result.updated > 0 ? "Channels imported" : "No channels imported"}
+        >
           {describeImport(result)}
         </Callout>
       )}

@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { MockBackend } from "../backend";
-import { USER_ID } from "../seed/session";
-import { FOOTAGE_ROOT } from "../seed/storage";
-import { MEDIA_ROOT, personalFolder } from "./workspace";
+import { profile } from "../seed/workspace";
 
 const options = { latencyMs: 0, autoTick: false } as const;
 const backends: MockBackend[] = [];
 
-function make(as: "admin" | "user" = "user") {
-  const backend = new MockBackend({ ...options, scenarios: ["default"], as });
+function make(as: "admin" | "user" = "user", world?: MockBackend["world"]) {
+  const backend = new MockBackend({
+    ...options,
+    scenarios: ["default"],
+    as,
+    ...(world ? { world } : {}),
+  });
   backends.push(backend);
   return backend;
 }
@@ -17,75 +20,96 @@ afterEach(() => {
   for (const backend of backends.splice(0)) backend.dispose();
 });
 
-const link = (dir: string) => ({ kind: "link" as const, dir });
-
-describe("mock workspace area: where a channel may live (server/src/channels.js)", () => {
-  it("refuses a folder outside every storage folder with the server's sentence", async () => {
+describe("mock workspace area: the owner's own channel functions", () => {
+  it("changes only what the owner may: video type, prompts and styles", async () => {
     const backend = make();
-    await expect(
-      backend.createChannel({ name: "Out", videoType: "auto", location: link("/etc/videos") }),
-    ).rejects.toMatchObject({
-      code: "forbidden",
-      message: "This folder is outside the storage folders the admin allows.",
+    const [channel] = (await backend.getWorkspace()).channels;
+    if (!channel) throw new Error("seed channel missing");
+    const long = profile("edited long");
+    const updated = await backend.updateChannel({
+      id: channel.id,
+      update: { videoType: "long", long, short: null },
     });
+    expect(updated).toMatchObject({
+      name: channel.name,
+      dir: channel.dir,
+      videoType: "long",
+      long,
+      short: channel.short,
+    });
+    // Nothing given: nothing changes.
+    expect(
+      await backend.updateChannel({
+        id: channel.id,
+        update: { videoType: null, long: null, short: null },
+      }),
+    ).toEqual(updated);
   });
 
-  it("refuses a storage folder or a personal folder as the channel itself", async () => {
+  it("imports into channels of the same name without regard to case, and skips the others", async () => {
     const backend = make();
-    for (const dir of [FOOTAGE_ROOT, MEDIA_ROOT, personalFolder(USER_ID)]) {
-      await expect(
-        backend.createChannel({ name: `At ${dir}`, videoType: "auto", location: link(dir) }),
-      ).rejects.toMatchObject({
-        code: "invalidInput",
-        message: "A storage folder cannot be a channel itself. Choose or make a folder inside it.",
-      });
-    }
+    const document = await backend.exportChannels();
+    const [entry] = document.channels;
+    if (!entry) throw new Error("seed channel missing");
+    const long = profile("imported long");
+    const result = await backend.importChannels({
+      document: {
+        ...document,
+        channels: [
+          { ...entry, name: entry.name.toUpperCase(), videoType: "short", long },
+          { ...entry, name: "Not Mine" },
+          { ...entry, name: "Also Not Mine" },
+        ],
+      },
+    });
+    expect(result).toEqual({ updated: 1, skipped: ["Not Mine", "Also Not Mine"] });
+    const channels = (await backend.getWorkspace()).channels;
+    expect(channels).toHaveLength(1);
+    expect(channels[0]).toMatchObject({ name: entry.name, videoType: "short", long });
   });
 
-  it("refuses a folder inside or around another channel, also another user's", async () => {
-    const backend = make();
-    const made = await backend.createChannel({
-      name: "Outer",
-      videoType: "auto",
-      location: link(`${FOOTAGE_ROOT}/group/outer`),
+  it("never touches another user's channel by name when importing", async () => {
+    const admin = make("admin");
+    const user = make("user", admin.world);
+    const adminBefore = await admin.getWorkspace();
+    const document = await admin.exportChannels();
+    const result = await user.importChannels({
+      document: {
+        ...document,
+        channels: document.channels.map((channel) => ({ ...channel, videoType: "short" })),
+      },
     });
-    expect(made.dir).toBe(`${FOOTAGE_ROOT}/group/outer`);
-    const taken = { code: "conflict", message: "This folder already belongs to a channel." };
-    await expect(
-      backend.createChannel({
-        name: "Inner",
-        videoType: "auto",
-        location: link(`${FOOTAGE_ROOT}/group/outer/inner`),
-      }),
-    ).rejects.toMatchObject(taken);
+    // The user has "Travel Diary" only; the admin's names match none of theirs.
+    expect(result).toEqual({
+      updated: 0,
+      skipped: document.channels.map((channel) => channel.name),
+    });
+    expect(await admin.getWorkspace()).toEqual(adminBefore);
+  });
 
-    const admin = new MockBackend({
-      ...options,
-      scenarios: ["default"],
-      as: "admin",
-      world: backend.world,
-    });
-    backends.push(admin);
+  it("keeps users apart on update and order", async () => {
+    const admin = make("admin");
+    const user = make("user", admin.world);
+    const [adminChannel] = (await admin.getWorkspace()).channels;
+    if (!adminChannel) throw new Error("seed channel missing");
     await expect(
-      admin.createChannel({
-        name: "Around",
-        videoType: "auto",
-        location: link(`${FOOTAGE_ROOT}/group`),
+      user.updateChannel({
+        id: adminChannel.id,
+        update: { videoType: "short", long: null, short: null },
       }),
-    ).rejects.toMatchObject(taken);
-    await expect(
-      admin.createChannel({
-        name: "Same",
-        videoType: "auto",
-        location: link(`${FOOTAGE_ROOT}/group/outer`),
-      }),
-    ).rejects.toMatchObject(taken);
-    // A sibling folder is fine.
-    const sibling = await admin.createChannel({
-      name: "Sibling",
-      videoType: "auto",
-      location: link(`${FOOTAGE_ROOT}/group/outer-two`),
+    ).rejects.toMatchObject({ code: "notFound" });
+    await expect(user.reorderChannels({ ids: [adminChannel.id] })).rejects.toMatchObject({
+      code: "notFound",
     });
-    expect(sibling.dir).toBe(`${FOOTAGE_ROOT}/group/outer-two`);
+  });
+});
+
+describe("mock workspace area: a user without channels", () => {
+  it("has an empty workspace and library while the admin's page lists none", async () => {
+    const backend = new MockBackend({ ...options, scenarios: ["no-channels"], as: "user" });
+    backends.push(backend);
+    expect((await backend.getWorkspace()).channels).toEqual([]);
+    expect((await backend.getLibrary()).channels).toEqual([]);
+    expect(await backend.exportChannels()).toMatchObject({ channels: [] });
   });
 });

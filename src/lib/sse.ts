@@ -104,6 +104,7 @@ const SHAPES: Partial<Record<EventName, (payload: unknown) => boolean>> = {
   "preview-copies-changed": (p) => isObject(p) && hasStrings(p, ["videoId"]) && isObject(p.copies),
   "disk-use-changed": (p) => isObject(p) && Array.isArray(p.videos),
   "system-changed": () => true,
+  "workspace-changed": () => true,
 };
 
 const REASONS: readonly string[] = ["passwordChanged", "disabled", "removed"];
@@ -235,8 +236,9 @@ export function createEventStream(options: EventStreamOptions): EventStream {
       );
       return;
     }
-    // `system-changed` carries nothing, whatever the server put there.
-    deliver(eventName, (eventName === "system-changed" ? null : payload) as never);
+    // `system-changed` and `workspace-changed` carry nothing, whatever the server put there.
+    const empty = eventName === "system-changed" || eventName === "workspace-changed";
+    deliver(eventName, (empty ? null : payload) as never);
   }
 
   function schedule() {

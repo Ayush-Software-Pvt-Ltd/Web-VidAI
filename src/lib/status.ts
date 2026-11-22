@@ -229,7 +229,7 @@ export const ACTION_LABELS: Record<VideoAction, string> = {
   reEdit: "Re-Edit",
   review: "Review",
   renderFinal: "Render Final",
-  upload: "Upload",
+  upload: "Upload Files",
   diskCleanup: "Disk Cleanup",
   archive: "Archive",
   unarchive: "Unarchive",

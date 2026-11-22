@@ -201,6 +201,7 @@ describe("hello and the instance id", () => {
 /** A sample payload of each event that has the right rough shape. */
 const SAMPLES: Record<Exclude<EventName, "session-ended">, unknown> = {
   "library-changed": null,
+  "workspace-changed": null,
   "job-updated": { id: "j1", videoId: "c/v", userId: "u1" },
   "job-log": { videoId: "c/v", jobId: "j1", entries: [] },
   "queue-changed": { queue: "edits" },

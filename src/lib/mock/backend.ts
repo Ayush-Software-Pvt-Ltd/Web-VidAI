@@ -13,6 +13,7 @@ import { buildFileUrl } from "../http";
 import { makeVideoId } from "../videoId";
 import { RPC_NAMES, type EventName, type EventPayloads } from "../rpc";
 import { adminArea } from "./areas/admin";
+import { adminChannelsArea } from "./areas/adminChannels";
 import { diskArea } from "./areas/disk";
 import { harnessArea } from "./areas/harness";
 import { jobsArea } from "./areas/jobs";
@@ -47,6 +48,7 @@ const AREAS = [
   storageArea,
   uploadsArea,
   adminArea,
+  adminChannelsArea,
   harnessArea,
   timelineArea,
   diskArea,

@@ -5,7 +5,6 @@ import {
   afterSave,
   buildUpdate,
   changedFields,
-  channelNameProblem,
   describeFields,
   hasInvalidSlotName,
   isFieldChanged,
@@ -21,38 +20,23 @@ const channel: Channel = {
   available: true,
 };
 
-describe("channel name", () => {
-  it("must have 1 to 60 characters", () => {
-    expect(channelNameProblem("a")).toBeNull();
-    expect(channelNameProblem("x".repeat(60))).toBeNull();
-    expect(channelNameProblem("   ")).toMatch(/1 to 60/);
-    expect(channelNameProblem("x".repeat(61))).toMatch(/1 to 60/);
-    // Characters, not UTF-16 units.
-    expect(channelNameProblem("😀".repeat(60))).toBeNull();
-  });
-
-  it("a changed invalid name cannot be saved", () => {
-    expect(hasInvalidSlotName(channel, { name: "" })).toBe(true);
-    expect(hasInvalidSlotName(channel, { name: "Fine" })).toBe(false);
+describe("slot names", () => {
+  it("a changed invalid slot name cannot be saved", () => {
+    expect(hasInvalidSlotName(channel, { "long.prompt.1.name": "  " })).toBe(true);
+    expect(hasInvalidSlotName(channel, { "long.prompt.1.name": "x".repeat(41) })).toBe(true);
+    expect(hasInvalidSlotName(channel, { "long.prompt.1.name": "Fine" })).toBe(false);
   });
 });
 
 describe("buildUpdate", () => {
   it("is null when nothing changed, also after typing the saved text again", () => {
     expect(buildUpdate(channel, {})).toBeNull();
-    expect(buildUpdate(channel, { name: "  Beauty ", videoType: "auto" })).toBeNull();
-    expect(changedFields(channel, { name: "Beauty" })).toEqual([]);
+    expect(buildUpdate(channel, { videoType: "auto" })).toBeNull();
+    expect(changedFields(channel, { "long.prompt.1.name": " Prompt 2 " })).toEqual([]);
   });
 
-  it("sends only the changed fields, the name trimmed", () => {
-    expect(buildUpdate(channel, { name: " Glow " })).toEqual({
-      name: "Glow",
-      videoType: null,
-      long: null,
-      short: null,
-    });
+  it("sends only the changed fields and never a name", () => {
     expect(buildUpdate(channel, { videoType: "short" })).toEqual({
-      name: null,
       videoType: "short",
       long: null,
       short: null,
@@ -75,15 +59,17 @@ describe("buildUpdate", () => {
 describe("afterSave and describeFields", () => {
   it("keeps what changed while saving", () => {
     expect(
-      afterSave({ name: "B", "long.style.0": "x" }, { name: "B", "long.style.0": "y" }),
+      afterSave(
+        { videoType: "long", "long.style.0": "x" },
+        { videoType: "long", "long.style.0": "y" },
+      ),
     ).toEqual({ "long.style.0": "x" });
   });
 
   it("describes the changed parts once each", () => {
-    const draft = { name: "B", videoType: "short", "long.prompt.0": "p", "long.prompt.1": "q" };
+    const draft = { videoType: "short", "long.prompt.0": "p", "long.prompt.1": "q" };
     expect(isFieldChanged(channel, draft, "videoType")).toBe(true);
     expect(describeFields(changedFields(channel, draft))).toEqual([
-      "name",
       "video type",
       "Long 16:9 prompt",
     ]);

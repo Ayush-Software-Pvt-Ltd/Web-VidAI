@@ -19,8 +19,13 @@ describe("storage routes", () => {
   let alice;
   /** @type {{ id: string, email: string }} */
   let bob;
+  /** The video's folder, and its `upload` folder where upload bytes go. */
+  /** @type {string} */
+  let videoFolder;
   /** @type {string} */
   let videoDir;
+  /** @type {string} */
+  let channelDir;
   /** @type {string} */
   let videoId;
   /** @type {string} */
@@ -29,15 +34,16 @@ describe("storage routes", () => {
   let channel;
 
   beforeEach(async () => {
-    world = createWorld({ storageRoots: ["share"], uploadOptions: { idleMs: 2000 } });
+    world = createWorld({ uploadOptions: { idleMs: 2000 } });
     alice = world.makeUser("alice@example.com");
     bob = world.makeUser("bob@example.com");
     outside = world.mkdir("outside");
-    const dir = world.mkdir("share/channel");
-    channel = await world.makeChannel(alice, "Chan", { location: { kind: "link", dir } });
-    videoId = (await world.mod.api.channels.createVideo(alice.id, channel.id, "Video 1")).id;
-    await world.mod.api.channels.createVideo(alice.id, channel.id, "Video 2");
-    videoDir = path.join(dir, "Video 1");
+    channel = await world.makeChannel(alice, "Chan");
+    channelDir = channel.dir;
+    videoId = `${channel.id}/Video 1`;
+    videoFolder = world.mkdir("channels/Chan/Video 1");
+    world.mkdir("channels/Chan/Video 2");
+    videoDir = world.mkdir("channels/Chan/Video 1/upload");
     server = await startServer({
       deps: {
         routes: world.mod.routes,
@@ -66,11 +72,10 @@ describe("storage routes", () => {
     });
   /** @param {string} user @param {string} id */
   const state = (user, id) => server.request("GET", `/api/upload/${id}`, { headers: as(user) });
-  /** @param {Partial<{ videoId: string, name: string, size: number }>} [input] */
+  /** @param {Partial<{ target: import("../../src/storage/uploads.js").UploadTarget, name: string, size: number }>} [input] */
   const ticket = (input = {}, user = alice) =>
     world.mod.api.uploads.create(user, {
-      videoId,
-      folder: "video",
+      target: { kind: "video", videoId },
       name: "clip.mp4",
       size: 10,
       ...input,
@@ -174,6 +179,34 @@ describe("storage routes", () => {
       assert.equal((await state("alice", made.id)).json.received, 0);
     });
 
+    test("bytes go to a channel's upload folder the same way", async () => {
+      const made = await ticket({
+        target: { kind: "channel", channelId: channel.id },
+        name: "a.png",
+      });
+      assert.deepEqual((await put("alice", made.id, 0, "01234")).json, {
+        received: 5,
+        done: false,
+      });
+      assert.deepEqual((await put("alice", made.id, 5, "56789")).json, {
+        received: 10,
+        done: true,
+      });
+      assert.equal(fs.readFileSync(path.join(channelDir, "upload", "a.png"), "utf8"), "0123456789");
+      assert.deepEqual(fs.readdirSync(videoDir), []);
+    });
+
+    test("another user's upload into a channel folder is 404 for every request", async () => {
+      const made = await ticket({
+        target: { kind: "channel", channelId: channel.id },
+        name: "a.png",
+      });
+      await put("alice", made.id, 0, "01234");
+      assert.equal((await state("bob", made.id)).status, 404);
+      assert.equal((await put("bob", made.id, 5, "56789")).status, 404);
+      assert.equal((await state("alice", made.id)).json.received, 5);
+    });
+
     test("a body of exactly 32 MB is accepted", async () => {
       const made = await ticket({ size: 33 * 1024 * 1024 });
       const body = Buffer.alloc(32 * 1024 * 1024, 2);
@@ -189,12 +222,12 @@ describe("storage routes", () => {
     test("a chunked body over the limit is 413 and the part file is cut back", async () => {
       await server.close();
       world.cleanup();
-      world = createWorld({ storageRoots: ["share"], uploadOptions: { maxChunkBytes: 1000 } });
+      world = createWorld({ uploadOptions: { maxChunkBytes: 1000 } });
       alice = world.makeUser("alice@example.com");
-      const dir = world.mkdir("share/channel");
-      channel = await world.makeChannel(alice, "Chan", { location: { kind: "link", dir } });
-      videoId = (await world.mod.api.channels.createVideo(alice.id, channel.id, "Video 1")).id;
-      videoDir = path.join(dir, "Video 1");
+      channel = await world.makeChannel(alice, "Chan");
+      videoId = `${channel.id}/Video 1`;
+      world.mkdir("channels/Chan/Video 1");
+      videoDir = world.mkdir("channels/Chan/Video 1/upload");
       server = await startServer({
         deps: {
           routes: world.mod.routes,
@@ -240,12 +273,12 @@ describe("storage routes", () => {
 
   describe("files of a video", () => {
     beforeEach(() => {
-      fs.writeFileSync(path.join(videoDir, "clip.mp4"), "0123456789");
-      fs.mkdirSync(path.join(videoDir, "output"));
-      fs.writeFileSync(path.join(videoDir, "output", "notes.txt"), "hello");
-      fs.writeFileSync(path.join(videoDir, "page.html"), "<script>alert(1)</script>");
-      fs.writeFileSync(path.join(videoDir, "image.svg"), "<svg onload='alert(1)'/>");
-      fs.writeFileSync(path.join(path.dirname(videoDir), "Video 2", "other.txt"), "other video");
+      fs.writeFileSync(path.join(videoFolder, "clip.mp4"), "0123456789");
+      fs.mkdirSync(path.join(videoFolder, "output"));
+      fs.writeFileSync(path.join(videoFolder, "output", "notes.txt"), "hello");
+      fs.writeFileSync(path.join(videoFolder, "page.html"), "<script>alert(1)</script>");
+      fs.writeFileSync(path.join(videoFolder, "image.svg"), "<svg onload='alert(1)'/>");
+      fs.writeFileSync(path.join(path.dirname(videoFolder), "Video 2", "other.txt"), "other video");
       fs.writeFileSync(path.join(outside, "secret.txt"), "top secret");
     });
 
@@ -313,10 +346,10 @@ describe("storage routes", () => {
     });
 
     test("a link to a file outside is 403, to a file of another video too", async () => {
-      fs.symlinkSync(path.join(outside, "secret.txt"), path.join(videoDir, "leak.txt"));
+      fs.symlinkSync(path.join(outside, "secret.txt"), path.join(videoFolder, "leak.txt"));
       fs.symlinkSync(
-        path.join(path.dirname(videoDir), "Video 2", "other.txt"),
-        path.join(videoDir, "sibling.txt"),
+        path.join(path.dirname(videoFolder), "Video 2", "other.txt"),
+        path.join(videoFolder, "sibling.txt"),
       );
       for (const name of ["leak.txt", "sibling.txt"]) {
         const reply = await file(videoId, name);
@@ -326,13 +359,13 @@ describe("storage routes", () => {
     });
 
     test("a link to a folder outside is 403, also for files inside it", async () => {
-      fs.symlinkSync(outside, path.join(videoDir, "folder-link"));
+      fs.symlinkSync(outside, path.join(videoFolder, "folder-link"));
       assert.equal((await file(videoId, "folder-link/secret.txt")).status, 403);
       assert.equal((await file(videoId, "folder-link")).status, 403);
     });
 
     test("a link to a file inside the same video is fine", async () => {
-      fs.symlinkSync(path.join(videoDir, "clip.mp4"), path.join(videoDir, "alias.mp4"));
+      fs.symlinkSync(path.join(videoFolder, "clip.mp4"), path.join(videoFolder, "alias.mp4"));
       assert.equal((await file(videoId, "alias.mp4")).text, "0123456789");
     });
 
@@ -344,6 +377,23 @@ describe("storage routes", () => {
       assert.equal(foreign.text, missing.text);
       assert.ok(!foreign.text.includes("0123456789"));
       assert.equal((await file("nonsense", "clip.mp4")).status, 404);
+    });
+
+    test("the upload folders are served as files of the video, but are not videos", async () => {
+      fs.writeFileSync(path.join(videoDir, "note.txt"), "uploaded");
+      assert.equal((await file(videoId, "upload/note.txt")).text, "uploaded");
+      fs.mkdirSync(path.join(channelDir, "upload"));
+      fs.writeFileSync(path.join(channelDir, "upload", "note.txt"), "channel level");
+      const reply = await file(`${channel.id}/upload`, "note.txt");
+      assert.equal(reply.status, 404);
+      assert.ok(!reply.text.includes("channel level"));
+    });
+
+    test("a video folder that is a link is 404", async () => {
+      fs.symlinkSync(outside, path.join(channelDir, "Linked"));
+      const reply = await file(`${channel.id}/Linked`, "secret.txt");
+      assert.equal(reply.status, 404);
+      assert.ok(!reply.text.includes("top secret"));
     });
 
     test("a file that does not exist is 404", async () => {

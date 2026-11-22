@@ -1,5 +1,5 @@
-// Channel documents (export, import), the default prompt, new video
-// folders and the workspace RPC functions.
+// Channel documents (export, import that only updates), the default prompt, video folders and the
+// workspace RPC functions.
 import { afterEach, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -19,7 +19,7 @@ describe("channel documents and videos", () => {
   let bob;
 
   beforeEach(() => {
-    world = createWorld({ storageRoots: ["share"] });
+    world = createWorld();
     alice = world.makeUser("alice@example.com");
     bob = world.makeUser("bob@example.com");
   });
@@ -28,11 +28,7 @@ describe("channel documents and videos", () => {
   const service = () => world.mod.api.channels;
   /** @param {string} name @param {{ id: string }} [user] */
   const linked = (name, user = alice) =>
-    service().create(user, {
-      name,
-      videoType: "auto",
-      location: { kind: "link", dir: world.mkdir(`share/${name}-${user.id.slice(0, 4)}`) },
-    });
+    world.makeChannel(user, name, { dir: world.mkdir(`area/${name}-${user.id.slice(0, 4)}`) });
   /** @param {string} text */
   const slots = (text) =>
     Array.from({ length: 5 }, (_, index) => ({ name: `S${index}`, text: `${text}${index}` }));
@@ -52,24 +48,15 @@ describe("channel documents and videos", () => {
       assert.deepEqual(service().exportDocument(bob.id).channels, []);
     });
 
-    test("a document imports into another account as new channels with new folders", async () => {
+    test("a document imports into another account without making channels or folders", async () => {
       await linked("Tech");
       await linked("News");
       const document = service().exportDocument(alice.id);
+      const before = treeOf(world.root);
       const result = await service().importDocument(bob, document);
-      assert.deepEqual(result, { updated: 0, created: 2 });
-      const mine = await service().list(bob.id);
-      assert.deepEqual(
-        mine.map((channel) => channel.name),
-        ["Tech", "News"],
-      );
-      const personal = path.join(world.dataDir, "media", bob.id);
-      assert.deepEqual(
-        mine.map((channel) => channel.dir),
-        [path.join(personal, "Tech"), path.join(personal, "News")],
-      );
-      assert.ok(mine.every((channel) => fs.statSync(channel.dir).isDirectory()));
-      assert.deepEqual(mine[0]?.long, (await service().list(alice.id))[0]?.long);
+      assert.deepEqual(result, { updated: 0, skipped: ["Tech", "News"] });
+      assert.deepEqual(await service().list(bob.id), []);
+      assert.deepEqual(treeOf(world.root), before);
     });
 
     test("a channel of the same name (any letter case) is updated, the others are kept", async () => {
@@ -88,7 +75,7 @@ describe("channel documents and videos", () => {
         ],
       };
       const result = await service().importDocument(alice, document);
-      assert.deepEqual(result, { updated: 1, created: 0 });
+      assert.deepEqual(result, { updated: 1, skipped: [] });
       const [first, second] = await service().list(alice.id);
       assert.equal(first?.id, tech.id);
       assert.equal(first?.name, "Tech");
@@ -101,26 +88,50 @@ describe("channel documents and videos", () => {
       assert.deepEqual(second?.long, keep.long);
     });
 
-    test("new folders get a number when the name is taken, and nothing is overwritten", async () => {
-      const personal = await world.mod.api.roots.personalFolder(alice.id);
-      fs.mkdirSync(path.join(personal, "Tech"));
-      fs.writeFileSync(path.join(personal, "Tech", "mine.txt"), "mine");
-      const document = { format: "vidai-channels", version: 1, channels: [{ name: "Tech" }] };
-      await service().importDocument(alice, document);
-      const [channel] = await service().list(alice.id);
-      assert.equal(channel?.dir, path.join(personal, "Tech 2"));
-      assert.deepEqual(treeOf(path.join(personal, "Tech")), ["mine.txt"]);
+    test("names that match no channel come back in the file's order, matching ones are updated", async () => {
+      const tech = await linked("Tech");
+      const document = {
+        format: "vidai-channels",
+        version: 1,
+        channels: [
+          { name: "Zed", videoType: "long" },
+          { name: "tech", videoType: "short" },
+          { name: "Alpha" },
+          { name: "Mid" },
+        ],
+      };
+      const result = await service().importDocument(alice, document);
+      assert.deepEqual(result, { updated: 1, skipped: ["Zed", "Alpha", "Mid"] });
+      const channels = await service().list(alice.id);
+      assert.deepEqual(
+        channels.map((channel) => [channel.id, channel.videoType]),
+        [[tech.id, "short"]],
+      );
+    });
+
+    test("another user's channel of the same name is never touched", async () => {
+      const theirs = await linked("Shared", bob);
+      const document = {
+        format: "vidai-channels",
+        version: 1,
+        channels: [{ name: "Shared", videoType: "short" }],
+      };
+      assert.deepEqual(await service().importDocument(alice, document), {
+        updated: 0,
+        skipped: ["Shared"],
+      });
+      assert.deepEqual((await service().list(bob.id))[0], theirs);
     });
 
     test("a file with a problem changes nothing at all", async () => {
       await linked("Existing");
       const before = treeOf(world.root);
-      const rows = (await service().list(alice.id)).length;
-      const good = { name: "Good", videoType: "long" };
+      const rows = await service().list(alice.id);
+      const good = { name: "Existing", videoType: "long" };
       for (const channels of [
         [good, { name: "" }],
         [good, { name: "x".repeat(61) }],
-        [good, { name: "good" }],
+        [good, { name: "existing" }],
         [good, "text"],
         [good, null],
       ]) {
@@ -130,7 +141,7 @@ describe("channel documents and videos", () => {
         );
       }
       assert.deepEqual(treeOf(world.root), before);
-      assert.equal((await service().list(alice.id)).length, rows);
+      assert.deepEqual(await service().list(alice.id), rows);
     });
 
     test("documents that are not channel files are invalidInput", async () => {
@@ -158,29 +169,31 @@ describe("channel documents and videos", () => {
     });
 
     test("an unknown video type is read as auto, extra fields are ignored", async () => {
-      await service().importDocument(alice, {
+      const channel = await linked("A");
+      await service().update(alice.id, channel.id, { videoType: "long" });
+      const result = await service().importDocument(alice, {
         format: "vidai-channels",
         version: 1,
         extra: true,
-        channels: [{ name: "A", videoType: "weird", folder: "/etc" }],
+        channels: [{ name: "A", videoType: "weird", folder: "/etc", dir: "/etc", userId: bob.id }],
       });
-      const [channel] = await service().list(alice.id);
-      assert.equal(channel?.videoType, "auto");
-      // A "folder" or "dir" in the file is never used.
-      assert.ok(channel?.dir.startsWith(path.join(world.dataDir, "media", alice.id)));
+      assert.deepEqual(result, { updated: 1, skipped: [] });
+      const [after] = await service().list(alice.id);
+      assert.equal(after?.videoType, "auto");
+      // A "folder", "dir" or owner in the file is never used.
+      assert.equal(after?.dir, channel.dir);
+      assert.deepEqual(await service().list(bob.id), []);
     });
 
-    test("a path in a name cannot make the folder go elsewhere", async () => {
-      await service().importDocument(alice, {
+    test("a path in a name makes nothing, it only matches no channel", async () => {
+      const before = treeOf(world.root);
+      const result = await service().importDocument(alice, {
         format: "vidai-channels",
         version: 1,
         channels: [{ name: "../../escape" }, { name: "a/b" }, { name: ".." }],
       });
-      const personal = path.join(world.dataDir, "media", alice.id);
-      for (const channel of await service().list(alice.id)) {
-        assert.equal(path.dirname(channel.dir), personal, channel.name);
-      }
-      assert.deepEqual(fs.readdirSync(world.dataDir).sort(), ["media"]);
+      assert.deepEqual(result, { updated: 0, skipped: ["../../escape", "a/b", ".."] });
+      assert.deepEqual(treeOf(world.root), before);
     });
 
     test("only the channels format is accepted, a settings file of another program is refused", async () => {
@@ -200,13 +213,15 @@ describe("channel documents and videos", () => {
 
     test("what is exported imports back unchanged", async () => {
       const channel = await linked("Round");
+      await linked("Round", bob);
       const edited = structuredClone(channel.long);
       /** @type {import("../../../src/lib/wire/channels.ts").ChannelSlot} */ (
         edited.prompts[2]
       ).name = "Custom";
       await service().update(alice.id, channel.id, { long: edited, videoType: "short" });
       const document = service().exportDocument(alice.id);
-      await service().importDocument(bob, JSON.parse(JSON.stringify(document)));
+      const result = await service().importDocument(bob, JSON.parse(JSON.stringify(document)));
+      assert.deepEqual(result, { updated: 1, skipped: [] });
       const [copy] = await service().list(bob.id);
       assert.equal(copy?.videoType, "short");
       assert.deepEqual(copy?.long, edited);
@@ -240,75 +255,10 @@ describe("channel documents and videos", () => {
     });
   });
 
-  describe("new video folders", () => {
-    test("makes the folder and answers the video id", async () => {
-      const channel = await linked("Chan");
-      const video = await service().createVideo(alice.id, channel.id, "  Video 1  ");
-      assert.deepEqual(video, {
-        id: `${channel.id}/Video 1`,
-        channelId: channel.id,
-        folderName: "Video 1",
-      });
-      assert.ok(fs.statSync(path.join(channel.dir, "Video 1")).isDirectory());
-      assert.ok(world.emitted.some((e) => e.event === "library-changed"));
-    });
-
-    test("an existing name is conflict and its files are untouched", async () => {
-      const channel = await linked("Chan");
-      fs.mkdirSync(path.join(channel.dir, "Taken"));
-      fs.writeFileSync(path.join(channel.dir, "Taken", "a.mp4"), "a");
-      await rejectsCode(service().createVideo(alice.id, channel.id, "Taken"), "conflict");
-      assert.deepEqual(treeOf(path.join(channel.dir, "Taken")), ["a.mp4"]);
-    });
-
-    test("reserved, hidden and path-like names are invalidInput", async () => {
-      const channel = await linked("Chan");
-      for (const name of [
-        "Style",
-        "STYLE",
-        "Samples",
-        "images",
-        "Host Pictures",
-        "CLAUDE_VE_x",
-        ".hidden",
-        "..",
-        ".",
-        "a/b",
-        "a\\b",
-        "../escape",
-        "",
-        "   ",
-        "x".repeat(121),
-        "x\u0000y",
-        "evil‮fdp",
-      ]) {
-        await rejectsCode(service().createVideo(alice.id, channel.id, name), "invalidInput");
-      }
-      assert.deepEqual(fs.readdirSync(channel.dir), []);
-      assert.deepEqual(fs.readdirSync(path.dirname(channel.dir)).includes("escape"), false);
-    });
-
-    test("a channel whose folder is gone is conflict, nothing is made", async () => {
-      const channel = await linked("Chan");
-      fs.renameSync(channel.dir, `${channel.dir}-gone`);
-      await rejectsCode(service().createVideo(alice.id, channel.id, "V"), "conflict");
-      assert.equal(fs.existsSync(channel.dir), false);
-    });
-
-    test("a channel directory that became a link out is conflict, nothing is made outside", async () => {
-      const channel = await linked("Chan");
-      const outside = world.mkdir("outside");
-      fs.renameSync(channel.dir, `${channel.dir}-gone`);
-      fs.symlinkSync(outside, channel.dir);
-      await rejectsCode(service().createVideo(alice.id, channel.id, "V"), "conflict");
-      assert.deepEqual(fs.readdirSync(outside), []);
-    });
-  });
-
   describe("video folders", () => {
     test("a video id resolves to its real folder inside the channel", async () => {
       const channel = await linked("Chan");
-      await service().createVideo(alice.id, channel.id, "V1");
+      fs.mkdirSync(path.join(channel.dir, "V1"));
       const resolved = await world.mod.api.folders.resolveVideo(alice.id, `${channel.id}/V1`);
       assert.equal(resolved.dir, path.join(channel.dir, "V1"));
       assert.equal(resolved.folderName, "V1");
@@ -318,13 +268,16 @@ describe("channel documents and videos", () => {
     test("reserved folders, files and other users' ids are notFound", async () => {
       const channel = await linked("Chan");
       fs.mkdirSync(path.join(channel.dir, "Style"));
+      fs.mkdirSync(path.join(channel.dir, "upload"));
       fs.mkdirSync(path.join(channel.dir, ".hidden"));
       fs.writeFileSync(path.join(channel.dir, "file"), "x");
-      await service().createVideo(alice.id, channel.id, "V1");
+      fs.mkdirSync(path.join(channel.dir, "V1"));
       const resolve = (/** @type {string} */ user, /** @type {unknown} */ id) =>
         world.mod.api.folders.resolveVideo(user, id);
       for (const id of [
         `${channel.id}/Style`,
+        `${channel.id}/upload`,
+        `${channel.id}/UPLOAD`,
         `${channel.id}/.hidden`,
         `${channel.id}/file`,
         `${channel.id}/missing`,
@@ -343,6 +296,36 @@ describe("channel documents and videos", () => {
     });
   });
 
+  describe("video folders that are links", () => {
+    test("a video folder that is a link is not a video, inside the channel or out of it", async () => {
+      const channel = await linked("Chan");
+      const outside = world.mkdir("outside");
+      fs.mkdirSync(path.join(channel.dir, "Real"));
+      fs.symlinkSync(outside, path.join(channel.dir, "Out"));
+      fs.symlinkSync(path.join(channel.dir, "Real"), path.join(channel.dir, "Alias"));
+      for (const name of ["Out", "Alias"]) {
+        await rejectsCode(
+          world.mod.api.folders.resolveVideo(alice.id, `${channel.id}/${name}`),
+          "notFound",
+        );
+      }
+      const real = await world.mod.api.folders.resolveVideo(alice.id, `${channel.id}/Real`);
+      assert.equal(real.dir, path.join(channel.dir, "Real"));
+    });
+
+    test("a channel whose folder was replaced by a link is unreachable, not followed", async () => {
+      const channel = await linked("Chan");
+      fs.mkdirSync(path.join(channel.dir, "V1"));
+      const moved = `${channel.dir}-moved`;
+      fs.renameSync(channel.dir, moved);
+      fs.symlinkSync(moved, channel.dir);
+      await rejectsCode(
+        world.mod.api.folders.resolveVideo(alice.id, `${channel.id}/V1`),
+        "conflict",
+      );
+    });
+  });
+
   describe("RPC", () => {
     test("getWorkspace answers channels, public settings and a null readiness", async () => {
       await linked("Tech");
@@ -356,29 +339,21 @@ describe("channel documents and videos", () => {
       assert.deepEqual(bobs.channels, []);
     });
 
-    test("createChannel, updateChannel, reorderChannels and removeChannel", async () => {
-      const dir = world.mkdir("share/rpc");
-      const created = /** @type {any} */ (
-        await world.callRpc(alice, "createChannel", {
-          name: "Rpc",
-          videoType: "long",
-          location: { kind: "link", dir },
-        })
-      );
-      assert.equal(created.dir, dir);
+    test("updateChannel and reorderChannels", async () => {
+      const created = await linked("Rpc");
       const updated = /** @type {any} */ (
         await world.callRpc(alice, "updateChannel", {
           id: created.id,
-          update: { name: "Renamed", videoType: null, long: null, short: null },
+          update: { videoType: "long", long: null, short: null },
         })
       );
-      assert.equal(updated.name, "Renamed");
+      assert.equal(updated.name, "Rpc");
       assert.equal(updated.videoType, "long");
       const profile = { prompts: slots("p"), styles: slots("s") };
       const withProfile = /** @type {any} */ (
         await world.callRpc(alice, "updateChannel", {
           id: created.id,
-          update: { name: null, videoType: "short", long: profile, short: null },
+          update: { videoType: "short", long: profile, short: null },
         })
       );
       assert.equal(withProfile.long.prompts[1].text, "p1");
@@ -389,98 +364,37 @@ describe("channel documents and videos", () => {
         ).map((channel) => channel.id),
         [created.id],
       );
-      assert.equal(await world.callRpc(alice, "removeChannel", { id: created.id }), null);
-      assert.deepEqual(
-        /** @type {any} */ (await world.callRpc(alice, "getWorkspace")).channels,
-        [],
-      );
     });
 
     test("input that is not valid is refused before anything happens", async () => {
       const bad = [
-        ["createChannel", {}],
-        [
-          "createChannel",
-          {
-            name: "x",
-            videoType: "weird",
-            location: { kind: "new", parent: null, folderName: null },
-          },
-        ],
-        ["createChannel", { name: "x", videoType: "auto", location: { kind: "other" } }],
-        ["createChannel", { name: "x", videoType: "auto", location: { kind: "link" } }],
-        ["createChannel", { name: "x", videoType: "auto", location: { kind: "link", dir: 5 } }],
         ["updateChannel", { id: "x", update: { long: { prompts: [], styles: [] } } }],
+        ["updateChannel", { id: "x", update: { videoType: "weird" } }],
         ["reorderChannels", { ids: "no" }],
-        ["removeChannel", {}],
-        ["createVideo", { channelId: "x" }],
+        ["importChannels", {}],
         ["fsList", { path: 5 }],
         ["fsCreateFolder", { parent: "/x" }],
-        ["createUpload", { videoId: "x", folder: "elsewhere", name: "a.mp4", size: 1 }],
-        ["createUpload", { videoId: "x", folder: "video", name: "a.mp4", size: "1" }],
         ["cancelUpload", {}],
       ];
+      const admin = world.makeAdmin("admin@example.com");
       for (const [name, input] of /** @type {[string, unknown][]} */ (bad)) {
         await assert.rejects(
-          Promise.resolve().then(() => world.callRpc(alice, name, input)),
+          Promise.resolve().then(() =>
+            world.callRpc(name.startsWith("fs") ? admin : alice, name, input),
+          ),
           (error) => /** @type {{ code?: string }} */ (error).code === "invalidInput",
           name,
         );
       }
-      assert.deepEqual(
-        treeOf(world.dataDir).filter((entry) => entry.startsWith("media/")),
-        [`media/${alice.id}/`].filter((entry) => treeOf(world.dataDir).includes(entry)),
-      );
     });
 
-    test("an empty file is refused by createUpload", async () => {
-      const dir = world.mkdir("share/up");
-      const channel = await service().create(alice, {
-        name: "Up",
-        videoType: "auto",
-        location: { kind: "link", dir },
-      });
-      const video = await service().createVideo(alice.id, channel.id, "V");
-      await rejectsCode(
-        Promise.resolve().then(() =>
-          world.callRpc(alice, "createUpload", {
-            videoId: video.id,
-            folder: "video",
-            name: "a.mp4",
-            size: 0,
-          }),
-        ),
-        "invalidInput",
-      );
-      const ticket = /** @type {any} */ (
-        await world.callRpc(alice, "createUpload", {
-          videoId: video.id,
-          folder: "video",
-          name: "a.mp4",
-          size: 3,
-        })
-      );
-      assert.equal(await world.callRpc(alice, "cancelUpload", { id: ticket.id }), null);
-    });
-
-    test("export, import, default prompt and createVideo", async () => {
-      const dir = world.mkdir("share/doc");
-      const channel = /** @type {any} */ (
-        await world.callRpc(alice, "createChannel", {
-          name: "Doc",
-          videoType: "auto",
-          location: { kind: "link", dir },
-        })
-      );
+    test("export, import and the default prompt", async () => {
+      await linked("Doc");
       const document = /** @type {any} */ (await world.callRpc(alice, "exportChannels"));
       assert.equal(document.channels[0].name, "Doc");
       const result = await world.callRpc(bob, "importChannels", { document });
-      assert.deepEqual(result, { updated: 0, created: 1 });
+      assert.deepEqual(result, { updated: 0, skipped: ["Doc"] });
       assert.equal(await world.callRpc(alice, "getDefaultPrompt"), DEFAULT_PROMPT);
-      const video = /** @type {any} */ (
-        await world.callRpc(alice, "createVideo", { channelId: channel.id, name: "V" })
-      );
-      assert.equal(video.folderName, "V");
     });
   });
 });

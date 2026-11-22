@@ -1,10 +1,11 @@
 /**
- * Settings, Channels: the user's channels (reorder, new, remove) and the editor of the selected
- * channel with its draft, Save, Revert, Ctrl+S and the unsaved-changes guard.
+ * Settings, Channels: the user's channels (reorder) and the editor of the selected channel with
+ * its draft, Save, Revert, Ctrl+S and the unsaved-changes guard. An admin adds, renames and removes
+ * channels, so this page has no New Channel and no Remove.
  */
-import { Plus, Tv } from "lucide-react";
+import { Tv } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Button, ConfirmDialog, EmptyState, ScrollArea, Spinner, toast } from "@/components/ui";
+import { EmptyState, ScrollArea, Spinner, toast } from "@/components/ui";
 import { toApiError, type ApiError } from "@/lib/errors";
 import { pluralize } from "@/lib/format";
 import type { Channel, VideoType } from "@/lib/types";
@@ -12,7 +13,6 @@ import { useAppState, useAppStoreApi, usePlatform } from "@/lib/appEnv";
 import { isShortcut } from "@/lib/platform";
 import { selectChannels } from "@/lib/store";
 import { useGuard, useRegisterGuard } from "../guardContext";
-import { quoted } from "../text";
 import { ChannelEditor } from "./ChannelEditor";
 import { ChannelList } from "./ChannelList";
 import {
@@ -23,7 +23,6 @@ import {
   hasInvalidSlotName,
   type Draft,
 } from "./draft";
-import { NewChannelDialog } from "./NewChannelDialog";
 import { moveItem } from "./reorder";
 
 const SAVED_FLASH_MS = 2500;
@@ -71,11 +70,6 @@ export function ChannelsSection({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<ApiError | null>(null);
   const [justSaved, setJustSaved] = useState(false);
-  const [newOpen, setNewOpen] = useState(false);
-  const [removeOpen, setRemoveOpen] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<{ channel: Channel; dirty: boolean } | null>(
-    null,
-  );
 
   useEffect(() => {
     if (!justSaved) return;
@@ -172,35 +166,6 @@ export function ChannelsSection({
       });
   };
 
-  // ---- Create, remove --------------------------------------------------------------------------
-
-  const onCreated = (channel: Channel) => {
-    setDraft({ id: null, values: {} });
-    setSelectedId(channel.id);
-    setSaveError(null);
-    setJustSaved(false);
-  };
-
-  const askRemove = () => {
-    if (!current) return;
-    setRemoveTarget({ channel: current, dirty });
-    setRemoveOpen(true);
-  };
-
-  const remove = async () => {
-    if (!removeTarget) return;
-    const { channel } = removeTarget;
-    const index = channels.findIndex((c) => c.id === channel.id);
-    try {
-      await store.getState().removeChannel(channel.id);
-      const rest = channels.filter((c) => c.id !== channel.id);
-      setSelectedId(rest[Math.min(index, rest.length - 1)]?.id ?? null);
-      if (draft.id === channel.id) discard();
-    } catch (error) {
-      toast.error(`${quoted(channel.name)} was not removed`, toApiError(error).message);
-    }
-  };
-
   // ---- Layout ----------------------------------------------------------------------------------
 
   if (!loaded && loading) {
@@ -218,7 +183,7 @@ export function ChannelsSection({
           <h2 className="flex h-6 items-center px-2 text-xs font-medium text-fg-subtle">
             {saved.length > 0 ? pluralize(saved.length, "Channel") : "Channels"}
           </h2>
-          {channels.length > 0 ? (
+          {channels.length > 0 && (
             <ChannelList
               channels={channels}
               selectedId={current?.id ?? null}
@@ -226,23 +191,8 @@ export function ChannelsSection({
               onSelect={select}
               onMove={move}
             />
-          ) : (
-            <p className="px-2 py-1 text-sm text-fg-muted">No channels yet.</p>
           )}
         </ScrollArea>
-        <div className="flex h-[52px] shrink-0 items-center border-t border-separator px-3">
-          <Button
-            icon={<Plus />}
-            className="w-full"
-            onClick={() => {
-              attempt(() => {
-                setNewOpen(true);
-              });
-            }}
-          >
-            New Channel
-          </Button>
-        </div>
       </div>
 
       <div className="min-w-0 flex-1">
@@ -266,7 +216,6 @@ export function ChannelsSection({
             justSaved={justSaved}
             onSave={() => void save()}
             onRevert={discard}
-            onRemove={askRemove}
             otherChannels={saved.filter((c) => c.id !== current.id)}
           />
         ) : (
@@ -274,41 +223,10 @@ export function ChannelsSection({
             className="h-full"
             icon={<Tv />}
             title="No channels yet"
-            description="A channel is a folder on the server with one folder per video inside. Create one to get started."
-            action={
-              <Button
-                variant="primary"
-                icon={<Plus />}
-                onClick={() => {
-                  setNewOpen(true);
-                }}
-              >
-                New Channel
-              </Button>
-            }
+            description="An admin adds channels for you."
           />
         )}
       </div>
-
-      <NewChannelDialog open={newOpen} onOpenChange={setNewOpen} onCreated={onCreated} />
-      <ConfirmDialog
-        open={removeOpen}
-        onOpenChange={setRemoveOpen}
-        title={`Remove ${quoted(removeTarget?.channel.name ?? "")} from VidAI?`}
-        description={
-          <>
-            VidAI forgets the channel with its prompts and styles. Its videos leave VidAI with their
-            jobs, change requests, revisions and unfinished uploads. The channel folder and
-            everything in it stay on the server's disk, and the edit log keeps its entries. While an
-            edit of one of its videos waits, runs or is paused, the channel cannot be removed: stop
-            those edits first.
-            {removeTarget?.dirty && " Your unsaved changes to it are discarded."}
-          </>
-        }
-        confirmLabel="Remove Channel"
-        tone="danger"
-        onConfirm={remove}
-      />
     </div>
   );
 }

@@ -26,7 +26,7 @@ describe("Channels in the Settings frame", () => {
       channelId: ADMIN_CHANNEL_TECH,
       videoType: "short",
     });
-    expect(screen.getByRole("textbox", { name: "Channel name" })).toHaveValue(TECH);
+    expect(screen.getByRole("heading", { name: TECH })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Short 9:16 prompt" })).toBeInTheDocument();
     act(() => {
       store.getState().openSettings({ section: "channels", videoType: "long" });

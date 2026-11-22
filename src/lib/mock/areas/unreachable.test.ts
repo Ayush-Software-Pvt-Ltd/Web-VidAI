@@ -31,10 +31,6 @@ describe("mock: operations that need the folder of an unreachable channel", () =
   });
 
   const calls: Array<[string, (backend: MockBackend) => Promise<unknown>]> = [
-    [
-      "createVideo",
-      (b: MockBackend) => b.createVideo({ channelId: ADMIN_CHANNEL_TECH, name: "N" }),
-    ],
     ["getVideoInputs", (b: MockBackend) => b.getVideoInputs({ videoId: LOST })],
     [
       "setVideoInputs",
@@ -59,9 +55,27 @@ describe("mock: operations that need the folder of an unreachable channel", () =
     ],
     ["cleanWorkingFiles", (b: MockBackend) => b.cleanWorkingFiles({ videoId: LOST })],
     [
-      "createUpload",
+      "createUpload into the video",
       (b: MockBackend) =>
-        b.createUpload({ videoId: LOST, folder: "video", name: "clip.mp4", size: 1000 }),
+        b.createUpload({ target: { kind: "video", videoId: LOST }, name: "clip.mp4", size: 1000 }),
+    ],
+    [
+      "createUpload into the channel",
+      (b: MockBackend) =>
+        b.createUpload({
+          target: { kind: "channel", channelId: ADMIN_CHANNEL_TECH },
+          name: "clip.mp4",
+          size: 1000,
+        }),
+    ],
+    [
+      "listUploads of the video",
+      (b: MockBackend) => b.listUploads({ target: { kind: "video", videoId: LOST } }),
+    ],
+    [
+      "listUploads of the channel",
+      (b: MockBackend) =>
+        b.listUploads({ target: { kind: "channel", channelId: ADMIN_CHANNEL_TECH } }),
     ],
     ["openTimeline", (b: MockBackend) => b.openTimeline({ videoId: LOST })],
     ["getTimeline", (b: MockBackend) => b.getTimeline({ videoId: LOST })],
@@ -107,8 +121,12 @@ describe("mock: operations that need the folder of an unreachable channel", () =
     const beauty = makeVideoId(ADMIN_CHANNEL_BEAUTY, "Night Cream");
     await expect(backend.getVideoInputs({ videoId: beauty })).resolves.toBeDefined();
     await expect(
-      backend.createVideo({ channelId: ADMIN_CHANNEL_BEAUTY, name: "Fresh" }),
-    ).resolves.toMatchObject({ folderName: "Fresh" });
+      backend.createUpload({
+        target: { kind: "channel", channelId: ADMIN_CHANNEL_BEAUTY },
+        name: "fresh.zip",
+        size: 10,
+      }),
+    ).resolves.toMatchObject({ name: "fresh.zip" });
     backend.dispose();
   });
 
@@ -167,8 +185,7 @@ describe("mock: operations that need the folder of an unreachable channel", () =
     const backend = new MockBackend({ ...options });
     const videoId = makeVideoId(ADMIN_CHANNEL_BEAUTY, "Night Cream");
     const ticket = await backend.createUpload({
-      videoId,
-      folder: "video",
+      target: { kind: "video", videoId },
       name: "clip.mp4",
       size: 1000,
     });

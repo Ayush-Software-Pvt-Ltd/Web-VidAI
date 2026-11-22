@@ -121,7 +121,7 @@ describe("VideoRow actions", () => {
     const items = within(menu)
       .getAllByRole("menuitem")
       .map((item) => item.textContent);
-    expect(items).toEqual(["Upload", "View activity"]);
+    expect(items).toEqual(["Upload Files", "View activity"]);
     expect(within(menu).queryByText(/Finder|Reveal|Open /)).toBeNull();
     await user.click(within(menu).getByRole("menuitem", { name: "View activity" }));
     expect(app.store.getState().selectedVideoId).toBe(app.video("Edit E").id);
@@ -146,12 +146,13 @@ describe("VideoRow upload state", () => {
       backend.world.uploads.push({
         id: "up-1",
         userId: USER_ID,
+        channelId: video.channelId,
         videoId: `${video.channelId}/${video.folderName}`,
-        folder: "video",
         name: "a-roll.mp4",
         size: 100,
         received: 40,
         done: false,
+        modifiedAt: 0,
       });
     },
   };

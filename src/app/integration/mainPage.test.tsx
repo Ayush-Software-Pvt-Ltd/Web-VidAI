@@ -43,7 +43,7 @@ describe("the main page", () => {
     expect(await screen.findByText("Hair Oil Review")).toBeInTheDocument();
     expect(screen.getByText("Earbuds Short")).toBeInTheDocument();
     const channels = screen.getByRole("navigation", { name: "Channels" });
-    await user.click(within(channels).getByRole("button", { name: /Tech Reviews/ }));
+    await user.click(within(channels).getByRole("button", { name: /^Tech Reviews/ }));
     expect(screen.queryByRole("list", { name: "Videos" })).toBeNull();
     expect(screen.getByText("Earbuds Short")).toBeInTheDocument();
     expect(screen.queryByText("Hair Oil Review")).toBeNull();

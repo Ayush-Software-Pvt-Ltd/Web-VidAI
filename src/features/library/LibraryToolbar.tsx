@@ -1,10 +1,9 @@
 /**
  * Left side of the main top bar (SPEC section 16): the search field (Cmd+F, Ctrl+F on Windows),
  * the filter (All, To edit, In progress, Edited), the sort, the user's own job summary such as
- * "2 running, 1 waiting" and, when the uploads feature provides a handler (`newVideo.tsx`), the
- * "New Video" button.
+ * "2 running, 1 waiting".
  */
-import { ArrowDown, ArrowUp, Plus, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
 import { useRef } from "react";
 import {
   Button,
@@ -29,7 +28,6 @@ import {
   type LibraryFilter,
   type VideoSort,
 } from "./model";
-import { useNewVideoHandler } from "./newVideoContext";
 import { SEARCH_INPUT_ID, useLibraryView } from "./viewStore";
 
 const DirIcon = ({ sort }: { sort: VideoSort }) =>
@@ -81,8 +79,6 @@ export function LibraryToolbar() {
   // The selector returns the stored queue (stable); the counts are derived from it here.
   const queue = useAppState((s) => s.queue.data);
   const summary = jobSummary(ownJobCounts(queue));
-  const channelId = useAppState((s) => s.selectedChannelId);
-  const onNewVideo = useNewVideoHandler();
   const inputRef = useRef<HTMLInputElement>(null);
   const platform = usePlatform();
 
@@ -139,18 +135,6 @@ export function LibraryToolbar() {
         options={FILTER_OPTIONS}
       />
       <SortMenu sort={sort} onChange={setSort} />
-      {onNewVideo && (
-        <Button
-          size="sm"
-          variant="primary"
-          icon={<Plus />}
-          onClick={() => {
-            onNewVideo(channelId);
-          }}
-        >
-          New Video
-        </Button>
-      )}
       {summary && (
         <span
           role="status"

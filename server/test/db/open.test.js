@@ -63,7 +63,10 @@ function seed(db) {
     "INSERT INTO revisions (video_id, n, label, user_id, job_id, created_at) VALUES ('v1', 1, 'Edit', 'u1', 'j1', 1)",
   );
   db.run(
-    "INSERT INTO uploads (id, user_id, video_id, folder, name, size, created_at, touched_at) VALUES ('up1', 'u1', 'v1', 'video', 'a.mp4', 10, 1, 1)",
+    "INSERT INTO uploads (id, user_id, channel_id, video_id, name, size, created_at, touched_at) VALUES ('up1', 'u1', 'c1', 'v1', 'a.mp4', 10, 1, 1)",
+  );
+  db.run(
+    "INSERT INTO uploads (id, user_id, channel_id, video_id, name, size, created_at, touched_at) VALUES ('up2', 'u1', 'c1', NULL, 'logo.png', 10, 1, 1)",
   );
 }
 
@@ -93,7 +96,7 @@ test("a fresh database gets every table of SPEC section 15", () => {
   ]) {
     assert.ok(tables.includes(name), `missing table ${name}`);
   }
-  assert.equal(one(db, "SELECT MAX(version) AS v FROM schema_migrations").v, 2);
+  assert.equal(one(db, "SELECT MAX(version) AS v FROM schema_migrations").v, 3);
   db.close();
 });
 
@@ -165,6 +168,8 @@ test("the real migrations load", () => {
   assert.equal(found[0].name, "initial");
   assert.equal(found[1].version, 2);
   assert.equal(found[1].name, "note-error");
+  assert.equal(found[2].version, 3);
+  assert.equal(found[2].name, "upload-targets");
 });
 
 test("a database of schema 1 gets the failure sentence column of the change requests", () => {
@@ -179,7 +184,7 @@ test("a database of schema 1 gets the failure sentence column of the change requ
     const old = openDatabase(path, { clock, migrationsDir: pathToFileURL(only + "/") });
     old.close();
     const db = openDatabase(path, { clock });
-    assert.equal(count(db, "schema_migrations"), 2);
+    assert.equal(count(db, "schema_migrations"), 3);
     assert.deepEqual(
       db
         .all("PRAGMA table_info(notes)")
@@ -189,6 +194,73 @@ test("a database of schema 1 gets the failure sentence column of the change requ
     );
     db.close();
   });
+});
+
+test("a database of schema 2 gets upload targets, loses its unfinished uploads and the storage folders", () => {
+  return withTempDir((dir) => {
+    const old = join(dir, "up-to-two");
+    mkdirSync(old);
+    for (const name of ["001-initial.sql", "002-note-error.sql"]) {
+      copyFileSync(new URL(`../../src/db/migrations/${name}`, import.meta.url), join(old, name));
+    }
+    const path = join(dir, "vidai.db");
+    const before = openDatabase(path, { clock, migrationsDir: pathToFileURL(old + "/") });
+    before.run(
+      "INSERT INTO users (id, email, password_hash, role, created_at, updated_at) VALUES ('u1', 'a@example.com', 'h', 'user', 1, 1)",
+    );
+    before.run(
+      "INSERT INTO channels (id, user_id, name, dir, video_type, profiles, position, created_at) VALUES ('c1', 'u1', 'Main', '/m/c1', 'auto', '{}', 0, 1)",
+    );
+    before.run(
+      "INSERT INTO videos (id, channel_id, folder_name, created_at) VALUES ('v1', 'c1', 'one', 1)",
+    );
+    before.run(
+      "INSERT INTO uploads (id, user_id, video_id, folder, name, size, created_at, touched_at) VALUES ('up1', 'u1', 'v1', 'broll', 'a.mp4', 10, 1, 1)",
+    );
+    before.run("INSERT INTO settings (key, value) VALUES ('storageRoots', '[\"/x\"]')");
+    before.run("INSERT INTO settings (key, value) VALUES ('maxUploadGb', '5')");
+    before.close();
+    const db = openDatabase(path, { clock });
+    assert.equal(count(db, "schema_migrations"), 3);
+    assert.equal(count(db, "uploads"), 0);
+    assert.equal(count(db, "videos"), 1);
+    assert.equal(one(db, "SELECT value FROM settings WHERE key = 'maxUploadGb'").value, "5");
+    assert.equal(db.all("SELECT value FROM settings WHERE key = 'storageRoots'").length, 0);
+    const columns = db.all("PRAGMA table_info(uploads)");
+    assert.deepEqual(
+      columns.map((c) => c.name),
+      [
+        "id",
+        "user_id",
+        "channel_id",
+        "video_id",
+        "name",
+        "size",
+        "received",
+        "created_at",
+        "touched_at",
+      ],
+    );
+    assert.equal(columns.find((c) => c.name === "channel_id")?.notnull, 1);
+    assert.equal(columns.find((c) => c.name === "video_id")?.notnull, 0);
+    db.close();
+  });
+});
+
+test("an upload names a channel; a channel upload has no video and goes with its channel", () => {
+  const db = openDatabase(":memory:", { clock });
+  seed(db);
+  db.run("DELETE FROM videos WHERE id = 'v1'");
+  assert.deepEqual(
+    db.all("SELECT id FROM uploads").map((row) => row.id),
+    ["up2"],
+  );
+  assert.throws(() =>
+    db.run(
+      "INSERT INTO uploads (id, user_id, channel_id, name, size, created_at, touched_at) VALUES ('x', 'u1', 'ghost', 'a', 1, 1, 1)",
+    ),
+  );
+  db.close();
 });
 
 test("foreign keys are really enforced", () => {

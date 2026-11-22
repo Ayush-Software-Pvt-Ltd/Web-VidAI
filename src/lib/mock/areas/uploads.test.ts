@@ -4,6 +4,7 @@ import type { Library } from "../../types";
 import { MockBackend } from "../backend";
 import { ADMIN_ID } from "../seed/session";
 import { HAIR_OIL_ID } from "../seed/uploads";
+import { ADMIN_CHANNEL_TECH, USER_CHANNEL_TRAVEL } from "../seed/workspace";
 import { makeVideoId } from "../../videoId";
 import { ADMIN_CHANNEL_BEAUTY } from "../seed/workspace";
 import { MAX_CHUNK_BYTES, UPLOAD_TICKS } from "./uploads";
@@ -16,8 +17,10 @@ function backendOf(scenarios: ("default" | "uploading")[] = ["default"], as?: "a
 }
 
 async function ticketFor(backend: MockBackend, name = "clip.mp4", size = 1000) {
-  return backend.createUpload({ videoId: NIGHT_CREAM, folder: "video", name, size });
+  return backend.createUpload({ target: { kind: "video", videoId: NIGHT_CREAM }, name, size });
 }
+
+const channelTarget = { kind: "channel", channelId: ADMIN_CHANNEL_BEAUTY } as const;
 
 const settle = async () => {
   for (let n = 0; n < 20; n += 1) await Promise.resolve();
@@ -41,16 +44,30 @@ describe("mock uploads area: createUpload", () => {
   });
 
   it.each([
-    ["a/b.mp4", "invalidInput", /slashes/],
-    [".hidden.mp4", "invalidInput", /dot/],
-    ["notes.exe", "invalidInput", /kind of file/],
-    ["noextension", "invalidInput", /kind of file/],
-  ] as const)("refuses the name %s", async (name, code, message) => {
+    ["a/b.mp4", /slashes/],
+    ["a\\b.mp4", /slashes/],
+    [".hidden.mp4", /start with a dot/],
+    ["name.", /end with a dot or a space/],
+    ["name ", /end with a dot or a space/],
+    ["bad\u0007name", /control characters/],
+    ["", /1 to 200 characters/],
+    ["x".repeat(201), /1 to 200 characters/],
+    ["CON.txt", /Windows does not allow/],
+  ] as const)("refuses the name %j", async (name, message) => {
     const backend = backendOf();
-    await expect(ticketFor(backend, name)).rejects.toMatchObject({ code });
+    await expect(ticketFor(backend, name)).rejects.toMatchObject({ code: "invalidInput" });
     await expect(ticketFor(backend, name)).rejects.toThrow(message);
     backend.dispose();
   });
+
+  it.each(["notes.exe", "noextension", "archive.zip", "Brand Kit (final).PSD", "x".repeat(200)])(
+    "accepts any file type: %s",
+    async (name) => {
+      const backend = backendOf();
+      await expect(ticketFor(backend, name)).resolves.toMatchObject({ name });
+      backend.dispose();
+    },
+  );
 
   it("refuses an empty file and a file over the limit with tooLarge", async () => {
     const backend = backendOf();
@@ -66,27 +83,24 @@ describe("mock uploads area: createUpload", () => {
     backend.dispose();
   });
 
-  it("refuses a name that exists in the folder, in the other folder it is free", async () => {
+  it("refuses a name that exists in the folder, free in the other folders", async () => {
     const backend = backendOf();
+    const hairOil = { kind: "video", videoId: HAIR_OIL_ID } as const;
     await expect(
-      backend.createUpload({
-        videoId: HAIR_OIL_ID,
-        folder: "video",
-        name: "Hair-Oil-Main.mp4",
-        size: 10,
-      }),
+      backend.createUpload({ target: hairOil, name: "LOGO.png", size: 10 }),
     ).rejects.toMatchObject({
       code: "conflict",
       message: "A file with this name already exists in this folder.",
     });
+    // The channel's upload folder and another video's folder are other folders.
     await expect(
-      backend.createUpload({
-        videoId: HAIR_OIL_ID,
-        folder: "broll",
-        name: "hair-oil-main.mp4",
-        size: 10,
-      }),
-    ).resolves.toMatchObject({ name: "hair-oil-main.mp4" });
+      backend.createUpload({ target: channelTarget, name: "logo.png", size: 10 }),
+    ).resolves.toMatchObject({ name: "logo.png" });
+    await expect(ticketFor(backend, "logo.png")).resolves.toMatchObject({ name: "logo.png" });
+    // A channel file name is taken in the channel folder only.
+    await expect(
+      backend.createUpload({ target: channelTarget, name: "brand-kit.zip", size: 10 }),
+    ).rejects.toMatchObject({ code: "conflict" });
     backend.dispose();
   });
 
@@ -104,8 +118,14 @@ describe("mock uploads area: createUpload", () => {
     const backend = backendOf();
     await expect(
       backend.createUpload({
-        videoId: makeVideoId(ADMIN_CHANNEL_BEAUTY, "Nope"),
-        folder: "video",
+        target: { kind: "video", videoId: makeVideoId(ADMIN_CHANNEL_BEAUTY, "Nope") },
+        name: "a.mp4",
+        size: 10,
+      }),
+    ).rejects.toMatchObject({ code: "notFound" });
+    await expect(
+      backend.createUpload({
+        target: { kind: "channel", channelId: "nope" },
         name: "a.mp4",
         size: 10,
       }),
@@ -246,7 +266,11 @@ describe("mock uploads area: cancelUpload and state", () => {
   it("the scenario uploading has an unfinished upload with its progress", async () => {
     const backend = backendOf(["uploading"]);
     const pending = backend.world.uploads.find((u) => !u.done);
-    expect(pending).toMatchObject({ userId: ADMIN_ID, videoId: NIGHT_CREAM, folder: "broll" });
+    expect(pending).toMatchObject({
+      userId: ADMIN_ID,
+      videoId: NIGHT_CREAM,
+      name: "texture-shots.mp4",
+    });
     expect(await backend.uploads.state(pending?.id ?? "")).toMatchObject({
       received: 340_000_000,
       done: false,
@@ -269,8 +293,28 @@ describe("mock uploads area: two users", () => {
       as: "user",
     });
     await expect(
-      user.createUpload({ videoId: NIGHT_CREAM, folder: "video", name: "a.mp4", size: 10 }),
+      user.createUpload({
+        target: { kind: "video", videoId: NIGHT_CREAM },
+        name: "a.mp4",
+        size: 10,
+      }),
     ).rejects.toMatchObject({ code: "notFound" });
+    await expect(
+      user.createUpload({ target: channelTarget, name: "a.mp4", size: 10 }),
+    ).rejects.toMatchObject({ code: "notFound" });
+    await expect(user.listUploads({ target: channelTarget })).rejects.toMatchObject({
+      code: "notFound",
+    });
+    await expect(
+      user.listUploads({ target: { kind: "video", videoId: NIGHT_CREAM } }),
+    ).rejects.toMatchObject({ code: "notFound" });
+    // Nor does the admin reach the user's channel.
+    await expect(
+      admin.listUploads({ target: { kind: "channel", channelId: USER_CHANNEL_TRAVEL } }),
+    ).rejects.toMatchObject({ code: "notFound" });
+    await expect(
+      user.listUploads({ target: { kind: "channel", channelId: USER_CHANNEL_TRAVEL } }),
+    ).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ name: "map.png" })]));
     const ticket = await ticketFor(admin);
     await expect(user.uploads.state(ticket.id)).rejects.toMatchObject({ code: "notFound" });
     await expect(user.cancelUpload({ id: ticket.id })).rejects.toMatchObject({ code: "notFound" });
@@ -281,5 +325,65 @@ describe("mock uploads area: two users", () => {
     expect((await admin.uploads.state(ticket.id)).received).toBe(0);
     user.dispose();
     admin.dispose();
+  });
+});
+
+describe("mock uploads area: listUploads and what an upload blocks", () => {
+  it("lists the finished files of a video and of a channel in natural order", async () => {
+    const backend = backendOf();
+    const video = await backend.listUploads({ target: { kind: "video", videoId: HAIR_OIL_ID } });
+    expect(video.map((f) => f.name)).toEqual(["background-music.mp3", "logo.png", "script.pdf"]);
+    expect(video[0]?.name).toBe("background-music.mp3");
+    expect(video[0]?.size).toBeGreaterThan(0);
+    expect(video[0]?.modifiedAt).toBeGreaterThan(0);
+    const channel = await backend.listUploads({ target: channelTarget });
+    expect(channel.map((f) => f.name)).toEqual(["brand-kit.zip", "intro-jingle.wav"]);
+    await expect(
+      backend.listUploads({ target: { kind: "channel", channelId: ADMIN_CHANNEL_TECH } }),
+    ).resolves.toEqual([]);
+    backend.dispose();
+  });
+
+  it("lists a file once it is complete, not while it is being sent", async () => {
+    const backend = backendOf();
+    const ticket = await ticketFor(backend, "clip.mp4", 1000);
+    const target = { kind: "video", videoId: NIGHT_CREAM } as const;
+    expect((await backend.listUploads({ target })).map((f) => f.name)).not.toContain("clip.mp4");
+    const sent = backend.uploads.send(ticket, new Blob(["x"]));
+    await settle();
+    for (let n = 0; n < UPLOAD_TICKS; n += 1) backend.tick();
+    await sent;
+    expect((await backend.listUploads({ target })).map((f) => f.name)).toEqual([
+      "clip.mp4",
+      "product-shots.zip",
+    ]);
+    backend.dispose();
+  });
+
+  it("an upload into a video blocks Start Editing of it until it is done", async () => {
+    const backend = backendOf();
+    const offered = async () =>
+      (await backend.getLibrary()).channels
+        .flatMap((c) => c.videos)
+        .find((v) => v.id === NIGHT_CREAM)?.actions ?? [];
+    const startable = (await offered()).includes("startEdit");
+    expect(startable).toBe(true);
+    const ticket = await ticketFor(backend);
+    expect(await offered()).not.toContain("startEdit");
+    await backend.cancelUpload({ id: ticket.id });
+    expect((await offered()).includes("startEdit")).toBe(startable);
+    backend.dispose();
+  });
+
+  it("an upload into a channel blocks nothing", async () => {
+    const backend = backendOf();
+    const actionsOf = async () =>
+      (await backend.getLibrary()).channels
+        .flatMap((c) => c.videos)
+        .map((v) => [v.id, v.actions, v.uploading]);
+    const before = await actionsOf();
+    await backend.createUpload({ target: channelTarget, name: "big.zip", size: 1000 });
+    expect(await actionsOf()).toEqual(before);
+    backend.dispose();
   });
 });

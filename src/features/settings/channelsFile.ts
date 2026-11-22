@@ -12,14 +12,18 @@ export function exportFileName(date: Date): string {
   return `vidai-channels-${localDateStamp(date)}.json`;
 }
 
-/** What an import did, as a sentence. */
-export function describeImport({ created, updated }: ImportResult): string {
-  if (created === 0 && updated === 0) return "The file had no channels, so nothing changed.";
-  const parts: string[] = [];
-  if (created > 0) parts.push(`${pluralize(created, "channel")} added`);
-  if (updated > 0) parts.push(`${pluralize(updated, "channel")} updated`);
-  const text = parts.join(" and ");
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+/**
+ * What an import did, as sentences: how many channels were updated, then the names in the file
+ * that are not among the user's channels ("Not in your channels: A, B."; only an admin makes
+ * channels, so an import never does).
+ */
+export function describeImport({ updated, skipped }: ImportResult): string {
+  const sentences: string[] = [];
+  if (updated > 0) sentences.push(`${pluralize(updated, "channel")} updated.`);
+  else if (skipped.length === 0) sentences.push("The file had no channels, so nothing changed.");
+  else sentences.push("No channel was updated.");
+  if (skipped.length > 0) sentences.push(`Not in your channels: ${skipped.join(", ")}.`);
+  return sentences.join(" ");
 }
 
 /** Reads the chosen file into a channels document for `importChannels` (the server checks the rest). */

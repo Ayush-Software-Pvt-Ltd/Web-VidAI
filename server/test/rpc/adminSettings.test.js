@@ -30,8 +30,8 @@ test("adminGetSettings returns every setting", async () => {
   const all = /** @type {AdminSettings} */ (await app.call("adminGetSettings", {}, ctx));
   assert.equal(all.maxEdits, 2);
   assert.equal(all.setup, "claudeSubscription");
-  assert.deepEqual(all.storageRoots, []);
-  assert.equal(Object.keys(all).length, 14);
+  assert.ok(!("storageRoots" in all));
+  assert.equal(Object.keys(all).length, 13);
 });
 
 test("adminUpdateSettings validates, clamps, answers with everything and announces the public view", async () => {
@@ -39,7 +39,7 @@ test("adminUpdateSettings validates, clamps, answers with everything and announc
   const all = /** @type {AdminSettings} */ (
     await app.call(
       "adminUpdateSettings",
-      { maxEdits: 50, cpuTotalPercent: 47, setup: "openaiApi", maxUploadGb: 10, storageRoots: [] },
+      { maxEdits: 50, cpuTotalPercent: 47, setup: "openaiApi", maxUploadGb: 10 },
       ctx,
     )
   );
@@ -72,18 +72,17 @@ test("a module can refuse a settings change: nothing is stored or announced", as
     hooks: {
       beforeSettingsChange: async (clean) => {
         seen.push(clean);
-        if (clean.storageRoots)
-          throw conflict("2 channels of 1 user are in /srv/x. Move or remove them first.");
+        if (clean.maxEdits === 8) throw conflict("A module can say no to a change.");
       },
     },
   });
   const admin = app.makeUser("admin@example.com", { role: "admin" });
   const ctx = app.contextFor(admin);
-  await app.call("adminUpdateSettings", { maxEdits: 50, storageRoots: [] }, ctx).then(
+  await app.call("adminUpdateSettings", { maxEdits: 50 }, ctx).then(
     () => assert.fail("refused"),
     (error) => assert.equal(error.code, "conflict"),
   );
-  assert.deepEqual(seen, [{ maxEdits: 8, storageRoots: [] }], "the hook sees the checked change");
+  assert.deepEqual(seen, [{ maxEdits: 8 }], "the hook sees the checked change");
   assert.equal(app.settings.getAll().maxEdits, 2);
   assert.deepEqual(app.emitted, []);
   // A change the hook accepts goes through.

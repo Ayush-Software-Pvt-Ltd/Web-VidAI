@@ -6,12 +6,16 @@ import {
   isBrollName,
   isReservedChannelEntry,
   naturalCompare,
+  uploadNameProblem,
 } from "../../src/storage/names.js";
 
 test("reserved names inside a channel", () => {
   for (const name of [
     ".hidden",
     ".DS_Store",
+    "upload",
+    "Upload",
+    "UPLOAD",
     "CLAUDE_VE",
     "CLAUDE_VE_cache",
     "Style",
@@ -25,7 +29,7 @@ test("reserved names inside a channel", () => {
   ]) {
     assert.equal(isReservedChannelEntry(name), true, name);
   }
-  for (const name of ["Video 1", "claude_ve", "My Style", "Images 2", "Host-Images"]) {
+  for (const name of ["Video 1", "claude_ve", "My Style", "Images 2", "Host-Images", "uploads"]) {
     assert.equal(isReservedChannelEntry(name), false, name);
   }
 });
@@ -53,4 +57,50 @@ test("naturalCompare orders numbers as numbers and ignores case", () => {
   // The order is total: names that look equal still compare.
   assert.notEqual(naturalCompare("a", "A"), 0);
   assert.equal(naturalCompare("a", "A"), -naturalCompare("A", "a"));
+});
+
+test("uploadNameProblem: one plain file name, any type, the Windows rules on every system", () => {
+  for (const platform of ["darwin", "win32", "linux"]) {
+    for (const name of [
+      "clip.mp4",
+      "Archive.ZIP",
+      "noextension",
+      "a b (1).mov",
+      "a:b?.txt".replace(/[:?]/g, "-"),
+      "ünï.png",
+      "a".repeat(200),
+    ]) {
+      assert.equal(uploadNameProblem(name, platform), null, `${platform} ${name}`);
+    }
+    for (const name of [
+      "",
+      ".hidden",
+      "a/b",
+      "a\\b",
+      "..",
+      "a\u0000b",
+      "a\u0007b",
+      "trail ",
+      " lead",
+      "dot.",
+      "CON",
+      "con.txt",
+      "Aux.mp4",
+      "NUL",
+      "prn.x",
+      "COM1",
+      "lpt9.bin",
+      "a".repeat(201),
+    ]) {
+      assert.notEqual(
+        uploadNameProblem(name, platform),
+        null,
+        `${platform} ${JSON.stringify(name)}`,
+      );
+    }
+  }
+  // Names that only look like devices are fine.
+  for (const name of ["console.mp4", "com10.mp4", "lpt.txt", "nullable"]) {
+    assert.equal(uploadNameProblem(name, "darwin"), null, name);
+  }
 });

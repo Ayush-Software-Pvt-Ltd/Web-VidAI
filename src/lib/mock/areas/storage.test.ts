@@ -1,173 +1,188 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { MockBackend } from "../backend";
-import { ADMIN_ID, USER_ID } from "../seed/session";
-import { FOOTAGE_ROOT, SHARE_ROOT, makeUnreachable } from "../seed/storage";
-import { MEDIA_ROOT, personalFolder } from "./workspace";
+import {
+  BEAUTY_DIR,
+  DATA_DIR,
+  HOME,
+  OFFLINE_VOLUME,
+  SSD,
+  TECH_DIR,
+  TRAVEL_DIR,
+  makeVolumeUnavailable,
+} from "../seed/storage";
 
 const options = { latencyMs: 0, autoTick: false } as const;
+const backends: MockBackend[] = [];
 
-function backendOf(as: "admin" | "user" = "admin") {
-  return new MockBackend({ ...options, scenarios: ["default"], as });
+function backendOf(as: "admin" | "user" = "admin", world?: MockBackend["world"]) {
+  const backend = new MockBackend({
+    ...options,
+    scenarios: ["default"],
+    as,
+    ...(world ? { world } : {}),
+  });
+  backends.push(backend);
+  return backend;
 }
+
+afterEach(() => {
+  for (const backend of backends.splice(0)) backend.dispose();
+});
 
 const names = (listing: { entries: { name: string }[] }) => listing.entries.map((e) => e.name);
 
 describe("mock storage area: fsPlaces", () => {
-  it("lists the personal folder first, then the storage folders", async () => {
+  it("lists home first, then the drive, then the volumes, one of them unavailable", async () => {
     const backend = backendOf();
     expect(await backend.fsPlaces()).toEqual([
-      { name: "My folder", path: personalFolder(ADMIN_ID), kind: "personal", available: true },
-      { name: "Server storage", path: MEDIA_ROOT, kind: "storage", available: true },
-      { name: "footage", path: FOOTAGE_ROOT, kind: "storage", available: true },
-      { name: "shoots", path: SHARE_ROOT, kind: "storage", available: true },
+      { name: "Home", path: HOME, kind: "home", available: true },
+      { name: "Macintosh HD", path: "/", kind: "drive", available: true },
+      { name: "Footage SSD", path: SSD, kind: "volume", available: true },
+      { name: "Backup NAS", path: OFFLINE_VOLUME, kind: "volume", available: false },
     ]);
-    backend.dispose();
   });
 
-  it("marks a storage folder that cannot be reached", async () => {
+  it("marks a volume that cannot be reached and cannot list it", async () => {
     const backend = backendOf();
-    makeUnreachable(backend.world, SHARE_ROOT);
+    makeVolumeUnavailable(backend.world, SSD);
     const places = await backend.fsPlaces();
-    expect(places.find((place) => place.path === SHARE_ROOT)?.available).toBe(false);
-    expect(places.find((place) => place.path === FOOTAGE_ROOT)?.available).toBe(true);
-    await expect(backend.fsList({ path: SHARE_ROOT })).rejects.toMatchObject({
-      code: "forbidden",
+    expect(places.find((place) => place.path === SSD)?.available).toBe(false);
+    await expect(backend.fsList({ path: SSD })).rejects.toMatchObject({ code: "notFound" });
+    await expect(backend.fsList({ path: OFFLINE_VOLUME })).rejects.toMatchObject({
+      code: "notFound",
     });
-    backend.dispose();
+    // The unavailable volume is not in the listing of /Volumes either.
+    expect(names(await backend.fsList({ path: "/Volumes" }))).toEqual([]);
   });
 
-  it("needs a signed-in user", async () => {
+  it("needs a signed-in account", async () => {
     const backend = new MockBackend({ ...options, scenarios: ["signed-out"] });
+    backends.push(backend);
     await expect(backend.fsPlaces()).rejects.toMatchObject({ code: "unauthenticated" });
-    backend.dispose();
   });
 });
 
 describe("mock storage area: fsList", () => {
-  it("lists the personal folder when no path is given, with taken channel folders", async () => {
+  it("lists the home folder when no path is given, with the channel folders taken", async () => {
     const backend = backendOf();
     const listing = await backend.fsList();
-    expect(listing.path).toBe(personalFolder(ADMIN_ID));
-    expect(listing.parent).toBe(MEDIA_ROOT);
-    expect(listing.entries).toEqual([
-      { name: "Beauty Channel", path: `${personalFolder(ADMIN_ID)}/Beauty Channel`, taken: true },
-      { name: "Raw footage", path: `${personalFolder(ADMIN_ID)}/Raw footage`, taken: false },
-      { name: "Tech Reviews", path: `${personalFolder(ADMIN_ID)}/Tech Reviews`, taken: true },
+    expect(listing.path).toBe(HOME);
+    expect(listing.parent).toBe("/Users");
+    expect(listing.entries.map((e) => [e.name, e.taken])).toEqual([
+      ["Desktop", false],
+      ["Documents", false],
+      ["Downloads", false],
+      // Holds the Tech Reviews and Travel Diary channels.
+      ["Footage", true],
+      ["Movies", false],
+      // The server's own data directory.
+      ["VidAI Data", true],
     ]);
-    backend.dispose();
+  });
+
+  it("shows the tops of the drive and of a volume, whose parent is null", async () => {
+    const backend = backendOf();
+    const drive = await backend.fsList({ path: "/" });
+    expect(drive.parent).toBeNull();
+    expect(names(drive)).toEqual(["Applications", "Library", "System", "Users", "Volumes"]);
+    expect(names(await backend.fsList({ path: "/Volumes" }))).toEqual(["Footage SSD"]);
+    const ssd = await backend.fsList({ path: SSD });
+    expect(ssd.parent).toBeNull();
+    expect(ssd.entries.map((e) => [e.name, e.taken])).toEqual([
+      ["Beauty Channel", true],
+      ["Beauty Channel Backup", false],
+      ["Client Shoots", false],
+      ["Spare", false],
+    ]);
   });
 
   it("sorts in natural order, counts videos and leaves hidden folders out", async () => {
     const backend = backendOf();
-    const raw = await backend.fsList({ path: `${personalFolder(ADMIN_ID)}/Raw footage` });
-    expect(names(raw)).toEqual(["Day 1", "Day 2", "Day 10"]);
-    expect(raw.videoCount).toBe(2);
-    expect(raw.entries.every((entry) => !entry.taken)).toBe(true);
-    const footage = await backend.fsList({ path: FOOTAGE_ROOT });
-    expect(names(footage)).toEqual(["Campaigns", "Interviews"]);
-    expect(footage.parent).toBeNull();
-    const day = await backend.fsList({ path: `${personalFolder(ADMIN_ID)}/Raw footage/Day 2` });
-    expect(day.videoCount).toBe(12);
-    expect(day.entries).toEqual([]);
-    backend.dispose();
-  });
-
-  it("flags a folder that contains a channel, and lists the media folder with only my own folder", async () => {
-    const backend = backendOf();
-    const media = await backend.fsList({ path: MEDIA_ROOT });
-    expect(media.parent).toBeNull();
-    expect(media.entries).toEqual([
-      { name: ADMIN_ID, path: personalFolder(ADMIN_ID), taken: true },
+    const shoots = await backend.fsList({ path: `${SSD}/Client Shoots` });
+    expect(names(shoots)).toEqual(["Spring launch", "Summer sale"]);
+    expect((await backend.fsList({ path: `${SSD}/Client Shoots/Spring launch` })).videoCount).toBe(
+      9,
+    );
+    expect(names(await backend.fsList({ path: `${HOME}/Footage` }))).toEqual([
+      "Archive 2024",
+      "Archive 2025",
+      "Interviews",
+      "Tech Reviews",
+      "Travel Diary",
     ]);
-    backend.dispose();
+    // `.cache` and `.Trashes` exist but are not listed.
+    expect(names(await backend.fsList({ path: HOME }))).not.toContain(".cache");
+    expect(names(await backend.fsList({ path: SSD }))).not.toContain(".Trashes");
   });
 
-  it("flags a folder made into a channel directory later", async () => {
+  it("lists the video and upload folders inside a channel directory", async () => {
     const backend = backendOf();
-    const dir = `${FOOTAGE_ROOT}/Campaigns/Spring launch`;
+    const beauty = await backend.fsList({ path: BEAUTY_DIR });
+    expect(names(beauty)).toContain("Hair Oil Review");
+    expect(names(beauty)).toContain("upload");
+    const video = await backend.fsList({ path: `${BEAUTY_DIR}/Hair Oil Review` });
+    expect(names(video)).toEqual(["upload"]);
+    expect(video.videoCount).toBe(1);
+  });
+
+  it("flags a folder made into a channel directory later, and anything in the data directory", async () => {
+    const backend = backendOf();
     const channel = backend.world.channels[0];
     if (!channel) throw new Error("seed channel missing");
-    channel.dir = dir;
-    const campaigns = await backend.fsList({ path: `${FOOTAGE_ROOT}/Campaigns` });
-    expect(campaigns.entries.map((e) => [e.name, e.taken])).toEqual([
+    channel.dir = `${SSD}/Client Shoots/Spring launch`;
+    const shoots = await backend.fsList({ path: `${SSD}/Client Shoots` });
+    expect(shoots.entries.map((e) => [e.name, e.taken])).toEqual([
       ["Spring launch", true],
       ["Summer sale", false],
     ]);
-    expect((await backend.fsList({ path: FOOTAGE_ROOT })).entries[0]).toMatchObject({
-      name: "Campaigns",
-      taken: true,
-    });
-    backend.dispose();
+    expect(
+      (await backend.fsList({ path: SSD })).entries.find((e) => e.name === "Client Shoots"),
+    ).toMatchObject({ taken: true });
+    const data = await backend.fsList({ path: DATA_DIR });
+    expect(data.entries).toEqual([{ name: "projects", path: `${DATA_DIR}/projects`, taken: true }]);
   });
 
-  it("refuses what the server refuses, with its sentences", async () => {
+  it("resolves .. and trailing slashes and refuses what the server refuses", async () => {
     const backend = backendOf();
-    await expect(backend.fsList({ path: "/etc" })).rejects.toMatchObject({
-      code: "forbidden",
-      message: "This folder is outside the storage folders the admin allows.",
-    });
-    await expect(backend.fsList({ path: `${FOOTAGE_ROOT}/../etc` })).rejects.toMatchObject({
-      code: "forbidden",
-    });
+    expect((await backend.fsList({ path: `${HOME}/Footage/../Movies/` })).path).toBe(
+      `${HOME}/Movies`,
+    );
     await expect(backend.fsList({ path: "Movies" })).rejects.toMatchObject({
       code: "invalidInput",
       message: "Give the full path of the folder, starting at the top of the disk.",
     });
-    await expect(backend.fsList({ path: `${FOOTAGE_ROOT}/Nope` })).rejects.toMatchObject({
-      code: "invalidInput",
-      message: "This folder does not exist.",
+    await expect(backend.fsList({ path: `${HOME}/Nope` })).rejects.toMatchObject({
+      code: "notFound",
+      message: "This folder does not exist or cannot be read.",
     });
-    backend.dispose();
   });
 
-  it("keeps two users apart", async () => {
+  it("answers forbidden to a user, for every path", async () => {
     const admin = backendOf("admin");
-    const user = new MockBackend({
-      ...options,
-      scenarios: ["default"],
-      as: "user",
-      world: admin.world,
-    });
-    expect(names(await user.fsList())).toEqual(["Travel Diary", "Trips"]);
-    expect(names(await user.fsList({ path: MEDIA_ROOT }))).toEqual([USER_ID]);
-    await expect(user.fsList({ path: personalFolder(ADMIN_ID) })).rejects.toMatchObject({
+    const user = backendOf("user", admin.world);
+    await expect(user.fsPlaces()).rejects.toMatchObject({ code: "forbidden" });
+    await expect(user.fsList()).rejects.toMatchObject({ code: "forbidden" });
+    await expect(user.fsList({ path: TRAVEL_DIR })).rejects.toMatchObject({ code: "forbidden" });
+    await expect(user.fsList({ path: TECH_DIR })).rejects.toMatchObject({ code: "forbidden" });
+    await expect(user.fsCreateFolder({ parent: HOME, name: "Mine" })).rejects.toMatchObject({
       code: "forbidden",
-      message: "You do not have access to this folder.",
     });
-    await expect(
-      user.fsCreateFolder({ parent: personalFolder(ADMIN_ID), name: "Mine" }),
-    ).rejects.toMatchObject({ code: "forbidden" });
-    // A folder inside a stranger's channel is a conflict, with the same sentence as a taken one.
-    const strangers = admin.world.channels.find((c) => c.userId === ADMIN_ID);
-    if (!strangers) throw new Error("seed channel missing");
-    strangers.dir = `${FOOTAGE_ROOT}/Interviews`;
-    await expect(user.fsList({ path: `${FOOTAGE_ROOT}/Interviews` })).rejects.toMatchObject({
-      code: "conflict",
-      message: "This folder already belongs to a channel.",
-    });
-    // The owner may look inside their own channel.
-    expect(await admin.fsList({ path: `${FOOTAGE_ROOT}/Interviews` })).toMatchObject({
-      entries: [],
-    });
-    admin.dispose();
-    user.dispose();
+    expect(admin.world.fs.some((folder) => folder.path === `${HOME}/Mine`)).toBe(false);
   });
 });
 
 describe("mock storage area: fsCreateFolder", () => {
   it("makes a folder that is then listed, empty and not taken", async () => {
     const backend = backendOf();
-    const made = await backend.fsCreateFolder({ parent: FOOTAGE_ROOT, name: "New shoot" });
-    expect(made).toEqual({ path: `${FOOTAGE_ROOT}/New shoot` });
-    const listing = await backend.fsList({ path: FOOTAGE_ROOT });
-    expect(names(listing)).toEqual(["Campaigns", "Interviews", "New shoot"]);
+    const made = await backend.fsCreateFolder({ parent: SSD, name: "New shoot" });
+    expect(made).toEqual({ path: `${SSD}/New shoot` });
+    expect(names(await backend.fsList({ path: SSD }))).toContain("New shoot");
     expect(await backend.fsList({ path: made.path })).toMatchObject({
       path: made.path,
-      parent: FOOTAGE_ROOT,
+      parent: SSD,
       videoCount: 0,
       entries: [],
     });
-    backend.dispose();
   });
 
   it("refuses a bad name with the reason", async () => {
@@ -181,42 +196,34 @@ describe("mock storage area: fsCreateFolder", () => {
       ["x".repeat(121), "A name can have at most 120 characters."],
     ];
     for (const [name, message] of bad) {
-      await expect(backend.fsCreateFolder({ parent: FOOTAGE_ROOT, name })).rejects.toMatchObject({
+      await expect(backend.fsCreateFolder({ parent: HOME, name })).rejects.toMatchObject({
         code: "invalidInput",
         message,
       });
     }
-    backend.dispose();
   });
 
-  it("refuses a name that exists, a place outside the storage folders and a missing parent", async () => {
+  it("refuses a name that exists and a parent that is missing or on an unavailable volume", async () => {
     const backend = backendOf();
-    await expect(
-      backend.fsCreateFolder({ parent: FOOTAGE_ROOT, name: "Interviews" }),
-    ).rejects.toMatchObject({
+    await expect(backend.fsCreateFolder({ parent: HOME, name: "Movies" })).rejects.toMatchObject({
       code: "conflict",
       message: "A folder with this name already exists here.",
     });
-    await expect(backend.fsCreateFolder({ parent: "/tmp", name: "x" })).rejects.toMatchObject({
-      code: "forbidden",
-    });
     await expect(
-      backend.fsCreateFolder({ parent: `${FOOTAGE_ROOT}/Gone`, name: "x" }),
+      backend.fsCreateFolder({ parent: `${HOME}/Gone`, name: "x" }),
     ).rejects.toMatchObject({
-      code: "invalidInput",
+      code: "notFound",
       message: "The folder to put it in does not exist.",
     });
-    backend.dispose();
+    await expect(
+      backend.fsCreateFolder({ parent: OFFLINE_VOLUME, name: "x" }),
+    ).rejects.toMatchObject({ code: "notFound" });
   });
 
-  it("refuses a folder inside a channel directory", async () => {
+  it("may make a folder anywhere on the disk, also on the drive's own folders", async () => {
     const backend = backendOf();
-    await expect(
-      backend.fsCreateFolder({ parent: `${personalFolder(ADMIN_ID)}/Beauty Channel`, name: "x" }),
-    ).rejects.toMatchObject({
-      code: "conflict",
-      message: "This folder already belongs to a channel.",
+    expect(await backend.fsCreateFolder({ parent: "/Users/Shared", name: "Clips" })).toEqual({
+      path: "/Users/Shared/Clips",
     });
-    backend.dispose();
   });
 });

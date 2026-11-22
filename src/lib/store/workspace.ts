@@ -1,4 +1,4 @@
-import type { Channel, ChannelCreate, ChannelUpdate, PublicSettings, Workspace } from "../types";
+import type { Channel, ChannelUpdate, PublicSettings, Workspace } from "../types";
 import type { SettingsChangedPayload } from "../rpc";
 import type { SliceContext } from "./ctx";
 import { idle, type Resource } from "./resource";
@@ -19,11 +19,7 @@ export interface WorkspaceActions {
    * edits need (readiness depends on both) are brought up to date.
    */
   applySettingsChanged: (payload: SettingsChangedPayload) => void;
-  /** Creates a channel; it is added to the list and the library is refreshed. */
-  createChannel: (input: ChannelCreate) => Promise<Channel>;
   updateChannel: (id: string, update: ChannelUpdate) => Promise<Channel>;
-  /** Removes a channel; a selection that pointed at it falls back to All Channels. */
-  removeChannel: (id: string) => Promise<void>;
   reorderChannels: (ids: string[]) => Promise<Channel[]>;
 }
 
@@ -61,22 +57,11 @@ export function createWorkspaceSlice({ api, set, get, load, call }: SliceContext
       if (adminSettings.status !== "idle") void get().loadAdminSettings();
       if (adminHarness.status !== "idle") void get().loadAdminHarness();
     },
-    async createChannel(input) {
-      const channel = await call(() => api.createChannel(input));
-      setChannels([...channelsNow().filter((c) => c.id !== channel.id), channel]);
-      await get().refreshLibrary();
-      return channel;
-    },
     async updateChannel(id, update) {
       const channel = await call(() => api.updateChannel({ id, update }));
       setChannels(channelsNow().map((c) => (c.id === channel.id ? channel : c)));
       await get().refreshLibrary();
       return channel;
-    },
-    async removeChannel(id) {
-      await call(() => api.removeChannel({ id }));
-      setChannels(channelsNow().filter((c) => c.id !== id));
-      await get().refreshLibrary();
     },
     async reorderChannels(ids) {
       const channels = await call(() => api.reorderChannels({ ids }));

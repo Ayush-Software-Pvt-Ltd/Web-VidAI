@@ -17,13 +17,14 @@
  *
  * What a reload can keep is the ticket: tickets of unfinished uploads are saved in local storage
  * (per user) and asked again with `api.uploads.state` when the app starts. The server has no call
- * that lists the unfinished uploads of a video, and a browser cannot keep a file across a reload.
+ * that lists the unfinished uploads of a folder, and a browser cannot keep a file across a reload.
+ *
+ * An upload goes to one `UploadTarget`: the `upload` folder of a video or of a channel.
  */
 import { createStore, type StoreApi } from "zustand";
 import type { Api } from "@/lib/api";
 import { isAbortError, toApiError } from "@/lib/errors";
-import type { AppStore } from "@/lib/store";
-import type { ErrorCode, UploadFolder, UploadTicket, VideoRef } from "@/lib/types";
+import type { ErrorCode, UploadTarget, UploadTicket } from "@/lib/types";
 
 /**
  * Files that are sent at the same time; the others wait for a place. A browser keeps about six
@@ -43,8 +44,7 @@ export type UploadPhase =
 export interface UploadItem {
   /** A local id, unique in this tab. */
   key: string;
-  videoId: string;
-  folder: UploadFolder;
+  target: UploadTarget;
   name: string;
   size: number;
   phase: UploadPhase;
@@ -60,21 +60,23 @@ export interface UploadItem {
   errorCode: ErrorCode | null;
 }
 
-/** The New Video dialog: asked for in a channel (`null`: the user chooses), then the new video. */
-export interface NewVideoRequest {
-  channelId: string | null;
-  created: VideoRef | null;
+/** Whether two targets are the same folder. */
+export function sameTarget(a: UploadTarget, b: UploadTarget): boolean {
+  return a.kind === "video"
+    ? b.kind === "video" && a.videoId === b.videoId
+    : b.kind === "channel" && a.channelId === b.channelId;
 }
 
 export interface UploadsState {
   items: UploadItem[];
-  newVideo: NewVideoRequest | null;
+  /** The Upload Files dialog of a channel (a video's is `uploadFor` of the jobs controller). */
+  dialog: UploadTarget | null;
 }
 
 export interface UploadsController {
   readonly state: StoreApi<UploadsState>;
   /** Starts the files: each asks the server at once, so a refusal shows before any byte moves. */
-  add: (videoId: string, folder: UploadFolder, files: readonly File[]) => void;
+  add: (target: UploadTarget, files: readonly File[]) => void;
   pause: (key: string) => void;
   resume: (key: string) => void;
   /** Tries a failed upload again (it continues from what the server has when it still has it). */
@@ -83,16 +85,15 @@ export interface UploadsController {
   cancel: (key: string) => void;
   /** Takes a finished or failed entry off the list (a failed one is cancelled on the server). */
   dismiss: (key: string) => void;
-  clearFinished: (videoId: string) => void;
+  clearFinished: (target: UploadTarget) => void;
   /**
    * Continues an `interrupted` upload with a file the user chose. Returns the sentence why this
    * file is not the one, or `null` when the upload goes on.
    */
   chooseAgain: (key: string, file: File) => string | null;
-  openNewVideo: (channelId: string | null) => void;
-  closeNewVideo: () => void;
-  /** Makes the video folder (the server's refusal is thrown as an `ApiError`). */
-  createVideo: (channelId: string, name: string) => Promise<VideoRef>;
+  /** Opens the Upload Files dialog of a target (`UploadsHost` shows it). */
+  openDialog: (target: UploadTarget) => void;
+  closeDialog: () => void;
   /** Tells whom the tab belongs to: the uploads of the previous user stop, this user's come back. */
   setUser: (userId: string | null) => Promise<void>;
   /** Whether bytes are moving or about to (what the page must ask about before it unloads). */
@@ -127,22 +128,29 @@ export function needsCancelConfirm(item: UploadItem): boolean {
 
 interface Saved {
   ticket: UploadTicket;
-  videoId: string;
-  folder: UploadFolder;
+  target: UploadTarget;
+}
+
+function isTarget(value: unknown): value is UploadTarget {
+  if (typeof value !== "object" || value === null) return false;
+  const { kind, videoId, channelId } = value as Record<string, unknown>;
+  return (
+    (kind === "video" && typeof videoId === "string") ||
+    (kind === "channel" && typeof channelId === "string")
+  );
 }
 
 /** What the browser's storage holds is not trusted: a damaged entry is left out, not thrown on. */
 function isSaved(value: unknown): value is Saved {
   if (typeof value !== "object" || value === null) return false;
-  const { ticket, videoId, folder } = value as Partial<Record<keyof Saved, unknown>>;
+  const { ticket, target } = value as Partial<Record<keyof Saved, unknown>>;
   if (typeof ticket !== "object" || ticket === null) return false;
   const { id, name, size } = ticket as Partial<Record<keyof UploadTicket, unknown>>;
   return (
     typeof id === "string" &&
     typeof name === "string" &&
     typeof size === "number" &&
-    typeof videoId === "string" &&
-    (folder === "video" || folder === "broll")
+    isTarget(target)
   );
 }
 
@@ -165,8 +173,8 @@ function writeSaved(userId: string, saved: Saved[]): void {
   }
 }
 
-export function createUploadsController(api: Api, store: AppStore): UploadsController {
-  const state = createStore<UploadsState>()(() => ({ items: [], newVideo: null }));
+export function createUploadsController(api: Api): UploadsController {
+  const state = createStore<UploadsState>()(() => ({ items: [], dialog: null }));
   const controllers = new Map<string, AbortController>();
   let counter = 0;
   let userId: string | null = null;
@@ -190,7 +198,7 @@ export function createUploadsController(api: Api, store: AppStore): UploadsContr
     const saved: Saved[] = [];
     for (const item of state.getState().items) {
       if (item.ticket !== null && item.phase !== "done") {
-        saved.push({ ticket: item.ticket, videoId: item.videoId, folder: item.folder });
+        saved.push({ ticket: item.ticket, target: item.target });
       }
     }
     writeSaved(userId, saved);
@@ -219,8 +227,7 @@ export function createUploadsController(api: Api, store: AppStore): UploadsContr
     if (!item) return;
     try {
       const ticket = await api.createUpload({
-        videoId: item.videoId,
-        folder: item.folder,
+        target: item.target,
         name: item.name,
         size: item.size,
       });
@@ -290,13 +297,12 @@ export function createUploadsController(api: Api, store: AppStore): UploadsContr
   return {
     state,
 
-    add(videoId, folder, files) {
+    add(target, files) {
       const items: UploadItem[] = files.map((file) => {
         counter += 1;
         return {
           key: `upload-${counter}`,
-          videoId,
-          folder,
+          target,
           name: file.name,
           size: file.size,
           phase: "preparing",
@@ -358,9 +364,11 @@ export function createUploadsController(api: Api, store: AppStore): UploadsContr
       }
     },
 
-    clearFinished(videoId) {
+    clearFinished(target) {
       state.setState((s) => ({
-        items: s.items.filter((item) => !(item.videoId === videoId && item.phase === "done")),
+        items: s.items.filter(
+          (item) => !(sameTarget(item.target, target) && item.phase === "done"),
+        ),
       }));
     },
 
@@ -375,25 +383,19 @@ export function createUploadsController(api: Api, store: AppStore): UploadsContr
       return null;
     },
 
-    openNewVideo(channelId) {
-      state.setState({ newVideo: { channelId, created: null } });
+    openDialog(target) {
+      state.setState({ dialog: target });
     },
 
-    closeNewVideo() {
-      state.setState({ newVideo: null });
-    },
-
-    async createVideo(channelId, name) {
-      const ref = await store.getState().createVideo(channelId, name);
-      state.setState((s) => (s.newVideo ? { newVideo: { ...s.newVideo, created: ref } } : {}));
-      return ref;
+    closeDialog() {
+      state.setState({ dialog: null });
     },
 
     async setUser(next) {
       if (next === userId) return;
       for (const key of [...controllers.keys()]) abort(key);
       userId = next;
-      state.setState({ items: [], newVideo: null });
+      state.setState({ items: [], dialog: null });
       if (next === null) return;
       for (const saved of readSaved(next)) {
         if (userId !== next) return;
@@ -412,8 +414,7 @@ export function createUploadsController(api: Api, store: AppStore): UploadsContr
         counter += 1;
         const item: UploadItem = {
           key: `upload-${counter}`,
-          videoId: saved.videoId,
-          folder: saved.folder,
+          target: saved.target,
           name: saved.ticket.name,
           size: saved.ticket.size,
           phase: "interrupted",

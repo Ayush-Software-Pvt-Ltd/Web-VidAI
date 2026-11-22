@@ -4,7 +4,8 @@
 // added by the library service.
 //
 // - A video is a folder directly inside the channel directory. Names starting with `.` or
-//   `CLAUDE_VE`, and the asset folders (`Style`, `sample`, ...), are not videos (`names.js`).
+//   `CLAUDE_VE`, the channel's `upload` folder and the asset folders (`Style`, `sample`, ...) are
+//   not videos (`names.js`); a video's own `upload` subfolder is not B-roll.
 //   Videos are listed newest first: the natural order of the names, descending.
 // - A-roll files are regular files directly in the video folder with a video extension; the
 //   main one is the largest (a tie goes to the smaller name).

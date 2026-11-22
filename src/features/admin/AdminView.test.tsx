@@ -34,11 +34,12 @@ describe("AdminView", () => {
     expect(screen.queryByRole("navigation", { name: "Admin" })).not.toBeInTheDocument();
   });
 
-  it("lists the six sections and opens the one of the store", async () => {
+  it("lists the seven sections and opens the one of the store", async () => {
     await open("limits");
     const links = within(nav()).getAllByRole("button");
     expect(links.map((l) => l.textContent)).toEqual([
       "Users",
+      "Channels",
       "Harness and Model",
       "Queues and Limits",
       "Storage",
@@ -57,8 +58,11 @@ describe("AdminView", () => {
     const user = userEvent.setup();
     const app = await open("users");
     await screen.findByText("Accounts");
+    await user.click(within(nav()).getByRole("button", { name: "Channels" }));
+    expect(await screen.findByText("Beauty Channel")).toBeInTheDocument();
+    expect(app.store.getState().adminSection).toBe("channels");
     await user.click(within(nav()).getByRole("button", { name: "Storage" }));
-    expect(await screen.findByText("Storage folders")).toBeInTheDocument();
+    expect(await screen.findByText("Uploads and previews")).toBeInTheDocument();
     expect(app.store.getState().adminSection).toBe("storage");
     await user.click(within(nav()).getByRole("button", { name: "Queue" }));
     expect(await screen.findByText("Timeline changes")).toBeInTheDocument();
